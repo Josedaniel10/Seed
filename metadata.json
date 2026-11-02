@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Seed - Sistema de Gestión del Comité de Investigación",
+  "description": "Plataforma universitaria para la radicación, verificación, revisión por pares y gestión de solicitudes del Comité de Investigación.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
