@@ -23,11 +23,14 @@ import { RegisterForm } from './features/auth/RegisterForm.tsx';
 import { LoginForm } from './features/auth/LoginForm.tsx';
 import { useAuthStore } from './features/auth/authStore.ts';
 import { PERMISSIONS_MATRIX } from './features/auth/permissions.ts';
+import { RoleGuard } from './features/auth/RoleGuard.tsx';
 import { UserRole } from './types/database.ts';
+import { LayoutGrid, ClipboardCheck, Users, Settings } from 'lucide-react';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const [activeNav, setActiveNav] = useState<'overview' | 'validation' | 'sessions' | 'admin'>('overview');
   const { profile, isAuthenticated, logout } = useAuthStore();
   const [supabaseTest, setSupabaseTest] = useState<{
     configured: boolean;
@@ -205,15 +208,152 @@ export default function App() {
             ) : null}
 
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 1 · Tarea T1.3
+              Sprint 1 · Tarea T1.4
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
+        </div>
+
+        {/* Navigation Bar by Role (T1.4 / RF-02) */}
+        <div className="max-w-6xl mx-auto flex items-center gap-1 pt-2.5 overflow-x-auto text-xs border-t border-stone-100">
+          <button
+            onClick={() => setActiveNav('overview')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeNav === 'overview'
+                ? 'bg-[#14281D] text-white font-semibold'
+                : 'text-stone-600 hover:text-[#14281D] hover:bg-stone-100'
+            }`}
+          >
+            <LayoutGrid size={13} />
+            <span>Panel Principal & Trámites</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('validation')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeNav === 'validation'
+                ? 'bg-[#14281D] text-white font-semibold'
+                : 'text-stone-600 hover:text-[#14281D] hover:bg-stone-100'
+            }`}
+          >
+            <ClipboardCheck size={13} />
+            <span>Validación Documental</span>
+            <span className="text-[10px] text-stone-400 font-mono">(Admin/Sec)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('sessions')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeNav === 'sessions'
+                ? 'bg-[#14281D] text-white font-semibold'
+                : 'text-stone-600 hover:text-[#14281D] hover:bg-stone-100'
+            }`}
+          >
+            <Users size={13} />
+            <span>Sesiones del Comité</span>
+            <span className="text-[10px] text-stone-400 font-mono">(Comité/Sec)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('admin')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeNav === 'admin'
+                ? 'bg-[#14281D] text-white font-semibold'
+                : 'text-stone-600 hover:text-[#14281D] hover:bg-stone-100'
+            }`}
+          >
+            <Settings size={13} />
+            <span>Administración del Sistema</span>
+            <span className="text-[10px] text-rose-500 font-mono font-semibold">(Solo Admin)</span>
+          </button>
         </div>
       </header>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 space-y-8">
+        {activeNav === 'admin' && (
+          <RoleGuard
+            allowedRoles={['admin']}
+            fallbackTitle="Módulo Exclusivo de Administración General"
+            onNavigateHome={() => setActiveNav('overview')}
+          >
+            <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-stone-100">
+                <Settings size={20} className="text-[#14281D]" />
+                <div>
+                  <h2 className="text-lg font-bold text-[#14281D]">
+                    Consola de Administración del Sistema (RF-03, RF-04, RF-05)
+                  </h2>
+                  <p className="text-xs text-stone-600">
+                    Módulo restringido únicamente a usuarios con rol Administrador. Gestión de usuarios, grupos y catálogos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#A3E635]/20 border border-[#84CC16] rounded-xl p-4 text-xs text-[#14281D] font-medium flex items-center gap-2">
+                <Check size={16} />
+                <span>Acceso concedido exitosamente con privilegios de Administrador.</span>
+              </div>
+            </div>
+          </RoleGuard>
+        )}
+
+        {activeNav === 'validation' && (
+          <RoleGuard
+            allowedRoles={['administrativo', 'secretario', 'admin']}
+            fallbackTitle="Validación Documental de Requisitos"
+            onNavigateHome={() => setActiveNav('overview')}
+          >
+            <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-stone-100">
+                <ClipboardCheck size={20} className="text-[#14281D]" />
+                <div>
+                  <h2 className="text-lg font-bold text-[#14281D]">
+                    Módulo de Verificación Documental (RF-12, RF-13)
+                  </h2>
+                  <p className="text-xs text-stone-600">
+                    Área reservada para personal administrativo y secretaría técnica.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#A3E635]/20 border border-[#84CC16] rounded-xl p-4 text-xs text-[#14281D] font-medium flex items-center gap-2">
+                <Check size={16} />
+                <span>Acceso autorizado para validación y lista de chequeo de requisitos.</span>
+              </div>
+            </div>
+          </RoleGuard>
+        )}
+
+        {activeNav === 'sessions' && (
+          <RoleGuard
+            allowedRoles={['integrante_comite', 'secretario', 'administrativo', 'admin']}
+            fallbackTitle="Sesiones y Deliberaciones de Comité"
+            onNavigateHome={() => setActiveNav('overview')}
+          >
+            <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-stone-100">
+                <Users size={20} className="text-[#14281D]" />
+                <div>
+                  <h2 className="text-lg font-bold text-[#14281D]">
+                    Módulo de Sesiones del Comité de Investigación (RF-24 a RF-28)
+                  </h2>
+                  <p className="text-xs text-stone-600">
+                    Agenda, quórum colegiado y deliberación de solicitudes.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#A3E635]/20 border border-[#84CC16] rounded-xl p-4 text-xs text-[#14281D] font-medium flex items-center gap-2">
+                <Check size={16} />
+                <span>Acceso autorizado para miembros del comité evaluador.</span>
+              </div>
+            </div>
+          </RoleGuard>
+        )}
+
+        {activeNav === 'overview' && (
+          <>
         {/* Supabase Connection Verification Card (T0.4) */}
         <section className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
@@ -799,6 +939,8 @@ export default function App() {
             </button>
           </div>
         </section>
+        </>
+        )}
       </main>
 
       {/* Footer */}
