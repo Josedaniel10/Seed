@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Environment variables for Supabase in Vite
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mock-seed-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vY2stc2VlZC1wcm9qZWN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.mock-signature';
+// Environment variables safe for both browser (import.meta.env) and Node.js (process.env)
+const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (typeof process !== 'undefined' ? process.env : {});
+const supabaseUrl = (env.VITE_SUPABASE_URL as string) || 'https://mock-seed-project.supabase.co';
+const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vY2stc2VlZC1wcm9qZWN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.mock-signature';
 
 export const isSupabaseConfigured = Boolean(
-  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+  env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY
 );
 
 /**

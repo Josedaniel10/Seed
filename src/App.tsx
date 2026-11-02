@@ -16,11 +16,17 @@ import {
   Download,
   AlertTriangle,
   UserPlus,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { RegisterForm } from './features/auth/RegisterForm.tsx';
+import { LoginForm } from './features/auth/LoginForm.tsx';
+import { useAuthStore } from './features/auth/authStore.ts';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const { profile, isAuthenticated, logout } = useAuthStore();
   const [supabaseTest, setSupabaseTest] = useState<{
     configured: boolean;
     connected: boolean;
@@ -173,8 +179,31 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isAuthenticated && profile ? (
+              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-stone-200">
+                <div className="w-7 h-7 rounded-full bg-[#14281D] text-white text-[11px] font-bold flex items-center justify-center">
+                  {profile.full_name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join('')}
+                </div>
+                <div className="text-left text-xs leading-tight">
+                  <div className="font-bold text-[#14281D] truncate max-w-[140px]">{profile.full_name}</div>
+                  <div className="text-[10px] text-stone-500 uppercase tracking-wider">{profile.role.replace('_', ' ')}</div>
+                </div>
+                <button
+                  onClick={() => logout()}
+                  title="Cerrar sesión"
+                  className="p-1 text-stone-400 hover:text-rose-700 hover:bg-stone-100 rounded transition-colors cursor-pointer ml-1"
+                >
+                  <LogOut size={13} />
+                </button>
+              </div>
+            ) : null}
+
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 1 · Tarea T1.1
+              Sprint 1 · Tarea T1.2
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -356,24 +385,48 @@ export default function App() {
           )}
         </section>
 
-        {/* Interactive Researcher Registration Form (T1.1 / RF-01) */}
+        {/* Interactive Access & Authentication Module (T1.1 & T1.2 / RF-01 & RF-02) */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-[#14281D] flex items-center gap-2">
-                <UserPlus size={18} className="text-[#14281D]" />
-                Módulo de Acceso: Registro de Investigadores (T1.1)
+                <ShieldCheck size={18} className="text-[#14281D]" />
+                Módulo de Acceso, Roles e Inicio de Sesión (T1.2)
               </h2>
               <p className="text-xs text-stone-600">
-                Formulario interactivo validado con React Hook Form + Zod. Se crea el usuario y su perfil con rol de investigador.
+                Inicio y cierre de sesión con control por rol (RF-02) y registro validado con Zod (RF-01). La sesión se mantiene tras recargar.
               </p>
             </div>
-            <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              RF-01 Activo
-            </span>
+
+            {/* Segmented Controls for Auth Tabs */}
+            <div className="flex items-center gap-1 p-1 bg-[#EFECE6] rounded-xl self-start sm:self-auto border border-[#E5E3DC]">
+              <button
+                onClick={() => setAuthTab('login')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  authTab === 'login'
+                    ? 'bg-white text-[#14281D] shadow-xs'
+                    : 'text-stone-600 hover:text-[#14281D]'
+                }`}
+              >
+                <LogIn size={13} />
+                <span>Iniciar Sesión (RF-02)</span>
+              </button>
+
+              <button
+                onClick={() => setAuthTab('register')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  authTab === 'register'
+                    ? 'bg-white text-[#14281D] shadow-xs'
+                    : 'text-stone-600 hover:text-[#14281D]'
+                }`}
+              >
+                <UserPlus size={13} />
+                <span>Registrar Investigador (RF-01)</span>
+              </button>
+            </div>
           </div>
 
-          <RegisterForm />
+          {authTab === 'login' ? <LoginForm /> : <RegisterForm />}
         </section>
 
         {/* Banner Hero */}
