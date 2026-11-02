@@ -22,6 +22,8 @@ import {
 import { RegisterForm } from './features/auth/RegisterForm.tsx';
 import { LoginForm } from './features/auth/LoginForm.tsx';
 import { useAuthStore } from './features/auth/authStore.ts';
+import { PERMISSIONS_MATRIX } from './features/auth/permissions.ts';
+import { UserRole } from './types/database.ts';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
@@ -203,7 +205,7 @@ export default function App() {
             ) : null}
 
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 1 · Tarea T1.2
+              Sprint 1 · Tarea T1.3
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -427,6 +429,126 @@ export default function App() {
           </div>
 
           {authTab === 'login' ? <LoginForm /> : <RegisterForm />}
+        </section>
+
+        {/* RLS Policies & Role Access Matrix (T1.3 / RNF-02) */}
+        <section className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-[#14281D]" />
+                <h2 className="text-base font-bold text-[#14281D]">
+                  Políticas RLS y Matriz de Acceso por Rol (RNF-02)
+                </h2>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[#A3E635] text-[#14281D] border-[#84CC16]">
+                  Prueba SQL Verificada
+                </span>
+              </div>
+              <p className="text-xs text-stone-600 mt-0.5">
+                Cada rol ve únicamente lo que le corresponde: el Investigador solo ve sus propios trámites y tiene el Kanban en solo lectura; el Líder de Grupo ve su grupo adscrito; el personal del comité gestiona la totalidad.
+              </p>
+            </div>
+
+            {profile && (
+              <div className="text-xs bg-[#F7F6F2] px-3 py-1.5 rounded-lg border border-[#E5E3DC] text-stone-700">
+                Tu rol actual: <strong className="text-[#14281D] uppercase font-mono">{profile.role.replace('_', ' ')}</strong>
+              </div>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-[#E5E3DC] bg-stone-50 text-stone-700 font-semibold">
+                  <th className="py-2.5 px-3">Rol Institucional</th>
+                  <th className="py-2.5 px-3">Radicar Proyectos</th>
+                  <th className="py-2.5 px-3">Visibilidad Solicitudes</th>
+                  <th className="py-2.5 px-3">Validar Documentos</th>
+                  <th className="py-2.5 px-3">Asignar Evaluador</th>
+                  <th className="py-2.5 px-3">Concepto Técnico</th>
+                  <th className="py-2.5 px-3">Sesión y Quórum</th>
+                  <th className="py-2.5 px-3">Modo Kanban</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {(Object.keys(PERMISSIONS_MATRIX) as UserRole[]).map((r) => {
+                  const perms = PERMISSIONS_MATRIX[r];
+                  const isCurrentRole = profile?.role === r;
+
+                  return (
+                    <tr
+                      key={r}
+                      className={`transition-colors ${
+                        isCurrentRole ? 'bg-[#A3E635]/15 font-semibold text-[#14281D]' : 'hover:bg-stone-50 text-stone-700'
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 font-medium">
+                        <span className="capitalize">{r.replace('_', ' ')}</span>
+                        {isCurrentRole && (
+                          <span className="ml-1.5 text-[10px] bg-[#14281D] text-white px-1.5 py-0.5 rounded font-mono">
+                            ACTUAL
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.canFiling ? (
+                          <span className="text-emerald-800 font-medium">✓ Sí</span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {r === 'investigador' && <span className="text-stone-700">Solo propias</span>}
+                        {r === 'lider_grupo' && <span className="text-stone-700">Solo su grupo</span>}
+                        {perms.canViewAllApplications && (
+                          <span className="text-emerald-800 font-medium">✓ Todas (Comité)</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.canValidateDocuments ? (
+                          <span className="text-emerald-800 font-medium">✓ Sí</span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.canAssignReviewers ? (
+                          <span className="text-emerald-800 font-medium">✓ Sí</span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.canSubmitConcept ? (
+                          <span className="text-emerald-800 font-medium">✓ Sí</span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.canManageSessions ? (
+                          <span className="text-emerald-800 font-medium">✓ Sí</span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {perms.isReadOnlyKanban ? (
+                          <span className="text-amber-800 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Solo Lectura
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            Interactivo (DnD)
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         {/* Banner Hero */}
