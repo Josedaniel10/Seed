@@ -89,7 +89,7 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 0 · Tarea T0.4
+              Sprint 0 · Tarea T0.5
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
