@@ -1,10 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SeedLogo } from './components/SeedLogo.tsx';
 import { APPLICATION_STATUS_CONFIG, ApplicationStatus } from './types/theme.ts';
-import { Check, ShieldCheck, ArrowRight, BookOpen, Layers, Sparkles } from 'lucide-react';
+import { testSupabaseConnection } from './lib/supabase.ts';
+import { Check, ShieldCheck, ArrowRight, BookOpen, Layers, Sparkles, Database, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
+  const [supabaseTest, setSupabaseTest] = useState<{
+    configured: boolean;
+    connected: boolean;
+    latencyMs: number;
+    url: string;
+    message: string;
+  } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const runSupabaseTest = async () => {
+    setIsTesting(true);
+    const result = await testSupabaseConnection();
+    setSupabaseTest(result);
+    setIsTesting(false);
+  };
+
+  useEffect(() => {
+    runSupabaseTest();
+  }, []);
 
   const paletteColors = [
     {
@@ -69,7 +89,7 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 0 · Tarea T0.3
+              Sprint 0 · Tarea T0.4
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -78,6 +98,71 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 space-y-8">
+        {/* Supabase Connection Verification Card (T0.4) */}
+        <section className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <Database size={18} className="text-[#14281D]" />
+                <h2 className="text-base font-bold text-[#14281D]">
+                  Cliente de Supabase y Verificación de Conexión
+                </h2>
+                {supabaseTest && (
+                  <span
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                      supabaseTest.connected
+                        ? 'bg-[#A3E635] text-[#14281D] border-[#84CC16]'
+                        : 'bg-rose-100 text-rose-900 border-rose-300'
+                    }`}
+                  >
+                    <Check size={12} />
+                    {supabaseTest.connected ? 'Cliente Inicializado' : 'Sin Conexión'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-stone-600 mt-0.5">
+                Verifica la inicialización del cliente `@supabase/supabase-js`, endpoint del proyecto y consulta de prueba.
+              </p>
+            </div>
+
+            <button
+              onClick={runSupabaseTest}
+              disabled={isTesting}
+              className="self-start sm:self-auto px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={isTesting ? 'animate-spin' : ''} />
+              <span>{isTesting ? 'Consultando...' : 'Reejecutar consulta de prueba'}</span>
+            </button>
+          </div>
+
+          {supabaseTest && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="bg-[#F7F6F2] p-3 rounded-lg border border-[#E5E3DC] space-y-1">
+                <span className="text-stone-500 font-medium">Endpoint Supabase:</span>
+                <p className="font-mono text-stone-800 break-all">{supabaseTest.url}</p>
+              </div>
+
+              <div className="bg-[#F7F6F2] p-3 rounded-lg border border-[#E5E3DC] space-y-1">
+                <span className="text-stone-500 font-medium">Tiempo de respuesta / latencia:</span>
+                <p className="font-semibold text-[#14281D] font-mono tabular-nums">
+                  {supabaseTest.latencyMs} ms
+                </p>
+              </div>
+
+              <div className="bg-[#F7F6F2] p-3 rounded-lg border border-[#E5E3DC] space-y-1">
+                <span className="text-stone-500 font-medium">Estado de configuración:</span>
+                <p className="font-semibold text-stone-800">
+                  {supabaseTest.configured ? 'Variables de entorno detectadas' : 'Modo inicial de desarrollo'}
+                </p>
+              </div>
+
+              <div className="md:col-span-3 bg-stone-50 p-3 rounded-lg border border-stone-200 text-stone-600 text-[11px] leading-relaxed">
+                <strong>Diagnóstico:</strong> {supabaseTest.message}
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* Banner Hero */}
         <section className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs relative overflow-hidden">
           <div className="max-w-2xl relative z-10 space-y-3">
