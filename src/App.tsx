@@ -15,7 +15,9 @@ import {
   UploadCloud,
   Download,
   AlertTriangle,
+  UserPlus,
 } from 'lucide-react';
+import { RegisterForm } from './features/auth/RegisterForm.tsx';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
@@ -172,7 +174,7 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 0 · Tarea T0.6
+              Sprint 1 · Tarea T1.1
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -352,6 +354,26 @@ export default function App() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Interactive Researcher Registration Form (T1.1 / RF-01) */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#14281D] flex items-center gap-2">
+                <UserPlus size={18} className="text-[#14281D]" />
+                Módulo de Acceso: Registro de Investigadores (T1.1)
+              </h2>
+              <p className="text-xs text-stone-600">
+                Formulario interactivo validado con React Hook Form + Zod. Se crea el usuario y su perfil con rol de investigador.
+              </p>
+            </div>
+            <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
+              RF-01 Activo
+            </span>
+          </div>
+
+          <RegisterForm />
         </section>
 
         {/* Banner Hero */}
