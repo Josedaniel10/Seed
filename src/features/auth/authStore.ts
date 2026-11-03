@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Profile, UserRole } from '../../types/database.ts';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
+import { RegisterFormData } from './schemas.ts';
 
 export interface AuthState {
   profile: Profile | null;
@@ -10,6 +11,8 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string, mockRole?: UserRole, mockName?: string) => Promise<{ success: boolean; error?: string }>;
+  registerUser: (data: RegisterFormData) => Promise<{ success: boolean; profile?: Profile; requiresConfirmation?: boolean; error?: string }>;
+  resendConfirmationEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => Promise<void>;
   setProfile: (profile: Profile | null) => void;
   clearError: () => void;
@@ -73,76 +76,180 @@ export const useAuthStore = create<AuthState>()(
 
       setProfile: (profile) => set({ profile, isAuthenticated: Boolean(profile) }),
 
-      login: async (email, password, mockRole, mockName) => {
+      /**
+       * Registro real de usuario en Supabase Auth y tabla 'profiles' (RF-01)
+       */
+      registerUser: async (data: RegisterFormData) => {
         set({ isLoading: true, error: null });
 
+        const client = getSupabaseClient();
+        if (!client) {
+          const err = 'Supabase no está configurado. Por favor conecta tu proyecto de Supabase ingresando la URL y la Anon Key.';
+          set({ isLoading: false, error: err });
+          return { success: false, error: err };
+        }
+
         try {
-          // Si Supabase está configurado en producción con URL real
-          if (isSupabaseConfigured) {
-            const { data, error: sbError } = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
+          const cleanEmail = data.email.trim().toLowerCase();
 
-            if (sbError) {
-              set({ isLoading: false, error: sbError.message });
-              return { success: false, error: sbError.message };
-            }
+          // 1. Registro directo en Supabase Auth (auth.users)
+          const { data: authData, error: authErr } = await client.auth.signUp({
+            email: cleanEmail,
+            password: data.password,
+            options: {
+              data: {
+                full_name: data.fullName.trim(),
+                role: 'investigador',
+                academic_program: data.academicProgram.trim(),
+                academic_link: data.academicLink,
+                research_group_id: data.researchGroupId,
+              },
+            },
+          });
 
-            const token = data.session?.access_token || 'sb-token';
-            const userProfile: Profile = {
-              id: data.user.id,
-              email: data.user.email || email,
-              full_name: data.user.user_metadata?.full_name || mockName || email.split('@')[0],
-              role: (data.user.user_metadata?.role as UserRole) || mockRole || 'investigador',
-              academic_program: data.user.user_metadata?.academic_program || 'Investigación General',
-              academic_link: data.user.user_metadata?.academic_link || 'docente_planta',
-              research_group_id: data.user.user_metadata?.research_group_id || 'grp-bio-01',
-              is_active: true,
-              created_at: data.user.created_at || new Date().toISOString(),
-            };
-
-            set({
-              profile: userProfile,
-              token,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            });
-
-            return { success: true };
+          if (authErr) {
+            set({ isLoading: false, error: authErr.message });
+            return { success: false, error: authErr.message };
           }
 
-          // Modo demo / desarrollo inicial: autenticación controlada
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          if (!authData.user) {
+            const msg = 'No se recibió el identificador de usuario desde Supabase.';
+            set({ isLoading: false, error: msg });
+            return { success: false, error: msg };
+          }
 
-          // Verificar si coincide con alguno de los roles demo o el especificado
-          const matchedDemo = Object.values(DEMO_USERS).find(
-            (u) => u.email.toLowerCase() === email.toLowerCase()
-          );
-
-          const role: UserRole = mockRole || matchedDemo?.role || 'investigador';
-          const name: string = mockName || matchedDemo?.name || email.split('@')[0];
-          const program: string = matchedDemo?.program || 'Facultad de Ingeniería';
-          const group: string = matchedDemo?.group || 'grp-bio-01';
-
-          const demoProfile: Profile = {
-            id: crypto.randomUUID(),
-            email,
-            full_name: name,
-            role,
-            academic_program: program,
-            academic_link: 'docente_planta',
-            research_group_id: group,
+          // 2. Creación / inserción directa en la tabla relacional 'profiles' de Supabase
+          const newProfile: Profile = {
+            id: authData.user.id,
+            email: cleanEmail,
+            full_name: data.fullName.trim(),
+            role: 'investigador',
+            academic_program: data.academicProgram.trim(),
+            academic_link: data.academicLink,
+            research_group_id: data.researchGroupId,
             is_active: true,
             created_at: new Date().toISOString(),
           };
 
-          const simulatedToken = `seed-jwt-${Date.now()}-${role}`;
+          try {
+            await client.from('profiles').upsert([newProfile]);
+          } catch (profileErr) {
+            console.warn('Nota: Inserción en profiles:', profileErr);
+          }
+
+          // Si Supabase devuelve sesión inmediata (sin confirmación de correo requerida)
+          const requiresConfirmation = !authData.session && !authData.user.confirmed_at;
+
+          if (authData.session) {
+            set({
+              profile: newProfile,
+              token: authData.session.access_token,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+          } else {
+            set({ isLoading: false });
+          }
+
+          return {
+            success: true,
+            profile: newProfile,
+            requiresConfirmation,
+          };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error inesperado al registrar usuario en Supabase';
+          set({ isLoading: false, error: msg });
+          return { success: false, error: msg };
+        }
+      },
+
+      resendConfirmationEmail: async (email: string) => {
+        const client = getSupabaseClient();
+        if (!client) {
+          return { success: false, error: 'Supabase no está conectado.' };
+        }
+
+        try {
+          const { error } = await client.auth.resend({
+            type: 'signup',
+            email: email.trim().toLowerCase(),
+          });
+
+          if (error) {
+            return { success: false, error: error.message };
+          }
+
+          return { success: true, message: `Correo de verificación reenviado exitosamente a ${email}.` };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error al reenviar correo de confirmación';
+          return { success: false, error: msg };
+        }
+      },
+
+      /**
+       * Inicio de sesión real contra Supabase (RF-02)
+       */
+      login: async (email: string, password: string, mockRole?: UserRole, mockName?: string) => {
+        set({ isLoading: true, error: null });
+        const cleanEmail = email.trim().toLowerCase();
+
+        const client = getSupabaseClient();
+        if (!client) {
+          const err = 'Supabase no está configurado. Ingrese la URL y la Anon Key de su proyecto en la barra de configuración superior.';
+          set({ isLoading: false, error: err });
+          return { success: false, error: err };
+        }
+
+        try {
+          // 1. Autenticación real contra Supabase Auth
+          const { data: authData, error: authErr } = await client.auth.signInWithPassword({
+            email: cleanEmail,
+            password,
+          });
+
+          if (authErr) {
+            set({ isLoading: false, error: `Error de Supabase: ${authErr.message}` });
+            return { success: false, error: authErr.message };
+          }
+
+          const user = authData.user;
+          const token = authData.session?.access_token || '';
+
+          // 2. Obtener el perfil real de la base de datos PostgreSQL de Supabase
+          let userProfile: Profile | null = null;
+
+          try {
+            const { data: dbProfile } = await client
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+
+            if (dbProfile) {
+              userProfile = dbProfile as Profile;
+            }
+          } catch {
+            // Fallback a los metadatos almacenados en el JWT si la tabla aún no tiene el registro
+          }
+
+          if (!userProfile) {
+            userProfile = {
+              id: user.id,
+              email: user.email || cleanEmail,
+              full_name: (user.user_metadata?.full_name as string) || mockName || cleanEmail.split('@')[0],
+              role: (user.user_metadata?.role as UserRole) || mockRole || 'investigador',
+              academic_program: (user.user_metadata?.academic_program as string) || 'Investigación General',
+              academic_link: (user.user_metadata?.academic_link as string) || 'docente_planta',
+              research_group_id: (user.user_metadata?.research_group_id as string) || 'grp-bio-01',
+              is_active: true,
+              created_at: user.created_at || new Date().toISOString(),
+            };
+          }
 
           set({
-            profile: demoProfile,
-            token: simulatedToken,
+            profile: userProfile,
+            token,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -150,20 +257,24 @@ export const useAuthStore = create<AuthState>()(
 
           return { success: true };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al iniciar sesión';
+          const msg = err instanceof Error ? err.message : 'Error inesperado al iniciar sesión en Supabase';
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }
       },
 
+      /**
+       * Cierre de sesión real en Supabase (RF-02)
+       */
       logout: async () => {
         set({ isLoading: true });
         try {
-          if (isSupabaseConfigured) {
-            await supabase.auth.signOut();
+          const client = getSupabaseClient();
+          if (client) {
+            await client.auth.signOut();
           }
-        } catch {
-          // Ignorar error de cierre si no hay conexión
+        } catch (err) {
+          console.warn('Error durante signOut en Supabase:', err);
         } finally {
           set({
             profile: null,
@@ -172,15 +283,15 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
-          // Limpieza garantizada de storage
-          if (typeof window !== 'undefined') {
+
+          if (typeof window !== 'undefined' && window.localStorage) {
             window.localStorage.removeItem('seed_auth_session');
           }
         }
       },
     }),
     {
-      name: 'seed_auth_session', // Nombre de la clave en localStorage
+      name: 'seed_auth_session',
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

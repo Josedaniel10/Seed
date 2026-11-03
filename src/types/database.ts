@@ -28,6 +28,7 @@ export interface ResearchGroup {
   name: string;
   faculty: string;
   leader_id: string | null;
+  is_active?: boolean;
   created_at: string;
 }
 

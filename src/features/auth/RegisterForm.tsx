@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, RegisterFormData, ACADEMIC_LINKS } from './schemas.ts';
 import { User, Mail, Lock, GraduationCap, Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Profile } from '../../types/database.ts';
+import { useAuthStore } from './authStore.ts';
+import { useUserStore } from '../users/userStore.ts';
 
 // Grupos de investigación institucionales para selección
 export const MOCK_RESEARCH_GROUPS = [
@@ -16,11 +18,15 @@ export const MOCK_RESEARCH_GROUPS = [
 
 interface RegisterFormProps {
   onSuccess?: (profile: Profile) => void;
+  onNavigateLogin?: () => void;
 }
 
-export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
+export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onNavigateLogin }) => {
   const [createdProfile, setCreatedProfile] = useState<Profile | null>(null);
+  const [lastPassword, setLastPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const registerUser = useAuthStore((s) => s.registerUser);
+  const login = useAuthStore((s) => s.login);
 
   const {
     register,
@@ -43,26 +49,29 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsSubmitting(true);
+    setLastPassword(data.password);
 
-    // Simulación de creación de perfil en Supabase
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    // Registro real y persistente en el sistema
+    const result = await registerUser(data);
 
-    const newProfile: Profile = {
-      id: crypto.randomUUID(),
-      email: data.email,
-      full_name: data.fullName,
-      role: 'investigador',
-      academic_program: data.academicProgram,
-      academic_link: data.academicLink,
-      research_group_id: data.researchGroupId,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
+    if (result.success && result.profile) {
+      setCreatedProfile(result.profile);
+      // Agregar al directorio de usuarios
+      useUserStore.getState().addUser(result.profile);
 
-    setCreatedProfile(newProfile);
+      if (onSuccess) {
+        onSuccess(result.profile);
+      }
+    }
+
     setIsSubmitting(false);
-    if (onSuccess) {
-      onSuccess(newProfile);
+  };
+
+  const handleLoginImmediately = async () => {
+    if (!createdProfile) return;
+    await login(createdProfile.email, lastPassword);
+    if (onNavigateLogin) {
+      onNavigateLogin();
     }
   };
 
@@ -125,12 +134,32 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
             </div>
           </div>
 
-          <button
-            onClick={handleRegisterAnother}
-            className="w-full py-2.5 px-4 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors cursor-pointer"
-          >
-            Registrar otro investigador de prueba
-          </button>
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-900 leading-relaxed space-y-1">
+            <p className="font-semibold flex items-center gap-1.5">
+              <Mail size={13} className="text-amber-700" />
+              <span>Verificación de correo en Supabase</span>
+            </p>
+            <p>
+              Supabase envía un enlace de confirmación a <strong>{createdProfile.email}</strong>. Si al iniciar sesión te indica <em>"Email not confirmed"</em>, haz clic en el enlace de tu correo o desactiva <em>"Confirm email"</em> en tu panel de Supabase (<em>Authentication → Providers → Email</em>).
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={handleLoginImmediately}
+              className="flex-1 py-2.5 px-4 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>Entrar con esta cuenta ahora</span>
+              <CheckCircle2 size={14} className="text-[#84CC16]" />
+            </button>
+
+            <button
+              onClick={handleRegisterAnother}
+              className="py-2.5 px-4 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors cursor-pointer"
+            >
+              Registrar otro
+            </button>
+          </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>

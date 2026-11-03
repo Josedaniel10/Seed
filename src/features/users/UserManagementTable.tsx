@@ -1,0 +1,406 @@
+import React, { useState } from 'react';
+import { useUserStore } from './userStore.ts';
+import { UserRole, Profile } from '../../types/database.ts';
+import {
+  Users,
+  Search,
+  Filter,
+  Shield,
+  CheckCircle2,
+  UserPlus,
+  Building,
+  GraduationCap,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
+  RefreshCw,
+  Database,
+} from 'lucide-react';
+import { getSupabaseClient } from '../../lib/supabase.ts';
+
+const ALL_ROLES: { role: UserRole; label: string; badgeClass: string }[] = [
+  { role: 'investigador', label: 'Investigador', badgeClass: 'bg-stone-100 text-stone-800 border-stone-200' },
+  { role: 'administrativo', label: 'Administrativo', badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+  { role: 'integrante_comite', label: 'Integrante Comité', badgeClass: 'bg-amber-100 text-amber-900 border-amber-300' },
+  { role: 'secretario', label: 'Secretario(a)', badgeClass: 'bg-[#A3E635] text-[#14281D] border-[#84CC16]' },
+  { role: 'lider_grupo', label: 'Líder de Grupo', badgeClass: 'bg-teal-100 text-teal-900 border-teal-300' },
+  { role: 'admin', label: 'Administrador', badgeClass: 'bg-purple-100 text-purple-900 border-purple-300' },
+];
+
+export const UserManagementTable: React.FC = () => {
+  const {
+    users,
+    searchQuery,
+    selectedRoleFilter,
+    setSearchQuery,
+    setSelectedRoleFilter,
+    updateUserRole,
+    toggleUserActive,
+    addUser,
+  } = useUserStore();
+
+  const [notification, setNotification] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('investigador');
+  const [newProgram, setNewProgram] = useState('');
+
+  const showFeedback = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3500);
+  };
+
+  const handleRoleChange = (userId: string, newRole: UserRole, userName: string) => {
+    const result = updateUserRole(userId, newRole);
+    if (result.success) {
+      showFeedback(`Rol de ${userName} actualizado inmediatamente a "${newRole.replace('_', ' ')}"`);
+    }
+  };
+
+  const handleToggleActive = (userId: string, currentStatus: boolean, userName: string) => {
+    toggleUserActive(userId);
+    showFeedback(`Usuario ${userName} ${currentStatus ? 'desactivado' : 'activado'} correctamente`);
+  };
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncSupabase = async () => {
+    setIsSyncing(true);
+    const client = getSupabaseClient();
+    if (!client) {
+      showFeedback('Supabase no está conectado. Configure su URL y Anon Key primero.');
+      setIsSyncing(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await client.from('profiles').select('*');
+      if (error) {
+        showFeedback(`Error al consultar profiles en Supabase: ${error.message}`);
+      } else if (data && data.length > 0) {
+        data.forEach((p) => addUser(p as Profile));
+        showFeedback(`Sincronizados ${data.length} perfiles reales desde Supabase.`);
+      } else {
+        showFeedback('Conectado a Supabase: No hay registros previos en la tabla profiles.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al sincronizar';
+      showFeedback(`Fallo de sincronización: ${msg}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName || !newEmail || !newProgram) return;
+
+    addUser({
+      email: newEmail,
+      full_name: newName,
+      role: newRole,
+      academic_program: newProgram,
+      academic_link: 'docente_planta',
+      research_group_id: 'grp-bio-01',
+      is_active: true,
+    });
+
+    showFeedback(`Usuario ${newName} creado con rol ${newRole.replace('_', ' ')}`);
+    setNewName('');
+    setNewEmail('');
+    setNewProgram('');
+    setShowAddModal(false);
+  };
+
+  // Filtrado de usuarios
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
+      u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (u.academic_program && u.academic_program.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesRole = selectedRoleFilter === 'ALL' || u.role === selectedRoleFilter;
+
+    return matchesSearch && matchesRole;
+  });
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-6">
+      {/* Header and Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-100">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
+            <Users size={16} className="text-[#84CC16]" />
+            <span>Gestión Institucional de Usuarios · RF-03</span>
+          </div>
+          <h2 className="text-xl font-extrabold text-[#14281D] mt-0.5">
+            Usuarios y Asignación de Roles
+          </h2>
+          <p className="text-xs text-stone-600">
+            Administra los roles del comité y personal universitario. Los cambios se aplican de inmediato en los permisos del sistema.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={handleSyncSupabase}
+            disabled={isSyncing}
+            className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Consultar y sincronizar perfiles existentes desde la tabla 'profiles' de Supabase"
+          >
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin text-[#84CC16]' : 'text-stone-500'} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Supabase'}</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <UserPlus size={14} />
+            <span>Nuevo Usuario</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Immediate Notification Toast */}
+      {notification && (
+        <div className="bg-[#A3E635]/25 border border-[#84CC16] rounded-xl p-3 text-xs text-[#14281D] font-medium flex items-center gap-2 shadow-2xs animate-fade-in">
+          <CheckCircle2 size={16} className="text-[#14281D] shrink-0" />
+          <span>{notification}</span>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="relative flex-1 max-w-md">
+          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+            <Search size={14} />
+          </span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nombre, correo o programa académico..."
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#E5E3DC] bg-[#F7F6F2] focus:bg-white text-[#14281D] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-stone-500 font-medium flex items-center gap-1">
+            <Filter size={13} />
+            <span>Filtrar por Rol:</span>
+          </span>
+          <select
+            value={selectedRoleFilter}
+            onChange={(e) => setSelectedRoleFilter(e.target.value as UserRole | 'ALL')}
+            className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#14281D] font-medium"
+          >
+            <option value="ALL">Todos los roles ({users.length})</option>
+            {ALL_ROLES.map((r) => (
+              <option key={r.role} value={r.role}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <div className="overflow-x-auto rounded-xl border border-[#E5E3DC]">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
+              <th className="py-3 px-4">Usuario / Nombre</th>
+              <th className="py-3 px-4">Programa & Vínculo</th>
+              <th className="py-3 px-4">Rol Asignado (Modificación Inmediata)</th>
+              <th className="py-3 px-4 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#E5E3DC]">
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-8 text-center text-stone-500">
+                  No se encontraron usuarios institucionales con los filtros aplicados.
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((u) => {
+                const roleBadge = ALL_ROLES.find((r) => r.role === u.role) || ALL_ROLES[0];
+
+                return (
+                  <tr
+                    key={u.id}
+                    className={`transition-colors hover:bg-stone-50/70 ${
+                      !u.is_active ? 'opacity-60 bg-stone-50/30' : ''
+                    }`}
+                  >
+                    {/* User Details */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#14281D] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                          {u.full_name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join('')}
+                        </div>
+                        <div>
+                          <div className="font-bold text-[#14281D]">{u.full_name}</div>
+                          <div className="font-mono text-[11px] text-stone-500">{u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Academic info */}
+                    <td className="py-3.5 px-4">
+                      <div className="space-y-0.5">
+                        <div className="font-medium text-stone-800 flex items-center gap-1.5">
+                          <GraduationCap size={13} className="text-stone-400" />
+                          <span>{u.academic_program || 'Sin programa'}</span>
+                        </div>
+                        <div className="text-[11px] text-stone-500 capitalize">
+                          {u.academic_link ? u.academic_link.replace('_', ' ') : 'Docente'}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Role Selector (Changes immediately, RF-03) */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={u.role}
+                          onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole, u.full_name)}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#14281D] transition-colors ${roleBadge.badgeClass}`}
+                        >
+                          {ALL_ROLES.map((r) => (
+                            <option key={r.role} value={r.role}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-[10px] text-stone-400 font-mono hidden md:inline">
+                          (Reactivo)
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Active toggle */}
+                    <td className="py-3.5 px-4 text-center">
+                      <button
+                        onClick={() => handleToggleActive(u.id, u.is_active, u.full_name)}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-colors"
+                        title={u.is_active ? 'Desactivar usuario' : 'Activar usuario'}
+                      >
+                        {u.is_active ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            Activo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-stone-400"></span>
+                            Inactivo
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 max-w-md w-full shadow-lg space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <h3 className="text-base font-bold text-[#14281D] flex items-center gap-2">
+                <UserPlus size={18} className="text-[#84CC16]" />
+                Registrar Miembro Universitario
+              </h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-stone-400 hover:text-stone-600 text-lg cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Nombre Completo *</label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ej. Dr. Mauricio Sandoval"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Correo Institucional *</label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="usuario@universidad.edu.co"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Programa Académico / Unidad *</label>
+                <input
+                  type="text"
+                  required
+                  value={newProgram}
+                  onChange={(e) => setNewProgram(e.target.value)}
+                  placeholder="Ej. Facultad de Ciencias de la Salud"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Rol Institucional Inicial *</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as UserRole)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D] bg-white font-medium"
+                >
+                  {ALL_ROLES.map((r) => (
+                    <option key={r.role} value={r.role}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-[#14281D] text-white font-semibold hover:bg-[#1E3A2B] cursor-pointer"
+                >
+                  Guardar Usuario
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

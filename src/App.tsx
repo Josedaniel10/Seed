@@ -26,11 +26,15 @@ import { PERMISSIONS_MATRIX } from './features/auth/permissions.ts';
 import { RoleGuard } from './features/auth/RoleGuard.tsx';
 import { UserRole } from './types/database.ts';
 import { LayoutGrid, ClipboardCheck, Users, Settings } from 'lucide-react';
+import { UserManagementTable } from './features/users/UserManagementTable.tsx';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal.tsx';
+import { ResearchGroupsManagement } from './features/groups/ResearchGroupsManagement.tsx';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
   const [activeNav, setActiveNav] = useState<'overview' | 'validation' | 'sessions' | 'admin'>('overview');
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const { profile, isAuthenticated, logout } = useAuthStore();
   const [supabaseTest, setSupabaseTest] = useState<{
     configured: boolean;
@@ -208,7 +212,7 @@ export default function App() {
             ) : null}
 
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 1 · Tarea T1.4
+              Sprint 1 · Tarea T1.6
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -294,6 +298,12 @@ export default function App() {
                 <Check size={16} />
                 <span>Acceso concedido exitosamente con privilegios de Administrador.</span>
               </div>
+
+              {/* T1.5 / RF-03: User Management Table */}
+              <UserManagementTable />
+
+              {/* T1.6 / RF-04: Research Groups Management */}
+              <ResearchGroupsManagement />
             </div>
           </RoleGuard>
         )}
@@ -381,14 +391,24 @@ export default function App() {
               </p>
             </div>
 
-            <button
-              onClick={runSupabaseTest}
-              disabled={isTesting}
-              className="self-start sm:self-auto px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={isTesting ? 'animate-spin' : ''} />
-              <span>{isTesting ? 'Consultando...' : 'Reejecutar consulta de prueba'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={() => setIsConfigModalOpen(true)}
+                className="px-3.5 py-1.5 bg-[#A3E635] hover:bg-[#84CC16] text-[#14281D] font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs border border-[#84CC16]"
+              >
+                <Database size={13} />
+                <span>Conectar Proyecto Supabase</span>
+              </button>
+
+              <button
+                onClick={runSupabaseTest}
+                disabled={isTesting}
+                className="px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isTesting ? 'animate-spin' : ''} />
+                <span>{isTesting ? 'Consultando...' : 'Probar conexión'}</span>
+              </button>
+            </div>
           </div>
 
           {supabaseTest && (
@@ -568,7 +588,7 @@ export default function App() {
             </div>
           </div>
 
-          {authTab === 'login' ? <LoginForm /> : <RegisterForm />}
+          {authTab === 'login' ? <LoginForm /> : <RegisterForm onNavigateLogin={() => setAuthTab('login')} />}
         </section>
 
         {/* RLS Policies & Role Access Matrix (T1.3 / RNF-02) */}
@@ -689,6 +709,16 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* User Management & Immediate Role Assignment (T1.5 / RF-03) */}
+        <section className="space-y-4">
+          <UserManagementTable />
+        </section>
+
+        {/* Research Groups & Verifiable Leader Assignment (T1.6 / RF-04) */}
+        <section className="space-y-4">
+          <ResearchGroupsManagement />
         </section>
 
         {/* Banner Hero */}
@@ -947,6 +977,13 @@ export default function App() {
       <footer className="border-t border-[#E5E3DC] bg-white py-4 px-6 text-center text-xs text-stone-500 mt-auto">
         Seed · Sistema de Gestión del Comité de Investigación © 2026 · Universidad
       </footer>
+
+      {/* Supabase Connection Configuration Modal */}
+      <SupabaseConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        onConfigured={runSupabaseTest}
+      />
     </div>
   );
 }

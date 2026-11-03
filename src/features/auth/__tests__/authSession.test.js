@@ -74,4 +74,37 @@ if (storageAfterLogout) {
   }
 }
 console.log('4. Cierre de sesión exitoso: store y almacenamiento completamente limpios.');
+
+// 5. Registrar un nuevo investigador y loguearse con sus credenciales creadas
+const newUserData = {
+  fullName: 'Dr. Alejandro Peña',
+  email: 'apena@universidad.edu.co',
+  password: 'Password999*',
+  confirmPassword: 'Password999*',
+  academicLink: 'docente_planta',
+  academicProgram: 'Química Aplicada',
+  researchGroupId: 'grp-bio-01',
+};
+
+const regRes = await useAuthStore.getState().registerUser(newUserData);
+if (!regRes.success || !regRes.profile) {
+  console.error('ERROR al registrar nuevo usuario:', regRes.error);
+  process.exit(1);
+}
+console.log('5. Nuevo usuario registrado:', regRes.profile.full_name, '| Email:', regRes.profile.email);
+
+// Iniciar sesión con este usuario recién creado
+const loginNewUserRes = await useAuthStore.getState().login('apena@universidad.edu.co', 'Password999*');
+if (!loginNewUserRes.success) {
+  console.error('ERROR al iniciar sesión con usuario recién creado:', loginNewUserRes.error);
+  process.exit(1);
+}
+const stateNewUser = useAuthStore.getState();
+if (!stateNewUser.isAuthenticated || stateNewUser.profile?.email !== 'apena@universidad.edu.co') {
+  console.error('ERROR: El usuario recién registrado no se autenticó');
+  process.exit(1);
+}
+console.log('6. Login con usuario recién registrado: ¡ÉXITO TOTAL!', stateNewUser.profile.full_name);
+
 console.log('--- ¡Todas las pruebas de sesión y persistencia T1.2 pasaron exitosamente! ---');
+

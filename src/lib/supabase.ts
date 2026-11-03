@@ -1,29 +1,143 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Environment variables safe for both browser (import.meta.env) and Node.js (process.env)
-const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (typeof process !== 'undefined' ? process.env : {});
-const supabaseUrl = (env.VITE_SUPABASE_URL as string) || 'https://mock-seed-project.supabase.co';
-const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vY2stc2VlZC1wcm9qZWN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.mock-signature';
-
-export const isSupabaseConfigured = Boolean(
-  env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY
-);
+// Claves de almacenamiento local para configuración dinámica en navegador
+export const STORAGE_KEY_URL = 'seed_supabase_url';
+export const STORAGE_KEY_ANON_KEY = 'seed_supabase_anon_key';
 
 /**
- * Cliente de Supabase para Seed
- * Maneja autenticación de usuarios, consultas con políticas RLS y suscripciones en tiempo real.
+ * Obtiene las credenciales de Supabase desde variables de entorno o almacenamiento local
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+export function getSupabaseCredentials(): {
+  url: string;
+  anonKey: string;
+  isConfigured: boolean;
+  source: 'env' | 'storage' | 'none';
+} {
+  // 1. Verificar variables de entorno primero
+  const env = typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env
+    : (typeof process !== 'undefined' ? process.env : {});
+
+  const envUrl = (env.VITE_SUPABASE_URL as string) || '';
+  const envKey = (env.VITE_SUPABASE_ANON_KEY as string) || '';
+
+  if (envUrl && envKey && !envUrl.includes('mock-seed-project')) {
+    return { url: envUrl, anonKey: envKey, isConfigured: true, source: 'env' };
+  }
+
+  // 2. Verificar almacenamiento local (configuración interactiva del usuario en UI)
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const localUrl = window.localStorage.getItem(STORAGE_KEY_URL);
+    const localKey = window.localStorage.getItem(STORAGE_KEY_ANON_KEY);
+    if (localUrl && localKey) {
+      return { url: localUrl, anonKey: localKey, isConfigured: true, source: 'storage' };
+    }
+  }
+
+  return { url: envUrl || '', anonKey: envKey || '', isConfigured: false, source: 'none' };
+}
+
+let cachedClient: SupabaseClient | null = null;
+let lastClientUrl = '';
+let lastClientKey = '';
 
 /**
- * Función de verificación de conectividad con Supabase
- * Ejecuta una consulta ligera o ping de autenticación para comprobar el estado de conexión
+ * Obtiene la instancia activa del cliente de Supabase
+ */
+export function getSupabaseClient(): SupabaseClient | null {
+  const { url, anonKey, isConfigured } = getSupabaseCredentials();
+
+  if (!url || !anonKey) {
+    return null;
+  }
+
+  // Reutilizar cliente si no han cambiado las credenciales
+  if (cachedClient && lastClientUrl === url && lastClientKey === anonKey) {
+    return cachedClient;
+  }
+
+  try {
+    cachedClient = createClient(url, anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+    lastClientUrl = url;
+    lastClientKey = anonKey;
+    return cachedClient;
+  } catch (err) {
+    console.error('Error al inicializar cliente de Supabase:', err);
+    return null;
+  }
+}
+
+/**
+ * Guarda credenciales de Supabase ingresadas por el usuario en el navegador
+ */
+export function saveSupabaseCredentials(url: string, anonKey: string): { success: boolean; error?: string } {
+  const trimmedUrl = url.trim();
+  const trimmedKey = anonKey.trim();
+
+  if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+    return { success: false, error: 'La URL debe comenzar con https:// (ej. https://tu-proyecto.supabase.co)' };
+  }
+
+  if (trimmedKey.length < 20) {
+    return { success: false, error: 'La Anon Key de Supabase parece inválida (demasiado corta).' };
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(STORAGE_KEY_URL, trimmedUrl);
+    window.localStorage.setItem(STORAGE_KEY_ANON_KEY, trimmedKey);
+  }
+
+  // Resetear cliente cacheado para forzar reconexión con las nuevas credenciales
+  cachedClient = null;
+  lastClientUrl = '';
+  lastClientKey = '';
+
+  return { success: true };
+}
+
+/**
+ * Elimina las credenciales guardadas en el navegador
+ */
+export function clearSupabaseCredentials() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.removeItem(STORAGE_KEY_URL);
+    window.localStorage.removeItem(STORAGE_KEY_ANON_KEY);
+  }
+  cachedClient = null;
+  lastClientUrl = '';
+  lastClientKey = '';
+}
+
+/**
+ * Exportación directa del cliente por compatibilidad
+ */
+export const supabase = {
+  get auth() {
+    const client = getSupabaseClient();
+    if (!client) {
+      throw new Error('Supabase no está conectado. Configure su URL y Anon Key.');
+    }
+    return client.auth;
+  },
+  from(table: string) {
+    const client = getSupabaseClient();
+    if (!client) {
+      throw new Error('Supabase no está conectado. Configure su URL y Anon Key.');
+    }
+    return client.from(table);
+  },
+};
+
+export const isSupabaseConfigured = () => getSupabaseCredentials().isConfigured;
+
+/**
+ * Comprueba la conectividad en vivo con el proyecto de Supabase
  */
 export async function testSupabaseConnection(): Promise<{
   configured: boolean;
@@ -33,21 +147,32 @@ export async function testSupabaseConnection(): Promise<{
   message: string;
 }> {
   const start = performance.now();
-  const url = supabaseUrl;
+  const creds = getSupabaseCredentials();
 
-  if (!isSupabaseConfigured) {
+  if (!creds.isConfigured || !creds.url || !creds.anonKey) {
     return {
       configured: false,
-      connected: true, // Modo demo / desarrollo inicial
-      latencyMs: Math.round(performance.now() - start),
-      url: `${url} (Modo de desarrollo/demo activo)`,
-      message: 'Cliente de Supabase inicializado correctamente con configuración de desarrollo. Se conectará a tu proyecto en la nube al ingresar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en el entorno.',
+      connected: false,
+      latencyMs: 0,
+      url: 'Sin configurar',
+      message: 'Pendiente conectar: Ingrese la URL y Anon Key de su proyecto de Supabase para activar la autenticación y base de datos relacional real.',
     };
   }
 
   try {
-    // Intento de consulta de sesión para probar conectividad
-    const { error } = await supabase.auth.getSession();
+    const client = getSupabaseClient();
+    if (!client) {
+      return {
+        configured: true,
+        connected: false,
+        latencyMs: 0,
+        url: creds.url,
+        message: 'No se pudo instanciar el cliente con las credenciales proporcionadas.',
+      };
+    }
+
+    // Ping real a Supabase Auth
+    const { error } = await client.auth.getSession();
     const latency = Math.round(performance.now() - start);
 
     if (error) {
@@ -55,8 +180,8 @@ export async function testSupabaseConnection(): Promise<{
         configured: true,
         connected: false,
         latencyMs: latency,
-        url,
-        message: `Error de respuesta en Supabase: ${error.message}`,
+        url: creds.url,
+        message: `Error al conectar con Supabase: ${error.message}`,
       };
     }
 
@@ -64,18 +189,18 @@ export async function testSupabaseConnection(): Promise<{
       configured: true,
       connected: true,
       latencyMs: latency,
-      url,
-      message: 'Conexión a Supabase establecida y verificada con éxito.',
+      url: creds.url,
+      message: `Conexión activa y verificada con Supabase (${latency}ms). Base de datos relacional y autenticación en tiempo real disponibles.`,
     };
   } catch (err: unknown) {
     const latency = Math.round(performance.now() - start);
-    const errorMsg = err instanceof Error ? err.message : 'Error desconocido';
+    const msg = err instanceof Error ? err.message : 'Error desconocido al conectar con Supabase';
     return {
       configured: true,
       connected: false,
       latencyMs: latency,
-      url,
-      message: `Fallo al conectar con Supabase: ${errorMsg}`,
+      url: creds.url,
+      message: `Error de red: ${msg}`,
     };
   }
 }

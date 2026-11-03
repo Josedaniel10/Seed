@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
 import { useAuthStore, DEMO_USERS } from './authStore.ts';
 import { UserRole } from '../../types/database.ts';
-import { LogIn, LogOut, ShieldCheck, Mail, Lock, UserCheck, KeyRound, Sparkles } from 'lucide-react';
+import { LogIn, LogOut, ShieldCheck, Mail, Lock, UserCheck, KeyRound, Sparkles, AlertTriangle } from 'lucide-react';
 
 export const LoginForm: React.FC = () => {
-  const { profile, isAuthenticated, isLoading, error, login, logout, clearError } = useAuthStore();
+  const { profile, isAuthenticated, isLoading, error, login, logout, clearError, resendConfirmationEmail } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resendStatus, setResendStatus] = useState<string | null>(null);
 
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+    setResendStatus(null);
     await login(email, password);
+  };
+
+  const handleResendEmail = async () => {
+    if (!email) return;
+    setResendStatus('Reenviando correo...');
+    const res = await resendConfirmationEmail(email);
+    if (res.success) {
+      setResendStatus(res.message || 'Correo reenviado. Revisa tu bandeja de entrada o spam.');
+    } else {
+      setResendStatus(`Error: ${res.error}`);
+    }
   };
 
   const handleQuickRoleLogin = async (role: UserRole) => {
@@ -126,8 +139,45 @@ export const LoginForm: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs text-rose-800">
-          {error}
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-xs text-rose-800 space-y-2">
+          <div className="font-semibold flex items-center gap-1.5">
+            <AlertTriangle size={15} className="text-rose-600 shrink-0" />
+            <span>
+              {error.toLowerCase().includes('email not confirmed')
+                ? 'Correo pendiente de confirmación en Supabase'
+                : 'Aviso de Autenticación Supabase'}
+            </span>
+          </div>
+
+          <p className="text-[11px] leading-relaxed">
+            {error.toLowerCase().includes('email not confirmed')
+              ? 'Tu usuario fue creado exitosamente en la base de datos de Supabase, pero la configuración de tu proyecto requiere que confirmes el enlace enviado a tu correo antes de iniciar sesión.'
+              : error}
+          </p>
+
+          {error.toLowerCase().includes('email not confirmed') && (
+            <div className="pt-1.5 border-t border-rose-200/60 space-y-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResendEmail}
+                  className="px-3 py-1 bg-white hover:bg-stone-50 text-rose-900 border border-rose-300 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer shadow-2xs"
+                >
+                  Reenviar correo de confirmación
+                </button>
+              </div>
+
+              {resendStatus && (
+                <p className="text-[11px] font-medium text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200">
+                  {resendStatus}
+                </p>
+              )}
+
+              <p className="text-[10px] text-stone-500 bg-white/70 p-2 rounded border border-rose-100">
+                <strong>Tip para desarrollo:</strong> Si deseas iniciar sesión de inmediato sin verificar enlaces de correo, en tu panel de <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="underline font-semibold text-[#14281D]">Supabase</a> ve a <em>Authentication → Providers → Email</em> y desmarca la casilla <em>"Confirm email"</em>.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
