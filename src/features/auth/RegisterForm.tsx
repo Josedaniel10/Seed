@@ -85,13 +85,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onNavigat
       <div className="border-b border-stone-100 pb-4">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
           <GraduationCap size={15} className="text-[#84CC16]" />
-          <span>RF-01 · Registro de Investigadores</span>
+          <span>Registro Institucional</span>
         </div>
         <h2 className="text-xl font-extrabold text-[#14281D] mt-1">
-          Inscripción al Sistema del Comité de Investigación
+          Inscripción al Sistema de Investigaciones
         </h2>
         <p className="text-xs text-stone-600 mt-1">
-          Formulario con validación en tiempo real (React Hook Form + Zod) para docentes, investigadores, estudiantes y monitores de semillero.
+          Complete sus datos para docentes, investigadores, estudiantes y monitores de semillero.
         </p>
       </div>
 

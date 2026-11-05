@@ -249,14 +249,11 @@ export function CatalogManagement() {
           <div className="flex items-center gap-2">
             <Layers size={20} className="text-[#14281D]" />
             <h3 className="text-base font-bold text-[#14281D]">
-              Catálogo Institucional de Tipos de Solicitud y Requisitos (RF-05, RF-06)
+              Catálogo de Tipos de Solicitud y Requisitos
             </h3>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#A3E635] text-[#14281D] border border-[#84CC16]">
-              T1.7 Activo
-            </span>
           </div>
           <p className="text-xs text-stone-600 mt-0.5">
-            Parametriza las solicitudes académicas, si requieren deliberación en sesión de comité, y define los requisitos obligatorios, condicionales y subsanables (RN-10 y RN-11).
+            Parametriza las solicitudes académicas, si requieren deliberación en sesión de comité, y define los requisitos obligatorios, condicionales y subsanables.
           </p>
         </div>
 
@@ -302,9 +299,9 @@ export function CatalogManagement() {
             <FileCheck size={14} />
           </div>
           <div>
-            <div className="font-bold text-[#14281D]">Regla RN-10 (Catálogo Normativo)</div>
+            <div className="font-bold text-[#14281D]">Requisitos Documentales Exigidos</div>
             <p className="text-stone-600 text-[11px] leading-relaxed">
-              Cada tipo de solicitud define con exactitud qué documentos debe radicar el investigador. El sistema valida automáticamente los formatos permitidos (.PDF, .DOCX) y el tope institucional de 10 MB (RNF-04).
+              Cada tipo de solicitud define con exactitud qué documentos debe radicar el investigador. El sistema valida automáticamente los formatos permitidos (.PDF, .DOCX) y el tope institucional de 10 MB.
             </p>
           </div>
         </div>
@@ -314,7 +311,7 @@ export function CatalogManagement() {
             <Clock size={14} />
           </div>
           <div>
-            <div className="font-bold text-[#14281D]">Regla RN-11 (Subsanable vs. No Subsanable)</div>
+            <div className="font-bold text-[#14281D]">Criterios de Subsanación Documental</div>
             <p className="text-stone-600 text-[11px] leading-relaxed">
               La falta de un requisito <strong>subsanable</strong> transita a <em>Pendiente por documentos</em> con plazo hábil de subsanación. La falta de un requisito <strong>no subsanable</strong> causa <em>Rechazo directo</em> en validación.
             </p>
@@ -553,7 +550,7 @@ export function CatalogManagement() {
                         {req.is_mandatory ? 'Obligatorio' : 'Opcional / Condicional'}
                       </span>
 
-                      {/* Subsanable vs No Subsanable (RN-11) */}
+                      {/* Subsanable vs No Subsanable */}
                       {req.is_subsanable ? (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#A3E635] text-[#14281D] border border-[#84CC16] flex items-center gap-1">
                           <Clock size={11} />
@@ -562,7 +559,7 @@ export function CatalogManagement() {
                       ) : (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1">
                           <ShieldAlert size={11} />
-                          <span>No subsanable (Causal de rechazo RN-11)</span>
+                          <span>No subsanable (Causal de rechazo)</span>
                         </span>
                       )}
 
@@ -617,7 +614,7 @@ export function CatalogManagement() {
               <div className="flex items-center gap-2">
                 <FileText size={18} className="text-[#14281D]" />
                 <h3 className="font-bold text-sm text-[#14281D]">
-                  {editingType ? 'Editar Tipo de Trámite' : 'Registrar Nuevo Tipo de Trámite (RF-05)'}
+                  {editingType ? 'Editar Tipo de Trámite' : 'Registrar Nuevo Tipo de Trámite'}
                 </h3>
               </div>
               <button
@@ -780,7 +777,7 @@ export function CatalogManagement() {
                 />
               </div>
 
-              {/* Obligatorio & Subsanable (RN-11) */}
+              {/* Obligatorio & Subsanable */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-stone-50 rounded-xl border border-stone-200">
                 <div className="space-y-1">
                   <label className="flex items-center gap-2 cursor-pointer font-semibold text-[#14281D]">
@@ -793,7 +790,7 @@ export function CatalogManagement() {
                     <span>Requisito Obligatorio</span>
                   </label>
                   <p className="text-[10px] text-stone-500 pl-5">
-                    Indispensable para que el trámite avance a revisión técnica (RN-02).
+                    Indispensable para que el trámite avance a revisión técnica.
                   </p>
                 </div>
 
@@ -805,7 +802,7 @@ export function CatalogManagement() {
                       onChange={(e) => setReqForm({ ...reqForm, is_subsanable: e.target.checked })}
                       className="rounded text-[#14281D] focus:ring-[#14281D]"
                     />
-                    <span>Es Subsanable (RN-11)</span>
+                    <span>Es Subsanable</span>
                   </label>
                   <p className="text-[10px] text-stone-500 pl-5">
                     Si falta, da plazo de corrección; si no es subsanable, se rechaza de inmediato.
@@ -842,7 +839,7 @@ export function CatalogManagement() {
                     onChange={(e) => setReqForm({ ...reqForm, max_size_mb: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs focus:ring-1 focus:ring-[#14281D] focus:outline-none"
                   />
-                  <span className="text-[10px] text-stone-400">Máximo normativo: 10 MB (RNF-04)</span>
+                  <span className="text-[10px] text-stone-400">Máximo institucional: 10 MB</span>
                 </div>
               </div>
 

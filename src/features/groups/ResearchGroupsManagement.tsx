@@ -127,7 +127,7 @@ export const ResearchGroupsManagement: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
             <Building2 size={16} className="text-[#84CC16]" />
-            <span>Catálogo Institucional · RF-04</span>
+            <span>Grupos de Investigación</span>
           </div>
           <h2 className="text-xl font-extrabold text-[#14281D] mt-0.5">
             Gestión de Grupos de Investigación y Líderes
@@ -208,7 +208,7 @@ export const ResearchGroupsManagement: React.FC = () => {
             <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
               <th className="py-3 px-4">Código / Identificador</th>
               <th className="py-3 px-4">Grupo de Investigación & Facultad</th>
-              <th className="py-3 px-4">Líder Asignado (Verificable RF-04)</th>
+              <th className="py-3 px-4">Líder Asignado</th>
               <th className="py-3 px-4 text-center">Estado</th>
             </tr>
           </thead>
@@ -381,7 +381,7 @@ export const ResearchGroupsManagement: React.FC = () => {
                   ))}
                 </select>
                 <p className="text-[10px] text-stone-500 mt-1">
-                  El líder tendrá visibilidad sobre todas las solicitudes de su grupo según las reglas RLS (RNF-02).
+                  El docente líder tendrá acceso y supervisión sobre las propuestas radicadas por los miembros del grupo.
                 </p>
               </div>
 

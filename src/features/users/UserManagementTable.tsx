@@ -132,7 +132,7 @@ export const UserManagementTable: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
             <Users size={16} className="text-[#84CC16]" />
-            <span>Gestión Institucional de Usuarios · RF-03</span>
+            <span>Gestión de Usuarios</span>
           </div>
           <h2 className="text-xl font-extrabold text-[#14281D] mt-0.5">
             Usuarios y Asignación de Roles

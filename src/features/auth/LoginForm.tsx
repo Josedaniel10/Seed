@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useAuthStore, DEMO_USERS } from './authStore.ts';
 import { UserRole } from '../../types/database.ts';
-import { LogIn, LogOut, ShieldCheck, Mail, Lock, UserCheck, KeyRound, Sparkles, AlertTriangle } from 'lucide-react';
+import { LogIn, LogOut, ShieldCheck, Mail, Lock, UserCheck, KeyRound, AlertTriangle } from 'lucide-react';
 
-export const LoginForm: React.FC = () => {
+interface LoginFormProps {
+  onLoginSuccess?: () => void;
+}
+
+export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
   const { profile, isAuthenticated, isLoading, error, login, logout, clearError, resendConfirmationEmail } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,7 +17,10 @@ export const LoginForm: React.FC = () => {
     e.preventDefault();
     if (!email || !password) return;
     setResendStatus(null);
-    await login(email, password);
+    const res = await login(email, password);
+    if (res.success && onLoginSuccess) {
+      onLoginSuccess();
+    }
   };
 
   const handleResendEmail = async () => {
@@ -30,7 +37,10 @@ export const LoginForm: React.FC = () => {
   const handleQuickRoleLogin = async (role: UserRole) => {
     clearError();
     const demo = DEMO_USERS[role];
-    await login(demo.email, 'password123', demo.role, demo.name);
+    const res = await login(demo.email, 'password123', demo.role, demo.name);
+    if (res.success && onLoginSuccess) {
+      onLoginSuccess();
+    }
   };
 
   const roleBadges: Record<UserRole, { label: string; bg: string; text: string }> = {
@@ -50,7 +60,7 @@ export const LoginForm: React.FC = () => {
         <div className="flex items-center justify-between pb-3 border-b border-stone-100">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
             <UserCheck size={16} className="text-[#84CC16]" />
-            <span>Sesión Activa · RF-02</span>
+            <span>Sesión Activa</span>
           </div>
 
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full border border-black/10 ${badge.bg} ${badge.text}`}>
@@ -87,17 +97,10 @@ export const LoginForm: React.FC = () => {
           </button>
         </div>
 
-        <div className="text-[11px] text-stone-500 leading-relaxed bg-stone-50 p-3 rounded-lg border border-stone-200 flex items-start gap-2">
-          <ShieldCheck size={15} className="text-[#84CC16] shrink-0 mt-0.5" />
-          <span>
-            <strong>Persistencia activa:</strong> Si recargas la página (F5), la sesión y permisos de <strong>{profile.full_name}</strong> se mantienen intactos. Al pulsar <em>Cerrar sesión</em>, el almacenamiento se limpia en su totalidad.
-          </span>
-        </div>
-
-        {/* Switcher rápido de rol para pruebas */}
+        {/* Selector rápido para demostración */}
         <div className="pt-2 border-t border-stone-100">
           <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block mb-2">
-            Alternar rápidamente a otro rol para pruebas de permisos:
+            Perfiles institucionales disponibles:
           </span>
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(DEMO_USERS) as UserRole[]).map((r) => {
@@ -124,65 +127,19 @@ export const LoginForm: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs max-w-2xl mx-auto space-y-6">
-      <div className="border-b border-stone-100 pb-4">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1E3A2B]">
-          <LogIn size={15} className="text-[#84CC16]" />
-          <span>RF-02 · Autenticación y Control de Sesión</span>
-        </div>
-        <h2 className="text-xl font-extrabold text-[#14281D] mt-1">
-          Inicio de Sesión en Seed
-        </h2>
-        <p className="text-xs text-stone-600 mt-1">
-          Acceso seguro institucional con persistencia de sesión en recarga y control de acceso por roles.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-xs text-rose-800 space-y-2">
           <div className="font-semibold flex items-center gap-1.5">
             <AlertTriangle size={15} className="text-rose-600 shrink-0" />
-            <span>
-              {error.toLowerCase().includes('email not confirmed')
-                ? 'Correo pendiente de confirmación en Supabase'
-                : 'Aviso de Autenticación Supabase'}
-            </span>
+            <span>Aviso de Acceso</span>
           </div>
-
-          <p className="text-[11px] leading-relaxed">
-            {error.toLowerCase().includes('email not confirmed')
-              ? 'Tu usuario fue creado exitosamente en la base de datos de Supabase, pero la configuración de tu proyecto requiere que confirmes el enlace enviado a tu correo antes de iniciar sesión.'
-              : error}
-          </p>
-
-          {error.toLowerCase().includes('email not confirmed') && (
-            <div className="pt-1.5 border-t border-rose-200/60 space-y-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleResendEmail}
-                  className="px-3 py-1 bg-white hover:bg-stone-50 text-rose-900 border border-rose-300 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer shadow-2xs"
-                >
-                  Reenviar correo de confirmación
-                </button>
-              </div>
-
-              {resendStatus && (
-                <p className="text-[11px] font-medium text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200">
-                  {resendStatus}
-                </p>
-              )}
-
-              <p className="text-[10px] text-stone-500 bg-white/70 p-2 rounded border border-rose-100">
-                <strong>Tip para desarrollo:</strong> Si deseas iniciar sesión de inmediato sin verificar enlaces de correo, en tu panel de <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="underline font-semibold text-[#14281D]">Supabase</a> ve a <em>Authentication → Providers → Email</em> y desmarca la casilla <em>"Confirm email"</em>.
-              </p>
-            </div>
-          )}
+          <p className="text-[11px] leading-relaxed">{error}</p>
         </div>
       )}
 
       {/* Formulario manual de login */}
-      <form onSubmit={handleManualLogin} className="space-y-4">
+      <form onSubmit={handleManualLogin} className="space-y-4 text-xs">
         <div>
           <label className="block text-xs font-semibold text-[#14281D] mb-1" htmlFor="login-email">
             Correo Institucional
@@ -198,7 +155,7 @@ export const LoginForm: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu.usuario@universidad.edu.co"
               required
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#E5E3DC] bg-white text-[#14281D] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#E5E3DC] bg-[#F7F6F2] focus:bg-white text-[#14281D] focus:outline-none focus:ring-1 focus:ring-[#14281D]"
             />
           </div>
         </div>
@@ -218,7 +175,7 @@ export const LoginForm: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#E5E3DC] bg-white text-[#14281D] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#E5E3DC] bg-[#F7F6F2] focus:bg-white text-[#14281D] focus:outline-none focus:ring-1 focus:ring-[#14281D]"
             />
           </div>
         </div>
@@ -229,29 +186,30 @@ export const LoginForm: React.FC = () => {
           className="w-full py-2.5 px-4 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
         >
           <LogIn size={14} />
-          <span>{isLoading ? 'Verificando credenciales...' : 'Iniciar Sesión'}</span>
+          <span>{isLoading ? 'Verificando...' : 'Iniciar Sesión'}</span>
         </button>
       </form>
 
-      {/* Selector rápido de roles precargados para pruebas ágiles */}
-      <div className="pt-4 border-t border-stone-100 space-y-3">
+      {/* Selector rápido de roles */}
+      <div className="pt-4 border-t border-stone-100 space-y-2.5">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-700">
           <KeyRound size={14} className="text-[#84CC16]" />
-          <span>Acceso Rápido por Rol Institucional (Modo Demostración / Pruebas)</span>
+          <span>Acceso Rápido por Perfil Institucional</span>
         </div>
         <p className="text-[11px] text-stone-500">
-          Haz clic en cualquiera de los roles precargados para autenticarte al instante y probar la persistencia de sesión:
+          Seleccione un perfil institucional preconfigurado para ingresar:
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {(Object.keys(DEMO_USERS) as UserRole[]).map((r) => {
             const u = DEMO_USERS[r];
             const badge = roleBadges[r];
             return (
               <button
                 key={r}
+                type="button"
                 onClick={() => handleQuickRoleLogin(r)}
-                className="p-2.5 text-left rounded-xl border border-[#E5E3DC] hover:border-[#14281D] hover:shadow-xs transition-all bg-[#F7F6F2] hover:bg-white cursor-pointer group"
+                className="p-2.5 text-left rounded-xl border border-[#E5E3DC] hover:border-[#14281D] hover:shadow-2xs transition-all bg-[#F7F6F2] hover:bg-white cursor-pointer group"
               >
                 <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 group-hover:text-[#14281D]">
                   {badge.label}
