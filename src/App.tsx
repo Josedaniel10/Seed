@@ -29,11 +29,13 @@ import { LayoutGrid, ClipboardCheck, Users, Settings } from 'lucide-react';
 import { UserManagementTable } from './features/users/UserManagementTable.tsx';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal.tsx';
 import { ResearchGroupsManagement } from './features/groups/ResearchGroupsManagement.tsx';
+import { CatalogManagement } from './features/catalog/CatalogManagement.tsx';
 
 export default function App() {
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('LISTA_COMITE');
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
   const [activeNav, setActiveNav] = useState<'overview' | 'validation' | 'sessions' | 'admin'>('overview');
+  const [adminTab, setAdminTab] = useState<'catalog' | 'users' | 'groups'>('catalog');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const { profile, isAuthenticated, logout } = useAuthStore();
   const [supabaseTest, setSupabaseTest] = useState<{
@@ -212,7 +214,7 @@ export default function App() {
             ) : null}
 
             <span className="text-xs bg-[#A3E635] text-[#14281D] font-semibold px-2.5 py-1 rounded-full border border-[#84CC16]">
-              Sprint 1 · Tarea T1.6
+              Sprint 1 · Tarea T1.7
             </span>
             <span className="text-xs text-stone-500 font-mono">v0.1-pre</span>
           </div>
@@ -281,29 +283,69 @@ export default function App() {
             fallbackTitle="Módulo Exclusivo de Administración General"
             onNavigateHome={() => setActiveNav('overview')}
           >
-            <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-stone-100">
-                <Settings size={20} className="text-[#14281D]" />
-                <div>
-                  <h2 className="text-lg font-bold text-[#14281D]">
-                    Consola de Administración del Sistema (RF-03, RF-04, RF-05)
-                  </h2>
-                  <p className="text-xs text-stone-600">
-                    Módulo restringido únicamente a usuarios con rol Administrador. Gestión de usuarios, grupos y catálogos.
-                  </p>
+            <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+                <div className="flex items-center gap-2">
+                  <Settings size={20} className="text-[#14281D]" />
+                  <div>
+                    <h2 className="text-lg font-bold text-[#14281D]">
+                      Consola de Administración del Sistema (RF-03, RF-04, RF-05, RF-06)
+                    </h2>
+                    <p className="text-xs text-stone-600">
+                      Módulo restringido únicamente a usuarios con rol Administrador. Gestión de catálogos, trámites, usuarios y grupos.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-[#A3E635]/20 border border-[#84CC16] rounded-xl px-3 py-1.5 text-xs text-[#14281D] font-medium flex items-center gap-1.5 self-start sm:self-auto">
+                  <Check size={14} />
+                  <span>Privilegios de Administrador Activos</span>
                 </div>
               </div>
 
-              <div className="bg-[#A3E635]/20 border border-[#84CC16] rounded-xl p-4 text-xs text-[#14281D] font-medium flex items-center gap-2">
-                <Check size={16} />
-                <span>Acceso concedido exitosamente con privilegios de Administrador.</span>
+              {/* Admin Subtabs */}
+              <div className="flex items-center gap-1 p-1 bg-[#EFECE6] rounded-xl self-start border border-[#E5E3DC] overflow-x-auto text-xs">
+                <button
+                  onClick={() => setAdminTab('catalog')}
+                  className={`px-3 py-1.5 font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    adminTab === 'catalog'
+                      ? 'bg-white text-[#14281D] shadow-xs'
+                      : 'text-stone-600 hover:text-[#14281D]'
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>Catálogo de Trámites y Requisitos (T1.7)</span>
+                </button>
+
+                <button
+                  onClick={() => setAdminTab('users')}
+                  className={`px-3 py-1.5 font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    adminTab === 'users'
+                      ? 'bg-white text-[#14281D] shadow-xs'
+                      : 'text-stone-600 hover:text-[#14281D]'
+                  }`}
+                >
+                  <Users size={13} />
+                  <span>Usuarios y Asignación de Roles (T1.5)</span>
+                </button>
+
+                <button
+                  onClick={() => setAdminTab('groups')}
+                  className={`px-3 py-1.5 font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    adminTab === 'groups'
+                      ? 'bg-white text-[#14281D] shadow-xs'
+                      : 'text-stone-600 hover:text-[#14281D]'
+                  }`}
+                >
+                  <Layers size={13} />
+                  <span>Grupos de Investigación (T1.6)</span>
+                </button>
               </div>
 
-              {/* T1.5 / RF-03: User Management Table */}
-              <UserManagementTable />
-
-              {/* T1.6 / RF-04: Research Groups Management */}
-              <ResearchGroupsManagement />
+              {/* Tab Contents */}
+              {adminTab === 'catalog' && <CatalogManagement />}
+              {adminTab === 'users' && <UserManagementTable />}
+              {adminTab === 'groups' && <ResearchGroupsManagement />}
             </div>
           </RoleGuard>
         )}
@@ -719,6 +761,11 @@ export default function App() {
         {/* Research Groups & Verifiable Leader Assignment (T1.6 / RF-04) */}
         <section className="space-y-4">
           <ResearchGroupsManagement />
+        </section>
+
+        {/* Catalog of Application Types and Requirements (T1.7 / RF-05, RF-06) */}
+        <section className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
+          <CatalogManagement />
         </section>
 
         {/* Banner Hero */}

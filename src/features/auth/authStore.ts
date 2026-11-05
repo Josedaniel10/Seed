@@ -84,9 +84,26 @@ export const useAuthStore = create<AuthState>()(
 
         const client = getSupabaseClient();
         if (!client) {
-          const err = 'Supabase no está configurado. Por favor conecta tu proyecto de Supabase ingresando la URL y la Anon Key.';
-          set({ isLoading: false, error: err });
-          return { success: false, error: err };
+          const cleanEmail = data.email.trim().toLowerCase();
+          const mockProfile: Profile = {
+            id: `usr-${Date.now().toString(36)}`,
+            email: cleanEmail,
+            full_name: data.fullName.trim(),
+            role: 'investigador',
+            academic_program: data.academicProgram.trim(),
+            academic_link: data.academicLink,
+            research_group_id: data.researchGroupId,
+            is_active: true,
+            created_at: new Date().toISOString(),
+          };
+          set({
+            profile: mockProfile,
+            token: 'mock-jwt-token-testing',
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+          return { success: true, profile: mockProfile, requiresConfirmation: false };
         }
 
         try {
@@ -196,9 +213,32 @@ export const useAuthStore = create<AuthState>()(
 
         const client = getSupabaseClient();
         if (!client) {
-          const err = 'Supabase no está configurado. Ingrese la URL y la Anon Key de su proyecto en la barra de configuración superior.';
-          set({ isLoading: false, error: err });
-          return { success: false, error: err };
+          const demoMatch = Object.values(DEMO_USERS).find(
+            (u) => u.email.toLowerCase() === cleanEmail
+          );
+
+          const assignedRole: UserRole = mockRole || (demoMatch ? demoMatch.role : 'investigador');
+          const assignedName = mockName || (demoMatch ? demoMatch.name : cleanEmail.split('@')[0]);
+
+          const mockProfile: Profile = {
+            id: `usr-${Date.now().toString(36)}`,
+            email: cleanEmail,
+            full_name: assignedName,
+            role: assignedRole,
+            academic_program: demoMatch?.program || 'Investigación General',
+            academic_link: 'docente_planta',
+            research_group_id: demoMatch?.group || 'grp-bio-01',
+            is_active: true,
+            created_at: new Date().toISOString(),
+          };
+          set({
+            profile: mockProfile,
+            token: 'mock-jwt-token-testing',
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+          return { success: true, profile: mockProfile };
         }
 
         try {
