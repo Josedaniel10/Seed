@@ -140,7 +140,7 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 | **T1.5** | Gestión de usuarios y asignación de roles | El administrador modifica el rol de un usuario y los permisos se actualizan de inmediato | RF-03 |
 | **T1.6** | Gestión de grupos de investigación | Se registra un grupo con su código institucional y se asigna su docente líder | RF-04 |
 | **T1.7** | Gestión de tipos de solicitud y requisitos | Se crea un tipo de trámite con requisitos obligatorios, condicionales y subsanables | RF-05, RF-06 |
-| **T1.8** | Precarga del catálogo inicial estándar | El script seed activa los 5 tipos prioritarios para el prototipo | RF-37 |
+| **T1.8** | Precarga del catálogo inicial estándar | Completado: 12 tipos estándar precargados según sección 2.10 (5 prioritarios activos y 7 complementarios inactivos configurables), 31 requisitos y pruebas automáticas en `catalogSeedPreload.test.js` | RF-37 |
 
 ---
 
@@ -148,13 +148,13 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 
 | ID | Tarea | Resultado esperado y prueba | Requisitos |
 | :--- | :--- | :--- | :--- |
-| **T2.1** | Paso 1 de radicación: selección de tipo de solicitud y datos generales | Al elegir el tipo, se despliega dinámicamente la lista de requisitos asociados | RF-07 |
-| **T2.2** | Asignación de número de radicado consecutivo ininterrumpido | Dos radicaciones simultáneas reciben consecutivos distintos sin colisiones | RF-08 |
-| **T2.3** | Carga de documentos por requisito hacia el servicio de archivos local | El archivo físico se almacena en el disco local y los metadatos se enlazan en la base de datos | RF-09 |
-| **T2.4** | Validación estricta de documentos (formato PDF/DOCX y tamaño máximo) | Se rechaza cualquier archivo ejecutable o con peso superior a 10 MB | RNF-04 |
-| **T2.5** | Finalizar radicación con estado inicial `Radicada` e historial | La solicitud queda registrada en estado inicial y con su primer evento en la bitácora | RF-08, RF-23 |
-| **T2.6** | Vista de Mis Solicitudes con filtros para investigadores | Cada investigador visualiza exclusivamente sus trámites radicados | RF-11 |
-| **T2.7** | Vista de detalle de solicitud con cronología vertical | Los eventos de trazabilidad se listan en orden cronológico con autor, fecha y detalle | RF-23 |
+| **T2.1** | Paso 1 de radicación: selección de tipo de solicitud y datos generales | Completado: Despliegue dinámico de requisitos por tipo en Wizard, validación Zod y pruebas automáticas en `filingWizardRequirements.test.js` | RF-07 |
+| **T2.2** | Asignación de número de radicado consecutivo ininterrumpido | Completado: Generador atómico sin colisiones en formato `Radicado YYYY-XXX`, validado con 10 peticiones simultáneas en `consecutiveFilingNumber.test.js` | RF-08 |
+| **T2.3** | Carga de documentos por requisito hacia el servicio de archivos local | Completado: Metadatos y hash SHA-256 vinculados por requisito y probados en `documentValidationAndUpload.test.js` | RF-09 |
+| **T2.4** | Validación estricta de documentos (formato PDF/DOCX y tamaño máximo) | Completado: Rechazo estricto de ejecutables (.exe, .sh, etc.) y archivos > 10MB con pruebas automáticas en `documentValidationAndUpload.test.js` | RNF-04 |
+| **T2.5** | Finalizar radicación con estado inicial `Radicada` e historial | Completado: Solicitud formal en estado `RADICADA` y primer evento en bitácora inmutable en `applicationFilingLifecycle.test.js` | RF-08, RF-23 |
+| **T2.6** | Vista de Mis Solicitudes con filtros para investigadores | Completado: Aislamiento estricto de expedientes por investigador, filtros en vivo, columna "Qué Falta" y pruebas en `myApplicationsAndDetail.test.js` | RF-11 |
+| **T2.7** | Vista de detalle de solicitud con cronología vertical | Completado: Cronología vertical inmutable, visualización y subsanación documental, verificado en `myApplicationsAndDetail.test.js` | RF-23 |
 
 ---
 

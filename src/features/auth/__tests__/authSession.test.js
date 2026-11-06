@@ -45,6 +45,7 @@ if (!stateAfterLogin.isAuthenticated || !stateAfterLogin.profile || stateAfterLo
 console.log('2. Inicio de sesión exitoso con rol:', stateAfterLogin.profile.role, 'y usuario:', stateAfterLogin.profile.full_name);
 
 // 3. Simular recarga de página: serializar a storage y reconstruir
+await new Promise((r) => setTimeout(r, 20));
 const serialized = globalThis.localStorage.getItem('seed_auth_session');
 if (!serialized) {
   console.error('ERROR: La sesión no fue guardada en el almacenamiento local persistente');

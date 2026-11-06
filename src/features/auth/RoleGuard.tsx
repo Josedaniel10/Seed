@@ -56,7 +56,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
 
         <div className="space-y-1">
           <div className="text-xs font-semibold uppercase tracking-wider text-rose-800">
-            Control de Acceso · RF-02
+            Control de Acceso
           </div>
           <h3 className="text-lg font-bold text-[#14281D]">{fallbackTitle}</h3>
           <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">

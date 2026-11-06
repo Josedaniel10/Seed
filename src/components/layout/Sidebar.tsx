@@ -33,14 +33,6 @@ export function Sidebar() {
       <div className="p-5 pb-4 border-b border-[#E5E3DC]">
         <NavLink to="/" className="flex items-center gap-3">
           <SeedLogo size={32} />
-          <div>
-            <div className="text-xs font-bold text-[#14281D] leading-tight tracking-tight">
-              Comité Institucional
-            </div>
-            <div className="text-[11px] text-stone-500 font-medium">
-              Gestión de Investigaciones
-            </div>
-          </div>
         </NavLink>
       </div>
 
