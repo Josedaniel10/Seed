@@ -162,21 +162,21 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 
 | ID | Tarea | Resultado esperado y prueba | Requisitos |
 | :--- | :--- | :--- | :--- |
-| **T3.1** | Lista de verificación de requisitos para el personal administrativo | El administrativo visualiza cada requisito junto con el documento cargado y su carácter subsanable | RF-12 |
-| **T3.2** | Validar o rechazar documentos individuales con motivo justificado | El motivo del rechazo queda asentado y se notifica al investigador | RF-13 |
-| **T3.3** | Recarga y subsanación de documentos rechazados | El investigador carga la versión corregida y el requisito regresa a validación | RF-10 |
-| **T3.4** | Función SQL de transición de estados reglamentaria | Prueba SQL: se rechaza cualquier salto de estado no contemplado en la matriz | RF-21 |
-| **T3.5** | Bitácora de historial inmutable (Trigger append-only) | Prueba SQL: cualquier intento de actualizar o eliminar un registro de historial es bloqueado | RF-23, RNF-03 |
-| **T3.6** | Transición automática de estado tras validación documental | Falta subsanable: `Pendiente por documentos`; falta no subsanable: `Rechazada`; todo válido: `En revisión` | RF-14, RN-02, RN-11 |
-| **T3.7** | Asignación de evaluador con bloqueo de conflicto de intereses (RN-14) | El sistema inhabilita la asignación a autores, coinvestigadores o miembros del mismo grupo | RF-15, RN-03, RN-14 |
-| **T3.8** | Reasignación de evaluador | La asignación previa pasa a estado inactivo y queda registrada en el histórico | RF-16, RN-08 |
-| **T3.9** | Formulario de observaciones técnicas clasificadas | Se registran observaciones tipificadas (aclaración, ajuste obligatorio o sugerencia) | RF-17 |
-| **T3.10** | Solicitud formal de ajustes con plazo y respuesta del investigador | El investigador responde los ajustes requeridos y el evaluador valida la respuesta | RF-18 |
-| **T3.11** | Emisión de concepto técnico y pase a `Lista para comité` | Solo con concepto favorable o favorable con ajustes subsanados transita a *Lista para comité* | RF-19, RF-20 |
-| **T3.12** | Monitor de seguimiento de plazos y vencimientos | Solicitudes próximas a vencer o vencidas se resaltan con alertas visuales | RF-22 |
-| **T3.13** | Franja superior de métricas unificada | Cada contador individual coincide exactamente con el conteo real en la base de datos | RF-35 |
-| **T3.14** | Vista de tabla estructurada con filtros avanzados | Filtrado multidimensional en tiempo real por estado, tipo de solicitud y búsqueda libre | RF-11 |
-| **T3.15** | Tablero Kanban con arrastre controlado y diálogo de acción | El arrastre no autorizado se bloquea; al soltar en columna válida se abre el diálogo de la acción; modo solo lectura para investigadores | RF-21 |
+| **T3.1** | Lista de verificación de requisitos para el personal administrativo | Completado: Lista interactiva en `ValidacionPage.tsx`, discriminación de subsanabilidad y verificación en `documentValidationWorkflow.test.js` | RF-12 |
+| **T3.2** | Validar o rechazar documentos individuales con motivo justificado | Completado: Rechazo exige justificación obligatoria (RN-05) y se asienta en auditoría, verificado en `documentValidationWorkflow.test.js` | RF-13, RN-05 |
+| **T3.3** | Recarga y subsanación de documentos rechazados | Completado: Reemplazo documental mediante `subsanarDocument`, actualización de metadatos SHA-256 y paso a validación pendiente en `myApplicationsAndDetail.test.js` | RF-10 |
+| **T3.4** | Función de transición de estados reglamentaria | Completado: Matriz `ALLOWED_TRANSITIONS` estricta, bloqueo de saltos inválidos y verificación en `stateTransitionsAndInmutability.test.js` | RF-21, RN-01 |
+| **T3.5** | Bitácora de historial inmutable (Trigger append-only) | Completado: Bloqueo de mutaciones y eliminaciones (RNF-03), verificado en `stateTransitionsAndInmutability.test.js` | RF-23, RNF-03 |
+| **T3.6** | Transición automática de estado tras validación documental | Completado: No subsanable -> `RECHAZADA`; subsanable -> `PENDIENTE_DOCUMENTOS`; 100% válido -> `EN_REVISION`, verificado en `documentValidationWorkflow.test.js` | RF-14, RN-02, RN-11 |
+| **T3.7** | Asignación de evaluador con bloqueo de conflicto de intereses | Completado: Inhabilidad por evaluar propia solicitud (RN-03) e inhabilidad por mismo grupo de investigación (RN-14) bloqueadas en `reviewerConflictAndAssignment.test.js` | RF-15, RN-03, RN-14 |
+| **T3.8** | Reasignación de evaluador | Completado: Preservación de asignación previa con `is_active: false` y activación de nueva asignación en `reviewerConflictAndAssignment.test.js` | RF-16, RN-08 |
+| **T3.9** | Formulario de observaciones técnicas clasificadas | Completado: Categorización tipificada (`ACLARACION`, `AJUSTE_OBLIGATORIO`, `SUGERENCIA`), probado en `technicalEvaluationAndConcept.test.js` | RF-17 |
+| **T3.10** | Solicitud formal de ajustes con plazo y respuesta del investigador | Completado: Interacción formal mediante `respondToObservation`, verificado en `technicalEvaluationAndConcept.test.js` | RF-18 |
+| **T3.11** | Emisión de concepto técnico y pase a `Lista para comité` | Completado: Concepto motivado por escrito (RN-05) y avance normativo a `LISTA_COMITE` (RF-20) verificado en `technicalEvaluationAndConcept.test.js` | RF-19, RF-20 |
+| **T3.12** | Monitor de seguimiento de plazos y vencimientos | Completado: Detección de plazos críticos y vencidos (`getDeadlineStatus`), alertas visuales y probado en `technicalEvaluationAndConcept.test.js` | RF-22 |
+| **T3.13** | Franja superior de métricas unificada | Completado: Contadores dinámicos sincronizados al 100% con la base de datos (`getStatusCounts`), probado en `kanbanAndMetrics.test.js` | RF-35 |
+| **T3.14** | Vista de tabla estructurada con filtros avanzados | Completado: Búsqueda libre, filtrado multidimensional por estado y tipo de trámite en `PanelSeguimientoPage.tsx`, probado en `kanbanAndMetrics.test.js` | RF-11 |
+| **T3.15** | Tablero Kanban con arrastre controlado y diálogo de acción | Completado: 5 columnas operativas, validación de arrastre reglamentario, diálogo de acción guiado y modo solo lectura para investigadores, probado en `kanbanAndMetrics.test.js` | RF-21 |
 
 ---
 

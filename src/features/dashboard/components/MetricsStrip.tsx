@@ -1,29 +1,57 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { APPLICATION_STATUS_CONFIG, ApplicationStatus } from '../../../types/theme.ts';
 import { useCatalogStore } from '../../catalog/catalogStore.ts';
+import { useApplicationStore } from '../../applications/applicationStore.ts';
 
-export function MetricsStrip() {
+export interface MetricsStripProps {
+  onSelectStatus?: (status: ApplicationStatus | 'TODOS') => void;
+  selectedStatus?: ApplicationStatus | 'TODOS';
+}
+
+export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripProps) {
   const catalogCount = useCatalogStore((s) => s.types.length);
   const requirementsCount = useCatalogStore((s) => s.requirements.length);
+  const applications = useApplicationStore((s) => s.applications);
 
-  // Simulated live counters for the 6 core states (RF-35)
+  // Contadores reales individuales para cada estado exacto (RF-35)
+  const realCounts = useMemo(() => {
+    const counts: Record<ApplicationStatus, number> = {
+      RADICADA: 0,
+      PENDIENTE_DOCUMENTOS: 0,
+      EN_REVISION: 0,
+      LISTA_COMITE: 0,
+      APROBADA: 0,
+      APROBADA_CON_AJUSTES: 0,
+      RECHAZADA: 0,
+      CERRADA: 0,
+    };
+
+    for (const app of applications) {
+      if (counts[app.current_status] !== undefined) {
+        counts[app.current_status]++;
+      }
+    }
+
+    return counts;
+  }, [applications]);
+
   const metrics: Array<{ status: ApplicationStatus; count: number }> = [
-    { status: 'RADICADA', count: 4 },
-    { status: 'PENDIENTE_DOCUMENTOS', count: 2 },
-    { status: 'EN_REVISION', count: 5 },
-    { status: 'LISTA_COMITE', count: 3 },
-    { status: 'APROBADA', count: 12 },
-    { status: 'RECHAZADA', count: 1 },
+    { status: 'RADICADA', count: realCounts.RADICADA },
+    { status: 'PENDIENTE_DOCUMENTOS', count: realCounts.PENDIENTE_DOCUMENTOS },
+    { status: 'EN_REVISION', count: realCounts.EN_REVISION },
+    { status: 'LISTA_COMITE', count: realCounts.LISTA_COMITE },
+    { status: 'APROBADA', count: realCounts.APROBADA + realCounts.APROBADA_CON_AJUSTES },
+    { status: 'RECHAZADA', count: realCounts.RECHAZADA },
   ];
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs text-stone-600">
         <span className="font-bold text-[#14281D] uppercase tracking-wider text-[11px]">
-          Resumen General de Trámites
+          Franja Superior de Métricas Unificada (RF-35)
         </span>
         <span className="text-[11px] text-stone-500 font-medium">
-          {catalogCount} tipos de trámite · {requirementsCount} requisitos configurados
+          {applications.length} expedientes registrados · {catalogCount} tipos activos
         </span>
       </div>
 
@@ -31,25 +59,35 @@ export function MetricsStrip() {
         {metrics.map(({ status, count }) => {
           const conf = APPLICATION_STATUS_CONFIG[status];
           const Icon = conf.icon;
+          const isSelected = selectedStatus === status;
 
           return (
             <div
               key={status}
-              className={`p-3 rounded-xl border flex flex-col justify-between transition-all bg-white hover:border-stone-400 shadow-2xs ${conf.borderClass}`}
+              onClick={() => onSelectStatus?.(isSelected ? 'TODOS' : status)}
+              className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all bg-white cursor-pointer shadow-xs ${
+                isSelected
+                  ? 'border-[#14281D] ring-2 ring-[#14281D] shadow-sm'
+                  : 'border-[#E5E3DC] hover:border-stone-400'
+              }`}
             >
               <div className="flex items-center justify-between text-stone-500 mb-1">
-                <span className="text-[10px] font-semibold truncate max-w-[85px]">
-                  {conf.label}
+                <span className="text-[11px] font-bold truncate max-w-[95px] text-stone-700">
+                  {conf.shortLabel || conf.label}
                 </span>
-                <span className={`p-1 rounded-md ${conf.bgClass} ${conf.textClass}`}>
+                <span className={`p-1 rounded-lg ${conf.bgClass} ${conf.textClass}`}>
                   <Icon size={12} />
                 </span>
               </div>
-              <div className="text-xl font-bold font-mono text-[#14281D] tabular-nums">
+              <div className="text-2xl font-extrabold font-mono text-[#14281D] tabular-nums mt-0.5">
                 {count}
               </div>
               <div className="text-[10px] text-stone-400 mt-1 truncate">
-                {status === 'LISTA_COMITE' ? 'Para sesión' : 'En seguimiento'}
+                {status === 'LISTA_COMITE'
+                  ? 'Para sesión'
+                  : status === 'APROBADA'
+                  ? 'Concluidas'
+                  : 'En trámite activo'}
               </div>
             </div>
           );

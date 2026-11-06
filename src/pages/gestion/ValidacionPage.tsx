@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ClipboardCheck,
@@ -11,285 +11,529 @@ import {
   ChevronRight,
   Eye,
   AlertCircle,
+  Download,
+  ShieldAlert,
+  Send,
+  Building2,
+  FolderOpen,
 } from 'lucide-react';
-
-interface ExpedienteValidacion {
-  id: string;
-  radicado: string;
-  investigador: string;
-  tipo: string;
-  estado: string;
-  fechaRadicacion: string;
-  documentosCompletos: string;
-  documentos: Array<{
-    id: string;
-    nombre: string;
-    obligatorio: boolean;
-    subsanable: boolean;
-    estado: 'PENDIENTE' | 'VALIDO' | 'OBSERVADO';
-  }>;
-}
-
-const EXPEDIENTES_INICIALES: ExpedienteValidacion[] = [
-  {
-    id: 'sol-001',
-    radicado: 'Radicado 2026-014',
-    investigador: 'Dra. Carmen Lucía Morales',
-    tipo: 'Presentación de Proyecto',
-    estado: 'Radicada',
-    fechaRadicacion: '03 Nov 2026 · 14:30',
-    documentosCompletos: '2 de 3',
-    documentos: [
-      {
-        id: 'doc-1',
-        nombre: 'Propuesta Técnica Completa',
-        obligatorio: true,
-        subsanable: false,
-        estado: 'VALIDO',
-      },
-      {
-        id: 'doc-2',
-        nombre: 'Presupuesto Detallado y Cronograma',
-        obligatorio: true,
-        subsanable: true,
-        estado: 'PENDIENTE',
-      },
-      {
-        id: 'doc-3',
-        nombre: 'Carta de Aval del Líder de Grupo',
-        obligatorio: true,
-        subsanable: true,
-        estado: 'VALIDO',
-      },
-    ],
-  },
-  {
-    id: 'sol-002',
-    radicado: 'Radicado 2026-015',
-    investigador: 'Dr. Alejandro Restrepo',
-    tipo: 'Modificación Presupuestal',
-    estado: 'Pendiente por documentos',
-    fechaRadicacion: '04 Nov 2026 · 09:15',
-    documentosCompletos: '1 de 2',
-    documentos: [
-      {
-        id: 'doc-4',
-        nombre: 'Justificación Técnica de Modificación Presupuestal',
-        obligatorio: true,
-        subsanable: true,
-        estado: 'VALIDO',
-      },
-      {
-        id: 'doc-5',
-        nombre: 'Cuadro Comparativo de Rubros Financieros',
-        obligatorio: true,
-        subsanable: true,
-        estado: 'OBSERVADO',
-      },
-    ],
-  },
-];
+import { useSessionStore } from '../../stores/session.store.ts';
+import { useApplicationStore } from '../../features/applications/applicationStore.ts';
+import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
+import { useUserStore } from '../../features/users/userStore.ts';
+import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 
 export function ValidacionPage() {
   const navigate = useNavigate();
-  const [expedientes, setExpedientes] = useState(EXPEDIENTES_INICIALES);
-  const [selectedId, setSelectedId] = useState('sol-001');
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const { user } = useSessionStore();
+  const {
+    applications,
+    documents,
+    validateRequirementDocument,
+    finalizeAdministrativeValidation,
+  } = useApplicationStore();
+  const { types, requirements } = useCatalogStore();
+  const { users } = useUserStore();
 
-  const selectedExp = expedientes.find((e) => e.id === selectedId) || expedientes[0];
+  // Solicitudes en estado Radicada o Pendiente por documentos (sección 4.4 del plan)
+  const expedientesPorValidar = useMemo(() => {
+    return applications.filter(
+      (a) => a.current_status === 'RADICADA' || a.current_status === 'PENDIENTE_DOCUMENTOS'
+    );
+  }, [applications]);
 
-  const handleDocDecision = (docId: string, nuevoEstado: 'VALIDO' | 'OBSERVADO') => {
-    setExpedientes((prev) =>
-      prev.map((exp) => {
-        if (exp.id !== selectedExp.id) return exp;
-        const nuevosDocs = exp.documentos.map((d) =>
-          d.id === docId ? { ...d, estado: nuevoEstado } : d
-        );
-        const validos = nuevosDocs.filter((d) => d.estado === 'VALIDO').length;
-        return {
-          ...exp,
-          documentos: nuevosDocs,
-          documentosCompletos: `${validos} de ${nuevosDocs.length}`,
-        };
-      })
+  const [selectedId, setSelectedId] = useState<string>(
+    expedientesPorValidar[0]?.id || applications[0]?.id || ''
+  );
+  const [searchTerm, setSearchTerm] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null
+  );
+
+  // Modal para rechazar con motivo justificado (RN-05, RF-13)
+  const [rejectingDocId, setRejectingDocId] = useState<{
+    reqId: string;
+    docId: string;
+    reqName: string;
+  } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const selectedExp = useMemo(() => {
+    return (
+      applications.find((a) => a.id === selectedId) ||
+      expedientesPorValidar[0] ||
+      applications[0]
+    );
+  }, [applications, selectedId, expedientesPorValidar]);
+
+  const applicant = useMemo(() => {
+    return users.find((u) => u.id === selectedExp?.applicant_id);
+  }, [users, selectedExp]);
+
+  const appType = useMemo(() => {
+    return types.find((t) => t.id === selectedExp?.application_type_id);
+  }, [types, selectedExp]);
+
+  const typeReqs = useMemo(() => {
+    if (!selectedExp) return [];
+    return requirements.filter((r) => r.application_type_id === selectedExp.application_type_id);
+  }, [requirements, selectedExp]);
+
+  const appDocs = useMemo(() => {
+    if (!selectedExp) return [];
+    return documents.filter((d) => d.application_id === selectedExp.id);
+  }, [documents, selectedExp]);
+
+  const filteredExpedientes = useMemo(() => {
+    return expedientesPorValidar.filter((exp) => {
+      const t = types.find((type) => type.id === exp.application_type_id)?.name || '';
+      const term = searchTerm.toLowerCase();
+      return (
+        exp.filing_number.toLowerCase().includes(term) ||
+        exp.title.toLowerCase().includes(term) ||
+        t.toLowerCase().includes(term)
+      );
+    });
+  }, [expedientesPorValidar, types, searchTerm]);
+
+  // Manejo de marcar como Válido
+  const handleMarkValido = async (reqId: string) => {
+    if (!selectedExp) return;
+    const doc = appDocs.find((d) => d.requirement_id === reqId);
+    if (!doc) {
+      setFeedback({
+        type: 'error',
+        message: 'No existe documento adjunto para este requisito.',
+      });
+      return;
+    }
+
+    const res = await validateRequirementDocument(
+      selectedExp.id,
+      reqId,
+      'VALIDO',
+      null,
+      user?.id || 'usr-adm-02',
+      user?.fullName || 'Personal Administrativo'
     );
 
-    setFeedback(
-      nuevoEstado === 'VALIDO'
-        ? 'Requisito marcado como válido.'
-        : 'Requisito observado. Se notificará para subsanación.'
-    );
-    setTimeout(() => setFeedback(null), 3000);
+    if (res.success) {
+      setFeedback({ type: 'success', message: 'Requisito marcado como VÁLIDO conforme a norma.' });
+      setTimeout(() => setFeedback(null), 3000);
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Error al validar requisito.' });
+    }
   };
 
-  const handleFinalizarValidacion = () => {
-    setExpedientes((prev) =>
-      prev.map((exp) =>
-        exp.id === selectedExp.id ? { ...exp, estado: 'En revisión' } : exp
-      )
+  // Confirmar rechazo con motivo (RF-13, RN-05)
+  const handleConfirmRechazo = async () => {
+    if (!selectedExp || !rejectingDocId) return;
+
+    if (!rejectReason.trim()) {
+      setFeedback({
+        type: 'error',
+        message: 'RN-05: El motivo del rechazo es obligatorio y debe estar justificado.',
+      });
+      return;
+    }
+
+    const res = await validateRequirementDocument(
+      selectedExp.id,
+      rejectingDocId.reqId,
+      'RECHAZADO',
+      rejectReason.trim(),
+      user?.id || 'usr-adm-02',
+      user?.fullName || 'Personal Administrativo'
     );
-    setFeedback('Validación documental finalizada. La solicitud avanza a fase de revisión.');
-    setTimeout(() => setFeedback(null), 3000);
+
+    if (res.success) {
+      setFeedback({
+        type: 'success',
+        message: `Requisito "${rejectingDocId.reqName}" marcado como RECHAZADO con justificación asentada.`,
+      });
+      setRejectingDocId(null);
+      setRejectReason('');
+      setTimeout(() => setFeedback(null), 3500);
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Error al rechazar requisito.' });
+    }
+  };
+
+  // Finalizar validación documental con transición automática (T3.6 / RF-14, RN-02, RN-11)
+  const handleFinalizar = async () => {
+    if (!selectedExp) return;
+
+    const res = await finalizeAdministrativeValidation(
+      selectedExp.id,
+      user?.id || 'usr-adm-02',
+      user?.fullName || 'Personal Administrativo'
+    );
+
+    if (res.success && res.application) {
+      const nuevo = res.application.current_status;
+      const mensaje =
+        nuevo === 'EN_REVISION'
+          ? '¡Validación aprobada! 100% de requisitos conformes. La solicitud avanzó a "En revisión técnica".'
+          : nuevo === 'PENDIENTE_DOCUMENTOS'
+          ? 'Validación concluida con requisitos subsanables observados. La solicitud pasó a "Pendiente por documentos".'
+          : 'Validación finalizada con rechazo directo por requisito no subsanable (RN-11).';
+
+      setFeedback({ type: 'success', message: mensaje });
+      setTimeout(() => setFeedback(null), 4500);
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'No fue posible finalizar la validación.' });
+    }
+  };
+
+  const handleDownloadDoc = (fileName: string, hash: string) => {
+    const content = `EXPEDIENTE INSTITUCIONAL DE INVESTIGACIÓN\nDocumento: ${fileName}\nSHA-256: ${hash}`;
+    const blob = new Blob([content], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
       <div>
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Bandeja de Validación Documental
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
-          Verificación formal de requisitos y documentos exigidos para trámites radicados.
+          Verificación reglamentaria de requisitos y documentos para trámites Radicados y Pendientes
+          por documentos (RF-12, RF-13, RF-14).
         </p>
       </div>
 
       {feedback && (
-        <div className="p-3 bg-[#A3E635]/25 border border-[#84CC16] text-[#14281D] rounded-xl text-xs flex items-center gap-2">
-          <CheckCircle2 size={16} />
-          <span>{feedback}</span>
+        <div
+          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900'
+          }`}
+        >
+          {feedback.type === 'success' ? (
+            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+          ) : (
+            <AlertCircle size={16} className="text-rose-600 shrink-0" />
+          )}
+          <span className="font-medium">{feedback.message}</span>
+        </div>
+      )}
+
+      {/* Modal / Diálogo de Rechazo Documental con Justificación (RN-05, RF-13) */}
+      {rejectingDocId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 max-w-lg w-full space-y-4 shadow-xl">
+            <div className="flex items-center gap-2 text-rose-800">
+              <ShieldAlert size={20} />
+              <h3 className="font-bold text-sm text-[#14281D]">
+                Rechazar Requisito Documental con Justificación
+              </h3>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Está a punto de rechazar el requisito: <strong>{rejectingDocId.reqName}</strong>. De
+              acuerdo con la norma (RN-05, RF-13), debe justificar de manera explícita la causa
+              técnica o formal del rechazo para que el investigador conozca qué corregir.
+            </p>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-800 mb-1">
+                Motivo / Justificación del Rechazo *
+              </label>
+              <textarea
+                rows={4}
+                required
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Describa el motivo detallado del rechazo (ej. Falta firma del líder de grupo, el presupuesto no incluye cotizaciones vigentes...)"
+                className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-rose-600 outline-none text-xs text-stone-800 leading-relaxed"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingDocId(null);
+                  setRejectReason('');
+                }}
+                className="px-4 py-2 rounded-xl border border-stone-200 text-xs font-semibold text-stone-600 hover:bg-stone-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRechazo}
+                className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold cursor-pointer transition-colors"
+              >
+                Confirmar Rechazo Documental
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Columna Izquierda: Cola de expedientes */}
+        {/* Columna Izquierda: Cola de expedientes (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
-          <div className="text-xs font-bold text-stone-600">
-            Expedientes por validar ({expedientes.length})
+          <div className="flex items-center justify-between text-xs font-bold text-stone-700">
+            <span>Expedientes en Cola ({expedientesPorValidar.length})</span>
           </div>
 
-          <div className="space-y-2.5">
-            {expedientes.map((exp) => {
-              const isSelected = exp.id === selectedExp?.id;
-              return (
-                <div
-                  key={exp.id}
-                  onClick={() => setSelectedId(exp.id)}
-                  className={`p-4 rounded-xl border text-xs transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-white border-[#14281D] shadow-sm ring-1 ring-[#14281D]'
-                      : 'bg-white border-[#E5E3DC] hover:border-stone-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-[#F7F6F2] border border-[#E5E3DC] text-[#14281D]">
-                      {exp.radicado}
-                    </span>
-                    <span className="text-[10px] text-stone-500">{exp.fechaRadicacion}</span>
-                  </div>
-
-                  <h4 className="font-bold text-[#14281D]">{exp.tipo}</h4>
-                  <p className="text-[11px] text-stone-500 mt-0.5">{exp.investigador}</p>
-
-                  <div className="pt-2 mt-2 border-t border-stone-100 flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-stone-600">
-                      Requisitos: {exp.documentosCompletos}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900">
-                      {exp.estado}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Buscador */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-stone-400" size={14} />
+            <input
+              type="text"
+              placeholder="Buscar por radicado o título..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E5E3DC] bg-white text-xs outline-none"
+            />
           </div>
+
+          {filteredExpedientes.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-2xl border border-[#E5E3DC] space-y-2">
+              <FolderOpen size={32} className="mx-auto text-stone-300" />
+              <p className="text-xs text-stone-500 font-medium">
+                No hay expedientes pendientes de validación en esta bandeja.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+              {filteredExpedientes.map((exp) => {
+                const isSelected = exp.id === selectedExp?.id;
+                const tName = types.find((t) => t.id === exp.application_type_id)?.name;
+                const expDocs = documents.filter((d) => d.application_id === exp.id);
+                const validCount = expDocs.filter((d) => d.validation_status === 'VALIDO').length;
+                const totalMandatory = requirements.filter(
+                  (r) => r.application_type_id === exp.application_type_id && r.is_mandatory
+                ).length;
+
+                return (
+                  <div
+                    key={exp.id}
+                    onClick={() => setSelectedId(exp.id)}
+                    className={`p-4 rounded-2xl border text-xs transition-all cursor-pointer space-y-2 ${
+                      isSelected
+                        ? 'bg-white border-[#14281D] shadow-xs ring-2 ring-[#14281D]'
+                        : 'bg-white border-[#E5E3DC] hover:border-stone-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-lg bg-[#F7F6F2] border border-[#E5E3DC] text-[#14281D]">
+                        {exp.filing_number}
+                      </span>
+                      <StatusBadge status={exp.current_status} size="sm" />
+                    </div>
+
+                    <h4 className="font-bold text-[#14281D] line-clamp-1">{exp.title}</h4>
+                    <p className="text-[11px] text-stone-500 truncate">{tName}</p>
+
+                    <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
+                      <span>
+                        Verificados: <strong>{validCount}</strong> de {totalMandatory} obligatorios
+                      </span>
+                      <span className="text-[10px] text-stone-400">
+                        {new Date(exp.created_at).toLocaleDateString('es-CO', {
+                          day: '2-digit',
+                          month: 'short',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Columna Derecha: Lista de Chequeo Documental */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
-          {selectedExp && (
+        {/* Columna Derecha: Lista de Chequeo Documental (7 cols) */}
+        <div className="lg:col-span-7 bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-7 shadow-xs space-y-5">
+          {selectedExp ? (
             <>
-              <div className="pb-3 border-b border-stone-100">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold px-2 py-0.5 bg-[#14281D] text-white rounded">
-                    {selectedExp.radicado}
-                  </span>
+              {/* Encabezado del expediente seleccionado */}
+              <div className="pb-4 border-b border-[#E5E3DC] space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold px-3 py-1 bg-[#14281D] text-white rounded-lg">
+                      {selectedExp.filing_number}
+                    </span>
+                    <StatusBadge status={selectedExp.current_status} size="sm" />
+                  </div>
                   <button
                     onClick={() => navigate(`/solicitudes/${selectedExp.id}`)}
                     className="text-xs text-stone-600 hover:text-[#14281D] font-bold flex items-center gap-1 cursor-pointer"
                   >
-                    <span>Ver expediente completo</span>
+                    <span>Ver expediente</span>
                     <ChevronRight size={13} />
                   </button>
                 </div>
-                <h3 className="font-bold text-sm text-[#14281D] mt-2">
-                  {selectedExp.tipo}
+
+                <h3 className="font-extrabold text-sm md:text-base text-[#14281D] leading-snug">
+                  {selectedExp.title}
                 </h3>
-                <p className="text-xs text-stone-600 mt-0.5">
-                  Investigador(a): <strong>{selectedExp.investigador}</strong>
-                </p>
+
+                <div className="text-xs text-stone-600 flex items-center gap-4 flex-wrap pt-1">
+                  <span>
+                    Investigador(a): <strong>{applicant?.full_name || 'Investigador Principal'}</strong>
+                  </span>
+                  <span>
+                    Tipo: <strong>{appType?.name}</strong>
+                  </span>
+                </div>
               </div>
 
+              {/* Lista de Requisitos con botón Válido / Rechazar (RF-12, RF-13) */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider">
-                  Lista de Requisitos Exigidos
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider">
+                    Requisitos Exigidos y Validación Individual ({typeReqs.length})
+                  </h4>
+                </div>
 
-                {selectedExp.documentos.map((doc, idx) => (
-                  <div
-                    key={doc.id}
-                    className="p-3.5 rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] text-xs space-y-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-bold text-[#14281D] flex items-center gap-2">
-                          <span>
-                            {idx + 1}. {doc.nombre}
+                {typeReqs.map((req, idx) => {
+                  const doc = appDocs.find((d) => d.requirement_id === req.id);
+                  const status = doc?.validation_status || 'PENDIENTE';
+
+                  return (
+                    <div
+                      key={req.id}
+                      className={`p-4 rounded-2xl border text-xs space-y-3 transition-all ${
+                        status === 'VALIDO'
+                          ? 'bg-emerald-50/50 border-emerald-300'
+                          : status === 'RECHAZADO'
+                          ? 'bg-rose-50/50 border-rose-300'
+                          : 'bg-[#F7F6F2] border-[#E5E3DC]'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[#14281D]">
+                              {idx + 1}. {req.name}
+                            </span>
+                            {req.is_mandatory ? (
+                              <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-stone-800 text-white">
+                                Obligatorio
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium px-2 py-0.2 rounded bg-stone-100 text-stone-700">
+                                Condicional
+                              </span>
+                            )}
+                            {req.is_subsanable ? (
+                              <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                Subsanable (5 días)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-rose-100 text-rose-900 border border-rose-200">
+                                No subsanable (Rechazo RN-11)
+                              </span>
+                            )}
+                          </div>
+
+                          {doc ? (
+                            <div className="text-[11px] text-stone-600 flex items-center gap-3 pt-1">
+                              <span className="font-mono text-stone-800 font-bold truncate">
+                                📎 {doc.file_name}
+                              </span>
+                              <span>{(doc.file_size_bytes / (1024 * 1024)).toFixed(2)} MB</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadDoc(doc.file_name, doc.file_hash_sha256)}
+                                className="text-stone-500 hover:text-[#14281D] cursor-pointer inline-flex items-center gap-1 font-semibold"
+                                title="Descargar"
+                              >
+                                <Download size={12} />
+                                <span>Descargar</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-rose-600 font-semibold italic block pt-1">
+                              ⚠ Documento no adjuntado por el solicitante.
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Botones de acción individual: Válido / Rechazar (RF-13) */}
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-start">
+                          <button
+                            type="button"
+                            onClick={() => handleMarkValido(req.id)}
+                            disabled={!doc}
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40 ${
+                              status === 'VALIDO'
+                                ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                                : 'bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}
+                          >
+                            <Check size={13} />
+                            <span>Válido</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRejectingDocId({
+                                reqId: req.id,
+                                docId: doc?.id || '',
+                                reqName: req.name,
+                              })
+                            }
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                              status === 'RECHAZADO'
+                                ? 'bg-rose-700 text-white border-rose-700 shadow-xs'
+                                : 'bg-white hover:bg-rose-50 text-rose-800 border-rose-200'
+                            }`}
+                          >
+                            <XCircle size={13} />
+                            <span>Rechazar</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Motivo de rechazo actual */}
+                      {status === 'RECHAZADO' && doc?.validation_observations && (
+                        <div className="p-3 rounded-xl bg-rose-100/70 border border-rose-300 text-rose-900 text-[11px] space-y-1">
+                          <span className="font-bold flex items-center gap-1 text-rose-800">
+                            <AlertCircle size={13} />
+                            <span>Motivo asentado:</span>
                           </span>
-                          {doc.estado === 'VALIDO' && (
-                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
-                              <Check size={11} /> Válido
-                            </span>
-                          )}
-                          {doc.estado === 'OBSERVADO' && (
-                            <span className="text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded flex items-center gap-1">
-                              <XCircle size={11} /> Observado
-                            </span>
-                          )}
+                          <p>{doc.validation_observations}</p>
                         </div>
-                        <div className="text-[11px] text-stone-500 mt-0.5">
-                          {doc.obligatorio ? 'Obligatorio' : 'Opcional'} ·{' '}
-                          {doc.subsanable ? 'Subsanable (5 días hábiles)' : 'No subsanable'}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => handleDocDecision(doc.id, 'VALIDO')}
-                          className={`p-1.5 rounded-lg border text-xs flex items-center gap-1 cursor-pointer transition-colors ${
-                            doc.estado === 'VALIDO'
-                              ? 'bg-emerald-700 text-white border-emerald-700'
-                              : 'bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-200'
-                          }`}
-                        >
-                          <Check size={13} />
-                          <span>Válido</span>
-                        </button>
-                        <button
-                          onClick={() => handleDocDecision(doc.id, 'OBSERVADO')}
-                          className={`p-1.5 rounded-lg border text-xs flex items-center gap-1 cursor-pointer transition-colors ${
-                            doc.estado === 'OBSERVADO'
-                              ? 'bg-rose-700 text-white border-rose-700'
-                              : 'bg-white hover:bg-rose-50 text-rose-800 border-rose-200'
-                          }`}
-                        >
-                          <XCircle size={13} />
-                          <span>Rechazar</span>
-                        </button>
-                      </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              <div className="pt-3 border-t border-stone-100 flex justify-end">
+              {/* Botón de cierre de validación (T3.6 / RF-14, RN-02, RN-11) */}
+              <div className="pt-4 border-t border-[#E5E3DC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-[11px] text-stone-500">
+                  Transición reglamentaria automática: 100% válido → <em>En revisión</em>; falla
+                  subsanable → <em>Pendiente por docs</em>; falla no subsanable → <em>Rechazada</em>.
+                </span>
+
                 <button
-                  onClick={handleFinalizarValidacion}
-                  className="px-4 py-2 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                  type="button"
+                  onClick={handleFinalizar}
+                  className="px-5 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
                 >
                   Finalizar Validación Documental
                 </button>
               </div>
             </>
+          ) : (
+            <div className="p-12 text-center text-xs text-stone-500">
+              Seleccione un expediente de la columna izquierda para iniciar la validación.
+            </div>
           )}
         </div>
       </div>

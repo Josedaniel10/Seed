@@ -6,8 +6,14 @@ import {
   AuditHistory,
   ApplicationDbStatus,
   DocumentValidationStatus,
+  ReviewerAssignment,
+  ReviewerConcept,
+  Observation,
+  ObservationCategory,
+  Profile,
 } from '../../types/database.ts';
 import { useCatalogStore } from '../catalog/catalogStore.ts';
+import { useUserStore } from '../users/userStore.ts';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 
 export interface UploadedFilePayload {
@@ -33,13 +39,35 @@ export interface CreateApplicationPayload {
   documents: UploadedFilePayload[];
 }
 
+export interface DeadlineInfo {
+  deadlineDate: string | null;
+  daysRemaining: number;
+  isOverdue: boolean;
+  isUrgent: boolean;
+  description: string;
+}
+
+// Matriz estricta de transiciones de estados (T3.4 / RF-21)
+export const ALLOWED_TRANSITIONS: Record<ApplicationDbStatus, ApplicationDbStatus[]> = {
+  RADICADA: ['PENDIENTE_DOCUMENTOS', 'EN_REVISION', 'RECHAZADA'],
+  PENDIENTE_DOCUMENTOS: ['EN_REVISION', 'RECHAZADA'],
+  EN_REVISION: ['LISTA_COMITE', 'RECHAZADA', 'PENDIENTE_DOCUMENTOS'],
+  LISTA_COMITE: ['APROBADA', 'APROBADA_CON_AJUSTES', 'RECHAZADA', 'CERRADA'],
+  APROBADA_CON_AJUSTES: ['APROBADA', 'CERRADA'],
+  APROBADA: ['CERRADA'],
+  RECHAZADA: ['CERRADA'],
+  CERRADA: [], // Estado final inmutable (RN-01)
+};
+
 export interface ApplicationState {
   applications: Application[];
   documents: ApplicationDocument[];
   auditHistory: AuditHistory[];
+  assignments: ReviewerAssignment[];
+  observations: Observation[];
   isSubmitting: boolean;
 
-  // Acciones y consultas
+  // Acciones Sprint 2
   generateNextFilingNumber: (year?: number) => Promise<string>;
   createApplication: (
     payload: CreateApplicationPayload
@@ -56,6 +84,78 @@ export interface ApplicationState {
     actorName: string
   ) => Promise<{ success: boolean; document?: ApplicationDocument; error?: string }>;
   computeQueFalta: (app: Application) => string;
+
+  // Acciones Sprint 3: Validación Documental
+  validateRequirementDocument: (
+    applicationId: string,
+    requirementId: string,
+    status: DocumentValidationStatus,
+    observations: string | null,
+    validatedBy: string,
+    validatedByName: string
+  ) => Promise<{ success: boolean; document?: ApplicationDocument; error?: string }>;
+  finalizeAdministrativeValidation: (
+    applicationId: string,
+    validatedBy: string,
+    validatedByName: string
+  ) => Promise<{ success: boolean; application?: Application; error?: string }>;
+
+  // Acciones Sprint 3: Transición de Estados
+  transitionApplicationStatus: (
+    applicationId: string,
+    newStatus: ApplicationDbStatus,
+    actorId: string,
+    actorName: string,
+    reason?: string,
+    details?: Record<string, unknown>
+  ) => Promise<{ success: boolean; application?: Application; error?: string }>;
+
+  // Acciones Sprint 3: Asignación de Revisores y Conflicto de Intereses
+  checkReviewerConflict: (
+    reviewerId: string,
+    applicationId: string
+  ) => { hasConflict: boolean; reason?: string };
+  assignReviewer: (
+    applicationId: string,
+    reviewerId: string,
+    deadlineDate: string,
+    assignedBy: string,
+    assignerName: string
+  ) => Promise<{ success: boolean; assignment?: ReviewerAssignment; error?: string }>;
+  getActiveAssignment: (applicationId: string) => ReviewerAssignment | undefined;
+  getAssignmentsByReviewer: (reviewerId: string) => ReviewerAssignment[];
+
+  // Acciones Sprint 3: Observaciones y Ajustes
+  addTechnicalObservation: (
+    applicationId: string,
+    authorId: string,
+    authorName: string,
+    category: ObservationCategory,
+    content: string
+  ) => Promise<{ success: boolean; observation?: Observation; error?: string }>;
+  respondToObservation: (
+    observationId: string,
+    applicantResponse: string,
+    actorId: string,
+    actorName: string
+  ) => Promise<{ success: boolean; observation?: Observation; error?: string }>;
+  getObservationsByApplication: (applicationId: string) => Observation[];
+
+  // Acciones Sprint 3: Concepto Técnico
+  submitReviewerConcept: (
+    applicationId: string,
+    reviewerId: string,
+    reviewerName: string,
+    concept: ReviewerConcept,
+    justification: string
+  ) => Promise<{ success: boolean; application?: Application; error?: string }>;
+
+  // Acciones Sprint 3: Métricas y Plazos
+  getStatusCounts: () => Record<ApplicationDbStatus, number>;
+  getDeadlineStatus: (applicationId: string) => DeadlineInfo;
+
+  // Inmutabilidad
+  assertAuditHistoryImmutable: (recordId: string) => never;
   resetToInitialSeed: () => void;
 }
 
@@ -125,6 +225,21 @@ export const INITIAL_APPLICATIONS: Application[] = [
     created_at: '2026-01-25T11:00:00Z',
     updated_at: '2026-01-30T17:00:00Z',
   },
+  {
+    id: 'sol-005',
+    filing_number: 'Radicado 2026-005',
+    application_type_id: 'apt-009', // Cierre
+    applicant_id: 'usr-006',
+    title: 'Cierre y Liquidación Proyecto Fitoquímica Avanzada',
+    abstract: 'Informe final de actividades, publicación de 2 artículos indexados y balance contable.',
+    research_group_id: 'grp-002',
+    budget_requested: 0,
+    current_status: 'LISTA_COMITE',
+    is_tutor_endorsed: true,
+    requires_committee: true,
+    created_at: '2026-01-28T09:00:00Z',
+    updated_at: '2026-02-03T15:00:00Z',
+  },
 ];
 
 export const INITIAL_DOCUMENTS: ApplicationDocument[] = [
@@ -146,10 +261,10 @@ export const INITIAL_DOCUMENTS: ApplicationDocument[] = [
   {
     id: 'doc-002',
     application_id: 'sol-001',
-    requirement_id: 'req-002', // Carta de Aval del Líder
-    file_name: 'Carta_Aval_Lider_Grupo_Firmada.pdf',
-    file_path: 'file-service/storage/carta_aval_grupo_firmada.pdf',
-    file_size_bytes: 840000,
+    requirement_id: 'req-002', // Presupuesto Detallado
+    file_name: 'Presupuesto_Detallado_Fitopatogenos.xlsx',
+    file_path: 'file-service/storage/presupuesto_fitopatogenos.xlsx',
+    file_size_bytes: 350000,
     file_hash_sha256: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
     mime_type: 'application/pdf',
     validation_status: 'PENDIENTE',
@@ -157,6 +272,36 @@ export const INITIAL_DOCUMENTS: ApplicationDocument[] = [
     validated_by: null,
     validated_at: null,
     uploaded_at: '2026-02-01T14:32:00Z',
+  },
+  {
+    id: 'doc-002-b',
+    application_id: 'sol-001',
+    requirement_id: 'req-003', // Carta de Aval Líder
+    file_name: 'Carta_Aval_Lider_Grupo_Firmada.pdf',
+    file_path: 'file-service/storage/carta_aval_grupo_firmada.pdf',
+    file_size_bytes: 840000,
+    file_hash_sha256: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8b',
+    mime_type: 'application/pdf',
+    validation_status: 'PENDIENTE',
+    validation_observations: null,
+    validated_by: null,
+    validated_at: null,
+    uploaded_at: '2026-02-01T14:33:00Z',
+  },
+  {
+    id: 'doc-002-c',
+    application_id: 'sol-001',
+    requirement_id: 'req-013', // Declaración Honestidad
+    file_name: 'Declaracion_Honestidad_Originalidad.pdf',
+    file_path: 'file-service/storage/declaracion_honestidad.pdf',
+    file_size_bytes: 420000,
+    file_hash_sha256: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8c',
+    mime_type: 'application/pdf',
+    validation_status: 'PENDIENTE',
+    validation_observations: null,
+    validated_by: null,
+    validated_at: null,
+    uploaded_at: '2026-02-01T14:34:00Z',
   },
   {
     id: 'doc-003',
@@ -173,6 +318,21 @@ export const INITIAL_DOCUMENTS: ApplicationDocument[] = [
     validated_by: 'usr-002',
     validated_at: '2026-02-03T11:00:00Z',
     uploaded_at: '2026-02-02T10:15:00Z',
+  },
+  {
+    id: 'doc-004',
+    application_id: 'sol-003',
+    requirement_id: 'req-008', // Justificación de prórroga
+    file_name: 'Justificacion_Prorroga_Bioensayos.pdf',
+    file_path: 'file-service/storage/justificacion_prorroga.pdf',
+    file_size_bytes: 520000,
+    file_hash_sha256: '992d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe311',
+    mime_type: 'application/pdf',
+    validation_status: 'VALIDO',
+    validation_observations: null,
+    validated_by: 'usr-002',
+    validated_at: '2026-02-04T09:00:00Z',
+    uploaded_at: '2026-02-02T16:00:00Z',
   },
 ];
 
@@ -250,6 +410,45 @@ export const INITIAL_AUDIT_HISTORY: AuditHistory[] = [
   },
 ];
 
+export const INITIAL_ASSIGNMENTS: ReviewerAssignment[] = [
+  {
+    id: 'asg-001',
+    application_id: 'sol-003',
+    reviewer_id: 'usr-003', // Dr. Alejandro Restrepo (Ciencias Básicas)
+    deadline_date: '2026-02-12',
+    is_active: true,
+    assigned_by: 'usr-004', // Secretaría Técnica
+    concept: null,
+    concept_date: null,
+    created_at: '2026-02-04T09:30:00Z',
+  },
+  {
+    id: 'asg-002',
+    application_id: 'sol-005',
+    reviewer_id: 'usr-003',
+    deadline_date: '2026-02-02',
+    is_active: true,
+    assigned_by: 'usr-004',
+    concept: 'FAVORABLE',
+    concept_date: '2026-02-02T14:00:00Z',
+    created_at: '2026-01-29T10:00:00Z',
+  },
+];
+
+export const INITIAL_OBSERVATIONS: Observation[] = [
+  {
+    id: 'obs-001',
+    application_id: 'sol-003',
+    assignment_id: 'asg-001',
+    author_id: 'usr-003', // Dr. Alejandro Restrepo
+    category: 'SUGERENCIA',
+    content: 'Se sugiere verificar que los nuevos plazos no traslapen con la temporada de lluvias en campo.',
+    is_resolved: true,
+    applicant_response: 'Se ajustó el plan de muestreo para evitar temporadas húmedas.',
+    created_at: '2026-02-04T11:00:00Z',
+  },
+];
+
 // Mutex / Lock atómico para generación concurrente de consecutivos ininterrumpidos (RF-08)
 let filingSequenceLock = Promise.resolve();
 const sequenceTracker: Record<number, number> = {};
@@ -260,22 +459,15 @@ export const useApplicationStore = create<ApplicationState>()(
       applications: INITIAL_APPLICATIONS,
       documents: INITIAL_DOCUMENTS,
       auditHistory: INITIAL_AUDIT_HISTORY,
+      assignments: INITIAL_ASSIGNMENTS,
+      observations: INITIAL_OBSERVATIONS,
       isSubmitting: false,
 
-      /**
-       * Genera un número de radicado consecutivo ininterrumpido (RF-08).
-       * Utiliza encadenamiento secuencial atómico con mutex para evitar colisiones
-       * cuando dos o más radicaciones se realizan de forma simultánea.
-       * Formato estandarizado: "Radicado YYYY-XXX" (e.g. "Radicado 2026-005").
-       */
       generateNextFilingNumber: async (year?: number): Promise<string> => {
         const targetYear = year || new Date().getFullYear();
 
-        // Encolamiento atómico mediante Promise chain
         const generateTask = filingSequenceLock.then(async () => {
           const currentApps = get().applications;
-
-          // Buscar el consecutivo más alto existente para el año especificado
           const prefix = `Radicado ${targetYear}-`;
           let maxSequence = sequenceTracker[targetYear] || 0;
 
@@ -296,19 +488,10 @@ export const useApplicationStore = create<ApplicationState>()(
           return `${prefix}${paddedNum}`;
         });
 
-        // Actualizar la referencia de lock
         filingSequenceLock = generateTask.then(() => {});
         return generateTask;
       },
 
-      /**
-       * Finaliza y registra una nueva solicitud formal de investigación (RF-07, RF-08, RF-09, RF-23).
-       * - Valida requisitos obligatorios según catálogo.
-       * - Asigna número consecutivo ininterrumpido.
-       * - Estado inicial inmutable: 'RADICADA'.
-       * - Vincula metadatos y hash SHA-256 de documentos.
-       * - Registra el primer evento formal en la bitácora inmutable (audit_history).
-       */
       createApplication: async (payload: CreateApplicationPayload) => {
         set({ isSubmitting: true });
 
@@ -324,13 +507,11 @@ export const useApplicationStore = create<ApplicationState>()(
             };
           }
 
-          // Obtener requisitos del tipo de trámite
           const typeRequirements = catalog.requirements.filter(
             (r) => r.application_type_id === payload.application_type_id
           );
           const mandatoryRequirements = typeRequirements.filter((r) => r.is_mandatory);
 
-          // Verificar que se hayan cargado todos los requisitos obligatorios
           const uploadedReqIds = new Set(payload.documents.map((d) => d.requirement_id));
           const missingMandatory = mandatoryRequirements.filter((m) => !uploadedReqIds.has(m.id));
 
@@ -342,13 +523,10 @@ export const useApplicationStore = create<ApplicationState>()(
             };
           }
 
-          // Generar número consecutivo atómico
           const filingNumber = await get().generateNextFilingNumber();
-
           const nowIso = new Date().toISOString();
           const appId = `sol-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
-          // 1. Crear el registro de la solicitud
           const newApplication: Application = {
             id: appId,
             filing_number: filingNumber,
@@ -365,7 +543,6 @@ export const useApplicationStore = create<ApplicationState>()(
             updated_at: nowIso,
           };
 
-          // 2. Crear los registros de documentos
           const newDocuments: ApplicationDocument[] = payload.documents.map((doc, idx) => ({
             id: `doc-${Date.now().toString(36)}-${idx}`,
             application_id: appId,
@@ -382,7 +559,6 @@ export const useApplicationStore = create<ApplicationState>()(
             uploaded_at: nowIso,
           }));
 
-          // 3. Crear el primer evento de bitácora inmutable (audit_history)
           const newAuditEvent: AuditHistory = {
             id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
             application_id: appId,
@@ -402,25 +578,12 @@ export const useApplicationStore = create<ApplicationState>()(
             created_at: nowIso,
           };
 
-          // Actualizar estado local
           set((state) => ({
             applications: [newApplication, ...state.applications],
             documents: [...newDocuments, ...state.documents],
             auditHistory: [...state.auditHistory, newAuditEvent],
             isSubmitting: false,
           }));
-
-          // Si Supabase está disponible, sincronizar en background
-          const supabase = getSupabaseClient();
-          if (supabase) {
-            Promise.all([
-              supabase.from('applications').insert([newApplication]),
-              supabase.from('application_documents').insert(newDocuments),
-              supabase.from('audit_history').insert([newAuditEvent]),
-            ]).catch((err) => {
-              console.warn('Sync en background con Supabase no completado:', err);
-            });
-          }
 
           return { success: true, application: newApplication };
         } catch (err: unknown) {
@@ -430,9 +593,6 @@ export const useApplicationStore = create<ApplicationState>()(
         }
       },
 
-      /**
-       * Permite a un investigador subsanar o recargar un documento
-       */
       subsanarDocument: async (
         applicationId: string,
         requirementId: string,
@@ -446,12 +606,12 @@ export const useApplicationStore = create<ApplicationState>()(
         }
 
         const nowIso = new Date().toISOString();
-        let targetDoc = get().documents.find(
+        const targetDoc = get().documents.find(
           (d) => d.application_id === applicationId && d.requirement_id === requirementId
         );
 
         if (targetDoc) {
-          targetDoc = {
+          const updatedDoc: ApplicationDocument = {
             ...targetDoc,
             file_name: file.file_name,
             file_path: file.file_path,
@@ -483,14 +643,634 @@ export const useApplicationStore = create<ApplicationState>()(
           };
 
           set((state) => ({
-            documents: state.documents.map((d) => (d.id === targetDoc!.id ? targetDoc! : d)),
+            documents: state.documents.map((d) => (d.id === targetDoc.id ? updatedDoc : d)),
             auditHistory: [...state.auditHistory, newAudit],
           }));
 
-          return { success: true, document: targetDoc };
+          return { success: true, document: updatedDoc };
         }
 
         return { success: false, error: 'Requisito documental no encontrado en el expediente.' };
+      },
+
+      // ==============================================================
+      // SPRINT 3: VALIDACIÓN DOCUMENTAL (RF-12, RF-13, RF-14, RN-02, RN-11)
+      // ==============================================================
+
+      /**
+       * Valida o rechaza un documento individual con motivo motivado por escrito (RF-13, RN-05)
+       */
+      validateRequirementDocument: async (
+        applicationId: string,
+        requirementId: string,
+        status: DocumentValidationStatus,
+        observations: string | null,
+        validatedBy: string,
+        validatedByName: string
+      ) => {
+        if (status === 'RECHAZADO' && (!observations || observations.trim().length === 0)) {
+          return {
+            success: false,
+            error: 'Todo rechazo documental exige justificación motivada por escrito (RN-05, RF-13).',
+          };
+        }
+
+        const nowIso = new Date().toISOString();
+        const doc = get().documents.find(
+          (d) => d.application_id === applicationId && d.requirement_id === requirementId
+        );
+
+        if (!doc) {
+          return { success: false, error: 'Documento no encontrado en el expediente.' };
+        }
+
+        const updatedDoc: ApplicationDocument = {
+          ...doc,
+          validation_status: status,
+          validation_observations: observations || null,
+          validated_by: validatedBy,
+          validated_at: nowIso,
+        };
+
+        const auditItem: AuditHistory = {
+          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          actor_id: validatedBy,
+          action: status === 'VALIDO' ? 'DOCUMENTO_VALIDADO' : 'DOCUMENTO_RECHAZADO',
+          previous_status: null,
+          new_status: null,
+          details: {
+            requirement_id: requirementId,
+            file_name: doc.file_name,
+            status,
+            observations,
+            validated_by_name: validatedByName,
+            timestamp: nowIso,
+          },
+          created_at: nowIso,
+        };
+
+        set((state) => ({
+          documents: state.documents.map((d) => (d.id === doc.id ? updatedDoc : d)),
+          auditHistory: [...state.auditHistory, auditItem],
+        }));
+
+        return { success: true, document: updatedDoc };
+      },
+
+      /**
+       * Finaliza la validación documental y transita automáticamente el estado (RF-14, RN-02, RN-11)
+       * - Si falta o se rechaza un requisito NO subsanable -> Rechazo inmediato ('RECHAZADA').
+       * - Si falta o se rechaza un requisito subsanable -> 'PENDIENTE_DOCUMENTOS'.
+       * - Si el 100% de los requisitos obligatorios están conformes -> 'EN_REVISION'.
+       */
+      finalizeAdministrativeValidation: async (
+        applicationId: string,
+        validatedBy: string,
+        validatedByName: string
+      ) => {
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) {
+          return { success: false, error: 'Solicitud no encontrada.' };
+        }
+
+        const catalog = useCatalogStore.getState();
+        const typeReqs = catalog.requirements.filter(
+          (r) => r.application_type_id === app.application_type_id
+        );
+        const mandatoryReqs = typeReqs.filter((r) => r.is_mandatory);
+        const docs = get().documents.filter((d) => d.application_id === applicationId);
+
+        // Evaluar requisitos obligatorios
+        let hasRejectedNonSubsanable = false;
+        let hasRejectedSubsanable = false;
+        let missingMandatoryCount = 0;
+
+        for (const req of mandatoryReqs) {
+          const doc = docs.find((d) => d.requirement_id === req.id);
+          if (!doc) {
+            missingMandatoryCount++;
+            if (!req.is_subsanable) hasRejectedNonSubsanable = true;
+            else hasRejectedSubsanable = true;
+          } else if (doc.validation_status === 'RECHAZADO') {
+            if (!req.is_subsanable) hasRejectedNonSubsanable = true;
+            else hasRejectedSubsanable = true;
+          } else if (doc.validation_status === 'PENDIENTE') {
+            return {
+              success: false,
+              error: `El requisito obligatorio "${req.name}" aún no ha sido dictaminado como Válido o Rechazado.`,
+            };
+          }
+        }
+
+        let targetStatus: ApplicationDbStatus;
+        let transitionReason: string;
+
+        if (hasRejectedNonSubsanable) {
+          // RN-11: La falta de un requisito no subsanable causa rechazo inmediato en validación
+          targetStatus = 'RECHAZADA';
+          transitionReason =
+            'Rechazo directo en validación: Requisito esencial no subsanable insatisfecho o rechazado (RN-11).';
+        } else if (hasRejectedSubsanable || missingMandatoryCount > 0) {
+          // RN-11: La falta de un requisito subsanable pasa a PENDIENTE_DOCUMENTOS con plazo
+          targetStatus = 'PENDIENTE_DOCUMENTOS';
+          transitionReason =
+            'Pendiente por documentos: Se detectaron inconsistencias en requisitos subsanables. Plazo de 5 días hábiles otorgado.';
+        } else {
+          // RN-02: Solo pasa a En revisión si el 100% de los requisitos obligatorios están marcados como válidos
+          targetStatus = 'EN_REVISION';
+          transitionReason =
+            '100% de los requisitos obligatorios verificados conformes a la normativa. Expediente habilitado para evaluación técnica.';
+        }
+
+        return get().transitionApplicationStatus(
+          applicationId,
+          targetStatus,
+          validatedBy,
+          validatedByName,
+          transitionReason,
+          {
+            validation_type: 'ADMINISTRATIVA_DOCUMENTAL',
+            mandatory_total: mandatoryReqs.length,
+            mandatory_valid: docs.filter((d) => d.validation_status === 'VALIDO').length,
+          }
+        );
+      },
+
+      // ==============================================================
+      // SPRINT 3: TRANSICIÓN REGLAMENTARIA DE ESTADOS (RF-21, RN-01, RN-05)
+      // ==============================================================
+
+      /**
+       * Función de transición reglamentaria con validación de matriz de estados (RF-21)
+       */
+      transitionApplicationStatus: async (
+        applicationId: string,
+        newStatus: ApplicationDbStatus,
+        actorId: string,
+        actorName: string,
+        reason?: string,
+        details?: Record<string, unknown>
+      ) => {
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) {
+          return { success: false, error: 'Solicitud no encontrada.' };
+        }
+
+        const currentStatus = app.current_status;
+
+        // Validar si el estado actual es final
+        if (currentStatus === 'CERRADA') {
+          return {
+            success: false,
+            error: 'RN-01: El expediente se encuentra en estado CERRADA (estado final inmutable). No se admiten transiciones.',
+          };
+        }
+
+        // Validar salto en la matriz reglamentaria
+        const allowedNext = ALLOWED_TRANSITIONS[currentStatus] || [];
+        if (!allowedNext.includes(newStatus)) {
+          return {
+            success: false,
+            error: `RF-21: Transición no permitida de "${currentStatus}" hacia "${newStatus}". Estados válidos: [${allowedNext.join(', ')}].`,
+          };
+        }
+
+        // RN-05: Toda decisión de rechazo o aprobación con ajustes exige justificación motivada
+        if ((newStatus === 'RECHAZADA' || newStatus === 'APROBADA_CON_AJUSTES') && (!reason || reason.trim().length === 0)) {
+          return {
+            success: false,
+            error: `RN-05: La transición al estado "${newStatus}" exige una justificación motivada por escrito.`,
+          };
+        }
+
+        // RN-02: Solo pasa a En revisión si el 100% de los requisitos obligatorios son válidos
+        if (newStatus === 'EN_REVISION') {
+          const catalog = useCatalogStore.getState();
+          const mandatoryReqs = catalog.requirements.filter(
+            (r) => r.application_type_id === app.application_type_id && r.is_mandatory
+          );
+          const docs = get().documents.filter((d) => d.application_id === applicationId);
+          const validReqIds = new Set(
+            docs.filter((d) => d.validation_status === 'VALIDO').map((d) => d.requirement_id)
+          );
+          const missingOrInvalid = mandatoryReqs.filter((m) => !validReqIds.has(m.id));
+
+          if (missingOrInvalid.length > 0) {
+            return {
+              success: false,
+              error: `RN-02: No es posible transitar a "En revisión" porque faltan requisitos obligatorios válidos: ${missingOrInvalid.map((m) => m.name).join(', ')}.`,
+            };
+          }
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatedApp: Application = {
+          ...app,
+          current_status: newStatus,
+          updated_at: nowIso,
+        };
+
+        const auditItem: AuditHistory = {
+          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          actor_id: actorId,
+          action: `TRANSICION_ESTADO_${newStatus}`,
+          previous_status: currentStatus,
+          new_status: newStatus,
+          details: {
+            actor_name: actorName,
+            reason: reason || null,
+            ...(details || {}),
+            timestamp: nowIso,
+          },
+          created_at: nowIso,
+        };
+
+        set((state) => ({
+          applications: state.applications.map((a) => (a.id === applicationId ? updatedApp : a)),
+          auditHistory: [...state.auditHistory, auditItem],
+        }));
+
+        return { success: true, application: updatedApp };
+      },
+
+      // ==============================================================
+      // SPRINT 3: ASIGNACIÓN DE EVALUADOR Y CONFLICTO DE INTERESES (RF-15, RN-03, RN-14)
+      // ==============================================================
+
+      /**
+       * Valida conflicto de intereses ampliado (RN-03, RN-14):
+       * 1. Un evaluador no puede evaluar su propia solicitud radicada.
+       * 2. Un evaluador no puede evaluar solicitudes de su mismo grupo de investigación.
+       */
+      checkReviewerConflict: (reviewerId: string, applicationId: string) => {
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) return { hasConflict: true, reason: 'Solicitud no encontrada.' };
+
+        const usersStore = useUserStore.getState();
+        const reviewer = usersStore.users.find((u) => u.id === reviewerId);
+        if (!reviewer) return { hasConflict: true, reason: 'Evaluador no registrado.' };
+
+        // RN-03: No puede evaluar su propia solicitud
+        if (reviewer.id === app.applicant_id) {
+          return {
+            hasConflict: true,
+            reason: 'RN-03: Conflicto de intereses directo. El evaluador es el autor solicitante del trámite.',
+          };
+        }
+
+        // RN-14: No puede evaluar a miembros de su mismo grupo de investigación
+        if (reviewer.research_group_id && app.research_group_id) {
+          if (reviewer.research_group_id === app.research_group_id) {
+            return {
+              hasConflict: true,
+              reason: 'RN-14: Inhabilidad por conflicto de intereses. El evaluador pertenece al mismo grupo de investigación adscrito a la solicitud.',
+            };
+          }
+        }
+
+        return { hasConflict: false };
+      },
+
+      /**
+       * Asigna o reasigna un evaluador par preservando el historial inactivo (RF-15, RF-16, RN-08)
+       */
+      assignReviewer: async (
+        applicationId: string,
+        reviewerId: string,
+        deadlineDate: string,
+        assignedBy: string,
+        assignerName: string
+      ) => {
+        const conflict = get().checkReviewerConflict(reviewerId, applicationId);
+        if (conflict.hasConflict) {
+          return { success: false, error: conflict.reason };
+        }
+
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) return { success: false, error: 'Solicitud no encontrada.' };
+
+        const nowIso = new Date().toISOString();
+        const reviewerUser = useUserStore.getState().users.find((u) => u.id === reviewerId);
+        const reviewerName = reviewerUser?.full_name || 'Evaluador Par';
+
+        // RN-08: Reasignar conserva las asignaciones anteriores marcadas como inactivas
+        const existingAssignments = get().assignments.filter(
+          (asg) => asg.application_id === applicationId && asg.is_active
+        );
+
+        const updatedAssignments = get().assignments.map((asg) => {
+          if (asg.application_id === applicationId && asg.is_active) {
+            return { ...asg, is_active: false };
+          }
+          return asg;
+        });
+
+        const newAssignment: ReviewerAssignment = {
+          id: `asg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          reviewer_id: reviewerId,
+          deadline_date: deadlineDate,
+          is_active: true,
+          assigned_by: assignedBy,
+          concept: null,
+          concept_date: null,
+          created_at: nowIso,
+        };
+
+        const auditItem: AuditHistory = {
+          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          actor_id: assignedBy,
+          action: existingAssignments.length > 0 ? 'REASIGNACION_EVALUADOR' : 'ASIGNACION_EVALUADOR',
+          previous_status: null,
+          new_status: null,
+          details: {
+            reviewer_id: reviewerId,
+            reviewer_name: reviewerName,
+            assigner_name: assignerName,
+            deadline_date: deadlineDate,
+            previous_deactivated_count: existingAssignments.length,
+            timestamp: nowIso,
+          },
+          created_at: nowIso,
+        };
+
+        set((state) => ({
+          assignments: [...updatedAssignments, newAssignment],
+          auditHistory: [...state.auditHistory, auditItem],
+        }));
+
+        return { success: true, assignment: newAssignment };
+      },
+
+      getActiveAssignment: (applicationId: string) => {
+        return get().assignments.find((asg) => asg.application_id === applicationId && asg.is_active);
+      },
+
+      getAssignmentsByReviewer: (reviewerId: string) => {
+        return get().assignments.filter((asg) => asg.reviewer_id === reviewerId && asg.is_active);
+      },
+
+      // ==============================================================
+      // SPRINT 3: OBSERVACIONES TÉCNICAS Y AJUSTES (RF-17, RF-18)
+      // ==============================================================
+
+      addTechnicalObservation: async (
+        applicationId: string,
+        authorId: string,
+        authorName: string,
+        category: ObservationCategory,
+        content: string
+      ) => {
+        if (!content || content.trim().length === 0) {
+          return { success: false, error: 'El contenido de la observación no puede estar vacío.' };
+        }
+
+        const nowIso = new Date().toISOString();
+        const activeAssignment = get().getActiveAssignment(applicationId);
+
+        const newObs: Observation = {
+          id: `obs-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          assignment_id: activeAssignment?.id || null,
+          author_id: authorId,
+          category,
+          content: content.trim(),
+          is_resolved: false,
+          applicant_response: null,
+          created_at: nowIso,
+        };
+
+        const auditItem: AuditHistory = {
+          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: applicationId,
+          actor_id: authorId,
+          action: 'OBSERVACION_TECNICA_REGISTRADA',
+          previous_status: null,
+          new_status: null,
+          details: {
+            category,
+            author_name: authorName,
+            content_snippet: content.substring(0, 100),
+            timestamp: nowIso,
+          },
+          created_at: nowIso,
+        };
+
+        set((state) => ({
+          observations: [...state.observations, newObs],
+          auditHistory: [...state.auditHistory, auditItem],
+        }));
+
+        return { success: true, observation: newObs };
+      },
+
+      respondToObservation: async (
+        observationId: string,
+        applicantResponse: string,
+        actorId: string,
+        actorName: string
+      ) => {
+        if (!applicantResponse || applicantResponse.trim().length === 0) {
+          return { success: false, error: 'La respuesta al ajuste no puede estar vacía.' };
+        }
+
+        const obs = get().observations.find((o) => o.id === observationId);
+        if (!obs) return { success: false, error: 'Observación no encontrada.' };
+
+        const nowIso = new Date().toISOString();
+        const updatedObs: Observation = {
+          ...obs,
+          applicant_response: applicantResponse.trim(),
+          is_resolved: true,
+        };
+
+        const auditItem: AuditHistory = {
+          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          application_id: obs.application_id,
+          actor_id: actorId,
+          action: 'RESPUESTA_AJUSTES_INVESTIGADOR',
+          previous_status: null,
+          new_status: null,
+          details: {
+            observation_id: observationId,
+            actor_name: actorName,
+            response_snippet: applicantResponse.substring(0, 100),
+            timestamp: nowIso,
+          },
+          created_at: nowIso,
+        };
+
+        set((state) => ({
+          observations: state.observations.map((o) => (o.id === observationId ? updatedObs : o)),
+          auditHistory: [...state.auditHistory, auditItem],
+        }));
+
+        return { success: true, observation: updatedObs };
+      },
+
+      getObservationsByApplication: (applicationId: string) => {
+        return get().observations.filter((o) => o.application_id === applicationId);
+      },
+
+      // ==============================================================
+      // SPRINT 3: CONCEPTO TÉCNICO Y PASE A LISTA PARA COMITÉ (RF-19, RF-20)
+      // ==============================================================
+
+      submitReviewerConcept: async (
+        applicationId: string,
+        reviewerId: string,
+        reviewerName: string,
+        concept: ReviewerConcept,
+        justification: string
+      ) => {
+        if (!justification || justification.trim().length === 0) {
+          return {
+            success: false,
+            error: 'RN-05: La emisión de concepto técnico exige fundamentación y justificación escrita.',
+          };
+        }
+
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) return { success: false, error: 'Solicitud no encontrada.' };
+
+        const activeAsg = get().getActiveAssignment(applicationId);
+        if (!activeAsg || activeAsg.reviewer_id !== reviewerId) {
+          return {
+            success: false,
+            error: 'El evaluador no tiene una asignación activa sobre esta solicitud.',
+          };
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatedAsg: ReviewerAssignment = {
+          ...activeAsg,
+          concept,
+          concept_date: nowIso,
+        };
+
+        // Reglas RF-19 y RF-20:
+        // Favorable o Favorable con ajustes -> Pasa a LISTA_COMITE
+        // No favorable -> Pasa a RECHAZADA
+        let targetStatus: ApplicationDbStatus;
+        if (concept === 'FAVORABLE' || concept === 'FAVORABLE_CON_AJUSTES') {
+          targetStatus = 'LISTA_COMITE';
+        } else {
+          targetStatus = 'RECHAZADA';
+        }
+
+        set((state) => ({
+          assignments: state.assignments.map((a) => (a.id === activeAsg.id ? updatedAsg : a)),
+        }));
+
+        return get().transitionApplicationStatus(
+          applicationId,
+          targetStatus,
+          reviewerId,
+          reviewerName,
+          `Emisión de concepto técnico: ${concept}. Justificación: ${justification}`,
+          {
+            reviewer_concept: concept,
+            concept_date: nowIso,
+          }
+        );
+      },
+
+      // ==============================================================
+      // SPRINT 3: MÉTRICAS Y PLAZOS (RF-22, RF-35)
+      // ==============================================================
+
+      getStatusCounts: () => {
+        const apps = get().applications;
+        const counts: Record<ApplicationDbStatus, number> = {
+          RADICADA: 0,
+          PENDIENTE_DOCUMENTOS: 0,
+          EN_REVISION: 0,
+          LISTA_COMITE: 0,
+          APROBADA: 0,
+          APROBADA_CON_AJUSTES: 0,
+          RECHAZADA: 0,
+          CERRADA: 0,
+        };
+
+        for (const app of apps) {
+          if (counts[app.current_status] !== undefined) {
+            counts[app.current_status]++;
+          }
+        }
+
+        return counts;
+      },
+
+      getDeadlineStatus: (applicationId: string) => {
+        const app = get().applications.find((a) => a.id === applicationId);
+        if (!app) {
+          return {
+            deadlineDate: null,
+            daysRemaining: 0,
+            isOverdue: false,
+            isUrgent: false,
+            description: 'No asignado',
+          };
+        }
+
+        const activeAsg = get().getActiveAssignment(applicationId);
+        const now = new Date();
+
+        if (app.current_status === 'EN_REVISION' && activeAsg?.deadline_date) {
+          const deadline = new Date(activeAsg.deadline_date);
+          const diffTime = deadline.getTime() - now.getTime();
+          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const isOverdue = daysRemaining < 0;
+          const isUrgent = daysRemaining >= 0 && daysRemaining <= 3;
+
+          return {
+            deadlineDate: activeAsg.deadline_date,
+            daysRemaining,
+            isOverdue,
+            isUrgent,
+            description: isOverdue
+              ? `Plazo vencido hace ${Math.abs(daysRemaining)} días`
+              : `${daysRemaining} días restantes para concepto técnico`,
+          };
+        }
+
+        if (app.current_status === 'PENDIENTE_DOCUMENTOS') {
+          return {
+            deadlineDate: null,
+            daysRemaining: 5,
+            isOverdue: false,
+            isUrgent: true,
+            description: '5 días hábiles reglamentarios para subsanar requisitos (RN-11)',
+          };
+        }
+
+        if (app.current_status === 'RADICADA') {
+          return {
+            deadlineDate: null,
+            daysRemaining: 3,
+            isOverdue: false,
+            isUrgent: false,
+            description: '3 días hábiles para validación administrativa inicial',
+          };
+        }
+
+        return {
+          deadlineDate: null,
+          daysRemaining: 0,
+          isOverdue: false,
+          isUrgent: false,
+          description: 'En curso ordinario',
+        };
+      },
+
+      // T3.5 / RNF-03: Inmutabilidad estricta de la bitácora
+      assertAuditHistoryImmutable: (recordId: string) => {
+        throw new Error(
+          `RNF-03: Operación denegada. La bitácora de auditoría e historial (registro ${recordId}) es estrictamente inmutable y append-only.`
+        );
       },
 
       getApplicationById: (id: string) => {
@@ -511,9 +1291,6 @@ export const useApplicationStore = create<ApplicationState>()(
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       },
 
-      /**
-       * Calcula dinámicamente la columna institucional "Qué Falta" (RF-11)
-       */
       computeQueFalta: (app: Application) => {
         switch (app.current_status) {
           case 'RADICADA':
@@ -521,13 +1298,13 @@ export const useApplicationStore = create<ApplicationState>()(
           case 'PENDIENTE_DOCUMENTOS':
             return 'Cargar documentos subsanables rechazados';
           case 'EN_REVISION':
-            return 'En evaluación técnica por revisor par';
+            return 'En evaluación técnica por revisor par asignado';
           case 'LISTA_COMITE':
             return 'En agenda para deliberación en sesión de comité';
           case 'APROBADA':
             return 'Trámite finalizado exitosamente';
           case 'APROBADA_CON_AJUSTES':
-            return 'Entregar ajustes menores concertados en acta';
+            return 'Entregar ajustes menores concertados en sesión';
           case 'RECHAZADA':
             return 'Solicitud rechazada';
           case 'CERRADA':
@@ -542,6 +1319,8 @@ export const useApplicationStore = create<ApplicationState>()(
           applications: INITIAL_APPLICATIONS,
           documents: INITIAL_DOCUMENTS,
           auditHistory: INITIAL_AUDIT_HISTORY,
+          assignments: INITIAL_ASSIGNMENTS,
+          observations: INITIAL_OBSERVATIONS,
         });
       },
     }),

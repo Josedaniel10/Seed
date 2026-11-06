@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   UserCheck,
   CheckCircle2,
@@ -7,176 +8,254 @@ import {
   Clock,
   ShieldAlert,
   Search,
+  Building2,
+  Calendar,
+  AlertCircle,
+  Eye,
 } from 'lucide-react';
-
-interface SolicitudSinRevisor {
-  id: string;
-  radicado: string;
-  tipo: string;
-  investigador: string;
-  grupoInvestigacion: string;
-  diasEspera: number;
-}
-
-interface RevisorCandidato {
-  id: string;
-  nombre: string;
-  cargaTrabajo: number; // solicitudes activas
-  grupoInvestigacion: string;
-}
-
-const SOLICITUDES_PENDIENTES: SolicitudSinRevisor[] = [
-  {
-    id: 'sol-003',
-    radicado: 'Radicado 2026-003',
-    tipo: 'Prórroga de Ejecución',
-    investigador: 'Dra. Carmen Lucía Morales',
-    grupoInvestigacion: 'Biotecnología Aplicada',
-    diasEspera: 4,
-  },
-  {
-    id: 'sol-006',
-    radicado: 'Radicado 2026-007',
-    tipo: 'Presentación de Proyecto',
-    investigador: 'Dr. Alejandro Restrepo',
-    grupoInvestigacion: 'Ciencias Básicas y Matemáticas',
-    diasEspera: 2,
-  },
-];
-
-const REVISORES: RevisorCandidato[] = [
-  {
-    id: 'rev-1',
-    nombre: 'Dr. Alejandro Restrepo',
-    cargaTrabajo: 2,
-    grupoInvestigacion: 'Ciencias Básicas y Matemáticas',
-  },
-  {
-    id: 'rev-2',
-    nombre: 'Dra. Patricia Salamanca',
-    cargaTrabajo: 1,
-    grupoInvestigacion: 'Secretaría Técnica',
-  },
-  {
-    id: 'rev-3',
-    nombre: 'Dr. Germán Valenzuela',
-    cargaTrabajo: 3,
-    grupoInvestigacion: 'Biotecnología Aplicada',
-  },
-];
+import { useSessionStore } from '../../stores/session.store.ts';
+import { useApplicationStore } from '../../features/applications/applicationStore.ts';
+import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
+import { useGroupsStore } from '../../features/groups/groupsStore.ts';
+import { useUserStore } from '../../features/users/userStore.ts';
+import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 
 export function AsignacionesPage() {
-  const [solicitudes, setSolicitudes] = useState(SOLICITUDES_PENDIENTES);
-  const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
-  const [mensaje, setMensaje] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { user } = useSessionStore();
+  const {
+    applications,
+    assignments,
+    assignReviewer,
+    checkReviewerConflict,
+    getActiveAssignment,
+  } = useApplicationStore();
+  const { types } = useCatalogStore();
+  const { groups } = useGroupsStore();
+  const { users } = useUserStore();
 
-  const handleAsignar = (solId: string) => {
-    const revisorId = asignaciones[solId];
-    if (!revisorId) return;
+  const [selectedAppId, setSelectedAppId] = useState<string>('');
+  const [selectedReviewerId, setSelectedReviewerId] = useState<string>('');
+  const [deadlineDays, setDeadlineDays] = useState<number>(8);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null
+  );
 
-    const sol = solicitudes.find((s) => s.id === solId);
-    const rev = REVISORES.find((r) => r.id === revisorId);
+  // Solicitudes en estado EN_REVISION (habilitadas para asignación de evaluador, RF-15)
+  const applicationsInReview = useMemo(() => {
+    return applications.filter((a) => a.current_status === 'EN_REVISION');
+  }, [applications]);
 
-    // Validación de conflicto de intereses: no puede pertenecer al mismo grupo o ser el mismo investigador
-    if (rev && sol && rev.grupoInvestigacion === sol.grupoInvestigacion) {
-      setMensaje(`Conflicto de intereses detectado: ${rev.nombre} pertenece al mismo grupo (${sol.grupoInvestigacion}). Asignación bloqueada.`);
+  // Lista de posibles evaluadores (integrantes del comité y docentes calificados)
+  const committeeMembers = useMemo(() => {
+    return users.filter(
+      (u) =>
+        u.is_active &&
+        (u.role === 'integrante_comite' ||
+          u.role === 'admin' ||
+          u.role === 'secretario' ||
+          u.academic_link === 'docente_planta')
+    );
+  }, [users]);
+
+  // Carga de trabajo por evaluador (número de asignaciones activas)
+  const workloadByReviewer = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of committeeMembers) {
+      counts[m.id] = assignments.filter((a) => a.reviewer_id === m.id && a.is_active).length;
+    }
+    return counts;
+  }, [committeeMembers, assignments]);
+
+  const handleAssign = async (appId: string, revId: string) => {
+    if (!revId) {
+      setFeedback({ type: 'error', message: 'Debe seleccionar un evaluador de la lista.' });
       return;
     }
 
-    setSolicitudes((prev) => prev.filter((s) => s.id !== solId));
-    setMensaje(`Revisor asignado exitosamente para ${sol?.radicado}.`);
-    setTimeout(() => setMensaje(null), 4000);
+    // Calcular fecha límite
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + (deadlineDays || 8));
+    const deadlineStr = deadline.toISOString().split('T')[0];
+
+    const res = await assignReviewer(
+      appId,
+      revId,
+      deadlineStr,
+      user?.id || 'usr-004',
+      user?.fullName || 'Secretaría Técnica'
+    );
+
+    if (res.success) {
+      setFeedback({
+        type: 'success',
+        message: 'Evaluador asignado formalmente con plazo institucional establecido.',
+      });
+      setSelectedAppId('');
+      setSelectedReviewerId('');
+      setTimeout(() => setFeedback(null), 4000);
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Error al asignar evaluador.' });
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 max-w-6xl mx-auto pb-16">
+      <div className="border-b border-[#E5E3DC] pb-4">
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
-          Asignación de Revisores
+          Asignación y Reasignación de Evaluadores Pares
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
-          Designación de integrantes del comité con verificación de carga de trabajo y control de conflictos de interés.
+          Secretaría Técnica · Control de carga de trabajo y bloqueo reglamentario de conflicto de
+          intereses (RF-15, RF-16, RN-03, RN-08, RN-14).
         </p>
       </div>
 
-      {mensaje && (
+      {feedback && (
         <div
-          className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-            mensaje.includes('bloqueada')
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-[#A3E635]/25 border-[#84CC16] text-[#14281D]'
+          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900'
           }`}
         >
-          {mensaje.includes('bloqueada') ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />}
-          <span>{mensaje}</span>
+          {feedback.type === 'success' ? (
+            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+          ) : (
+            <ShieldAlert size={16} className="text-rose-600 shrink-0" />
+          )}
+          <span className="font-medium">{feedback.message}</span>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
-        <h3 className="font-bold text-xs text-[#14281D] uppercase tracking-wider">
-          Solicitudes en espera de revisor ({solicitudes.length})
-        </h3>
+      {/* Tarjeta Informativa de Reglas RN-03 y RN-14 */}
+      <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex items-start gap-3">
+        <ShieldAlert size={18} className="text-amber-700 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <span className="font-bold block">
+            Régimen Institucional de Inhabilidades y Conflicto de Intereses (RN-03, RN-14):
+          </span>
+          <p className="text-[11px] text-amber-900 leading-relaxed">
+            El sistema bloquea automáticamente cualquier asignación donde el evaluador sea el autor
+            solicitante o pertenezca al mismo grupo de investigación adscrito. Si se reasigna un nuevo
+            evaluador, la asignación previa pasa a estado inactivo y se conserva en el historial
+            (RN-08).
+          </p>
+        </div>
+      </div>
 
-        {solicitudes.length === 0 ? (
-          <div className="p-8 text-center text-xs text-stone-500">
-            No hay solicitudes pendientes de asignación en este momento.
+      {/* Lista de Solicitudes En Revisión */}
+      <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+          <h3 className="font-extrabold text-sm text-[#14281D] uppercase tracking-wider">
+            Solicitudes en Etapa de Revisión Técnica ({applicationsInReview.length})
+          </h3>
+        </div>
+
+        {applicationsInReview.length === 0 ? (
+          <div className="p-8 text-center text-xs text-stone-500 bg-[#F7F6F2] rounded-2xl">
+            No hay solicitudes en estado "En revisión" pendientes de asignación o evaluación.
           </div>
         ) : (
-          <div className="space-y-3">
-            {solicitudes.map((sol) => (
-              <div
-                key={sol.id}
-                className="p-4 rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-[#14281D] px-2 py-0.5 rounded bg-white border border-stone-200">
-                      {sol.radicado}
-                    </span>
-                    <span className="font-bold text-[#14281D]">{sol.tipo}</span>
+          <div className="space-y-4">
+            {applicationsInReview.map((app) => {
+              const activeAsg = getActiveAssignment(app.id);
+              const currentReviewer = users.find((u) => u.id === activeAsg?.reviewer_id);
+              const appType = types.find((t) => t.id === app.application_type_id);
+              const appGroup = groups.find((g) => g.id === app.research_group_id);
+              const applicant = users.find((u) => u.id === app.applicant_id);
+
+              const isReassigning = selectedAppId === app.id;
+              const chosenRevId = isReassigning ? selectedReviewerId : '';
+
+              return (
+                <div
+                  key={app.id}
+                  className="p-5 rounded-2xl border border-[#E5E3DC] bg-[#F7F6F2] flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs"
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[#14281D]">
+                        {app.filing_number}
+                      </span>
+                      <span className="font-bold text-[#14281D] text-xs md:text-sm">
+                        {app.title}
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] text-stone-600 flex items-center gap-3 flex-wrap">
+                      <span>
+                        Solicitante: <strong>{applicant?.full_name || 'Investigador'}</strong>
+                      </span>
+                      <span>·</span>
+                      <span>
+                        Grupo: <strong>{appGroup?.name || 'No adscrito'}</strong>
+                      </span>
+                      <span>·</span>
+                      <span>Tipo: {appType?.name}</span>
+                    </div>
+
+                    {/* Evaluador actual si existe */}
+                    <div className="pt-1 flex items-center gap-2 text-[11px]">
+                      <span className="text-stone-500">Evaluador activo:</span>
+                      {currentReviewer ? (
+                        <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                          <UserCheck size={12} />
+                          <span>{currentReviewer.full_name}</span>
+                          <span className="font-normal text-stone-500">
+                            (Plazo: {activeAsg?.deadline_date})
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Sin evaluador asignado
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-stone-600">
-                    Investigador: <strong>{sol.investigador}</strong> · Grupo: {sol.grupoInvestigacion}
-                  </div>
-                  <div className="text-[11px] text-stone-400 flex items-center gap-1">
-                    <Clock size={12} />
-                    <span>En espera: {sol.diasEspera} días</span>
+
+                  {/* Panel de Asignación / Reasignación */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                    <select
+                      value={isReassigning ? selectedReviewerId : ''}
+                      onChange={(e) => {
+                        setSelectedAppId(app.id);
+                        setSelectedReviewerId(e.target.value);
+                      }}
+                      className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white text-xs text-stone-800 outline-none max-w-xs"
+                    >
+                      <option value="">
+                        {currentReviewer ? 'Reasignar otro evaluador...' : 'Seleccione evaluador...'}
+                      </option>
+                      {committeeMembers.map((rev) => {
+                        const conflict = checkReviewerConflict(rev.id, app.id);
+                        const load = workloadByReviewer[rev.id] || 0;
+
+                        return (
+                          <option
+                            key={rev.id}
+                            value={rev.id}
+                            disabled={conflict.hasConflict}
+                          >
+                            {rev.full_name} ({load} activas)
+                            {conflict.hasConflict ? ' [Conflicto Inhabilitante]' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <button
+                      type="button"
+                      disabled={!isReassigning || !selectedReviewerId}
+                      onClick={() => handleAssign(app.id, selectedReviewerId)}
+                      className="px-4 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold rounded-xl disabled:opacity-40 cursor-pointer transition-colors whitespace-nowrap shadow-xs"
+                    >
+                      {currentReviewer ? 'Reasignar' : 'Asignar'}
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={asignaciones[sol.id] || ''}
-                    onChange={(e) =>
-                      setAsignaciones({ ...asignaciones, [sol.id]: e.target.value })
-                    }
-                    className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white text-xs text-stone-700 outline-none"
-                  >
-                    <option value="">Seleccione revisor...</option>
-                    {REVISORES.map((rev) => {
-                      const isConflict = rev.grupoInvestigacion === sol.grupoInvestigacion;
-                      return (
-                        <option
-                          key={rev.id}
-                          value={rev.id}
-                          disabled={isConflict}
-                        >
-                          {rev.nombre} ({rev.cargaTrabajo} activas){isConflict ? ' [Conflicto de interés]' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  <button
-                    onClick={() => handleAsignar(sol.id)}
-                    disabled={!asignaciones[sol.id]}
-                    className="px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold rounded-xl disabled:opacity-40 cursor-pointer transition-colors"
-                  >
-                    Asignar
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
