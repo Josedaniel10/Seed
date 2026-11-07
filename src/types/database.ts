@@ -143,6 +143,27 @@ export interface CommitteeSession {
   created_at: string;
 }
 
+export interface SessionAgendaItem {
+  id: string;
+  session_id: string;
+  application_id: string;
+  agenda_order: number;
+  speaker_id: string | null;
+  speaker_name?: string | null;
+  created_at: string;
+}
+
+export interface SessionAttendance {
+  id: string;
+  session_id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  attended: boolean;
+  notes?: string;
+  updated_at: string;
+}
+
 export type SessionDecisionType = 'APROBADA' | 'APROBADA_CON_AJUSTES' | 'RECHAZADA' | 'APLAZADA';
 
 export interface SessionDecision {

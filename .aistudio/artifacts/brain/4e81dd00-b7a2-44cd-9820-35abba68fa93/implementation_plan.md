@@ -184,12 +184,12 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 
 | ID | Tarea | Resultado esperado y prueba | Requisitos |
 | :--- | :--- | :--- | :--- |
-| **T4.1** | Creación y programación de sesiones de comité | La sesión queda registrada con tipo (ordinaria/extraordinaria), fecha, hora y modalidad/lugar | RF-24 |
-| **T4.2** | Conformación de agenda con solicitudes `Listas para comité` | Solo las solicitudes en estado elegible pueden incorporarse; se ordenan y se asigna ponente | RF-25, RN-04 |
-| **T4.3** | Cierre de agenda y convocatoria formal | Al cerrar la agenda no se admiten más trámites y se genera la citación a los integrantes | RF-26 |
-| **T4.4** | Registro de asistencia y verificación automática de quórum | La plataforma impide registrar votaciones o decisiones si no se alcanza el quórum reglamentario | RF-27, RN-07 |
-| **T4.5** | Registro formal de decisión con justificación motivada | Toda decisión (Aprobada, Aprobada con ajustes, Rechazada, Aplazada) queda asentada con fundamento; *Aplazada* preserva la solicitud para la siguiente sesión | RF-28, RN-05, RN-06 |
-| **T4.6** | Actualización automática de estado y trazabilidad post-decisión | La solicitud transita a su estado correspondiente y se registra el evento en el historial | RF-28, RF-23 |
+| **T4.1** | Creación y programación de sesiones de comité | Completado: Secuencia anual consecutiva (`Sesión Ordinaria Nº 05 - 2026`), tipo, fecha, hora, lugar y persistencia en `committeeSessionsStore.ts`, verificado en `sessionSchedulingAndAgenda.test.js` | RF-24 |
+| **T4.2** | Conformación de agenda con solicitudes `Listas para comité` | Completado: Validación estricta RN-04 (solo expedientes en `LISTA_COMITE`), asignación de ponente colegiado y ordenamiento en agenda en `sessionSchedulingAndAgenda.test.js` | RF-25, RN-04 |
+| **T4.3** | Cierre de agenda y convocatoria formal | Completado: Cierre formal con bandera `is_agenda_closed: true`, bloqueo de incorporaciones posteriores (RN-04) y convocatoria en `sessionSchedulingAndAgenda.test.js` | RF-26 |
+| **T4.4** | Registro de asistencia y verificación automática de quórum | Completado: Control de quórum en tiempo real (`checkSessionQuorum`), cálculo de mayoría requerida y bloqueo estricto de votación sin quórum (RN-07) en `quorumAndDecisionsWorkflow.test.js` | RF-27, RN-07 |
+| **T4.5** | Registro formal de decisión con justificación motivada | Completado: Tipificación (Aprobada, Aprobada con ajustes, Rechazada, Aplazada), justificación escrita obligatoria (RN-05) y preservación de `LISTA_COMITE` ante Aplazada (RN-06) en `quorumAndDecisionsWorkflow.test.js` | RF-28, RN-05, RN-06 |
+| **T4.6** | Actualización automática de estado y trazabilidad post-decisión | Completado: Transición formal de la solicitud tras acuerdo colegiado y registro inmutable en bitácora de auditoría (RF-23) en `quorumAndDecisionsWorkflow.test.js` | RF-28, RF-23 |
 
 ---
 
@@ -197,14 +197,14 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 
 | ID | Tarea | Resultado esperado y prueba | Requisitos |
 | :--- | :--- | :--- | :--- |
-| **T5.1** | Numeración consecutiva de actas por año calendario | Se genera la secuencia consecutiva anual (ej. *Acta 001 de 2026*) sin duplicidades ni saltos | RF-31 |
-| **T5.2** | Generación de borrador de acta a partir de las decisiones registradas | El borrador consolida automáticamente los miembros asistentes, el orden del día y los acuerdos | RF-29 |
-| **T5.3** | Edición de compromisos y aprobación formal del acta | Una vez aprobada por el comité, el acta pasa a estado definitivo inmutable | RF-30, RNF-03 |
-| **T5.4** | Exportación y descarga del acta oficial en formato PDF | El PDF estructurado se genera y se almacena en el servicio local de archivos | RF-31 |
-| **T5.5** | Módulo de consulta histórica de decisiones y actas | Búsqueda rápida por número de radicado, sesión, fecha o investigador | RF-32 |
-| **T5.6** | Notificaciones internas dentro de la plataforma | Los cambios de estado, asignaciones y requerimientos de ajustes alertan al usuario | RF-33 |
-| **T5.7** | Integración de notificaciones por correo institucional (opcional) | Envío de correo en eventos críticos del flujo | RF-34 |
-| **T5.8** | Reportes analíticos consolidados y exportables (opcional) | Generación de informe cuantitativo por periodo, tipo de trámite y tiempos de respuesta | RF-36 |
+| **T5.1** | Numeración consecutiva de actas por año calendario | Completado: Generador atómico de secuencias consecutivas anuales (`Acta XXX de YYYY`), probado en `minutesWorkflowAndImmutability.test.js` | RF-31 |
+| **T5.2** | Generación de borrador de acta a partir de las decisiones registradas | Completado: Consolidación automática de fecha, quórum (RN-07), orden del día y acuerdos numerados en `minutesWorkflowAndImmutability.test.js` | RF-29 |
+| **T5.3** | Edición de compromisos y aprobación formal del acta | Completado: Edición en borrador y bloqueo estricto de mutaciones tras aprobación formal (RNF-03), verificado en `minutesWorkflowAndImmutability.test.js` | RF-30, RNF-03 |
+| **T5.4** | Exportación y descarga del acta oficial en formato PDF | Completado: Descarga estructurada con encoding UTF-8 y almacenamiento institucional en `minutesWorkflowAndImmutability.test.js` | RF-31 |
+| **T5.5** | Módulo de consulta histórica de decisiones y actas | Completado: Búsqueda indexada en vivo por número, sesión, año o texto en `ActasPage.tsx` y `minutesWorkflowAndImmutability.test.js` | RF-32 |
+| **T5.6** | Notificaciones internas dentro de la plataforma | Completado: Notificaciones automáticas por cambio de estado, asignaciones y avisos en `notificationsAndEmailWorkflow.test.js` | RF-33 |
+| **T5.7** | Integración de notificaciones por correo institucional | Completado: Trazabilidad de despacho con destinatario oficial (ej. `@universidad.edu.co`) probado en `notificationsAndEmailWorkflow.test.js` | RF-34 |
+| **T5.8** | Reportes analíticos consolidados y exportables | Completado: Cálculo analítico de efectividad, desglose por tipo de solicitud y descarga CSV estructurada en `analyticalReportsAndExport.test.js` | RF-36 |
 
 ---
 

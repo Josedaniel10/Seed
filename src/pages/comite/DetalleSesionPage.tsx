@@ -4,41 +4,193 @@ import {
   Calendar,
   Users,
   CheckCircle2,
+  XCircle,
   FileText,
   FileCheck,
   Download,
   Plus,
+  Trash2,
   ArrowLeft,
   Scale,
+  Lock,
+  AlertTriangle,
+  AlertCircle,
+  Clock,
+  Sparkles,
+  Info,
 } from 'lucide-react';
+import { useCommitteeSessionsStore } from '../../features/sessions/committeeSessionsStore.ts';
+import { useApplicationStore } from '../../features/applications/applicationStore.ts';
+import { useUserStore } from '../../features/users/userStore.ts';
+import { useSessionStore } from '../../stores/session.store.ts';
+import { SessionDecisionType } from '../../types/database.ts';
 
 export function DetalleSesionPage() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useSessionStore();
+
+  const {
+    sessions,
+    getAgendaBySession,
+    addApplicationToAgenda,
+    removeApplicationFromAgenda,
+    closeAgendaAndSummon,
+    getAttendanceBySession,
+    toggleAttendance,
+    checkSessionQuorum,
+    registerSessionDecision,
+    getDecisionsBySession,
+    finalizeSession,
+  } = useCommitteeSessionsStore();
+
+  const { applications, getApplicationById } = useApplicationStore();
+  const { users } = useUserStore();
+
+  const session = sessions.find((s) => s.id === id);
+
   const [activeTab, setActiveTab] = useState<'agenda' | 'quorum' | 'decisiones' | 'acta'>('agenda');
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('usr-003');
+  const [selectedAppId, setSelectedAppId] = useState<string>('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
-  // Miembros y quórum
-  const [miembros, setMiembros] = useState([
-    { id: 'm1', nombre: 'Dr. Alejandro Restrepo', rol: 'Presidente Delegado', asistio: true },
-    { id: 'm2', nombre: 'Dra. Patricia Salamanca', rol: 'Secretaria Técnica', asistio: true },
-    { id: 'm3', nombre: 'Dra. Carmen Lucía Morales', rol: 'Vocal de Investigaciones', asistio: true },
-    { id: 'm4', nombre: 'Dr. Germán Valenzuela', rol: 'Representante de Líderes', asistio: true },
-    { id: 'm5', nombre: 'Lic. Fernando Ortiz', rol: 'Invitado Administrativo', asistio: true },
-    { id: 'm6', nombre: 'Dra. Elena Vargas', rol: 'Representante de Posgrados', asistio: false },
-    { id: 'm7', nombre: 'Dr. Carlos Mendoza', rol: 'Representante de Ética', asistio: false },
-  ]);
+  // Estados de deliberación para cada expediente
+  const [decisionPayloads, setDecisionPayloads] = useState<
+    Record<string, { decision: SessionDecisionType; justification: string }>
+  >({});
 
-  const [decisiones, setDecisiones] = useState<Record<string, { decision: string; motivo: string }>>({
-    'sol-001': { decision: 'Aprobada', motivo: 'Cumple con rigor metodológico y presupuesto viable.' },
-  });
-
-  const quorumAsistentes = miembros.filter((m) => m.asistio).length;
-  const hayQuorum = quorumAsistentes >= 4; // Mínimo 4 de 7
-
-  const toggleAsistencia = (id: string) => {
-    setMiembros((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, asistio: !m.asistio } : m))
+  if (!session) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-8 text-center space-y-4 max-w-lg mx-auto">
+        <AlertTriangle size={36} className="text-amber-500 mx-auto" />
+        <h2 className="text-base font-bold text-[#14281D]">Sesión no encontrada</h2>
+        <p className="text-xs text-stone-500">
+          El identificador de sesión no corresponde a ningún registro activo en el comité.
+        </p>
+        <button
+          onClick={() => navigate('/sesiones')}
+          className="px-4 py-2 bg-[#14281D] text-white rounded-xl text-xs font-bold hover:bg-[#1E3A2B] cursor-pointer"
+        >
+          Volver a Sesiones
+        </button>
+      </div>
     );
+  }
+
+  const agenda = getAgendaBySession(session.id);
+  const attendances = getAttendanceBySession(session.id);
+  const quorum = checkSessionQuorum(session.id);
+  const decisions = getDecisionsBySession(session.id);
+
+  // Candidatos para agregar a la agenda: Solicitudes en estado LISTA_COMITE (RN-04)
+  const agendaAppIds = new Set(agenda.map((a) => a.application_id));
+  const candidateApps = applications.filter(
+    (a) => a.current_status === 'LISTA_COMITE' && !agendaAppIds.has(a.id)
+  );
+
+  const committeeMembers = users.filter(
+    (u) => u.role === 'integrante_comite' || u.role === 'secretario'
+  );
+
+  const isSecretaryOrAdmin = user?.activeRole === 'secretario' || user?.activeRole === 'admin';
+
+  // Manejador: Agregar solicitud a la agenda
+  const handleAddToAgenda = async (appIdToAdd: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+
+    const res = await addApplicationToAgenda(
+      session.id,
+      appIdToAdd,
+      selectedSpeakerId || null,
+      user?.id || 'usr-sec-04',
+      user?.fullName || 'Secretaria Técnica'
+    );
+
+    if (!res.success) {
+      setActionError(res.error || 'Error al agregar solicitud a la agenda.');
+    } else {
+      setActionSuccess('Expediente incorporado exitosamente en el orden del día.');
+      setSelectedAppId('');
+      setTimeout(() => setActionSuccess(null), 3000);
+    }
+  };
+
+  // Manejador: Retirar de la agenda
+  const handleRemoveFromAgenda = async (appIdToRemove: string) => {
+    setActionError(null);
+    const res = await removeApplicationFromAgenda(
+      session.id,
+      appIdToRemove,
+      user?.id || 'usr-sec-04',
+      user?.fullName || 'Secretaria Técnica'
+    );
+    if (!res.success) {
+      setActionError(res.error || 'Error al retirar solicitud.');
+    }
+  };
+
+  // Manejador: Cerrar agenda formalmente (RF-26)
+  const handleCloseAgenda = async () => {
+    setActionError(null);
+    const res = await closeAgendaAndSummon(
+      session.id,
+      user?.id || 'usr-sec-04',
+      user?.fullName || 'Secretaria Técnica'
+    );
+    if (!res.success) {
+      setActionError(res.error || 'Error al cerrar la agenda.');
+    } else {
+      setActionSuccess('Agenda formalmente cerrada. Convocatoria y citaciones generadas.');
+      setTimeout(() => setActionSuccess(null), 3500);
+    }
+  };
+
+  // Manejador: Registrar Decisión Colegiada (RF-28, RN-05, RN-06, RN-07)
+  const handleRegisterDecision = async (appId: string) => {
+    setActionError(null);
+    const itemData = decisionPayloads[appId] || {
+      decision: 'APROBADA' as SessionDecisionType,
+      justification: '',
+    };
+
+    if (!itemData.justification.trim()) {
+      setActionError('RN-05: El registro de la decisión colegiada exige una justificación motivada por escrito.');
+      return;
+    }
+
+    const res = await registerSessionDecision(
+      session.id,
+      appId,
+      itemData.decision,
+      itemData.justification,
+      user?.id || 'usr-sec-04',
+      user?.fullName || 'Secretaria Técnica'
+    );
+
+    if (!res.success) {
+      setActionError(res.error || 'Error al registrar la decisión.');
+    } else {
+      setActionSuccess('Decisión colegiada registrada y trazabilidad de estado actualizada.');
+      setTimeout(() => setActionSuccess(null), 3500);
+    }
+  };
+
+  // Manejador: Finalizar sesión
+  const handleFinalizeSession = async () => {
+    setActionError(null);
+    const res = await finalizeSession(
+      session.id,
+      user?.id || 'usr-sec-04',
+      user?.fullName || 'Secretaria Técnica'
+    );
+    if (!res.success) {
+      setActionError(res.error || 'Error al finalizar sesión.');
+    } else {
+      setActionSuccess('Sesión concluida formalmente con acuerdos adoptados.');
+      setTimeout(() => setActionSuccess(null), 3500);
+    }
   };
 
   return (
@@ -55,250 +207,584 @@ export function DetalleSesionPage() {
 
         <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="p-3 rounded-xl bg-[#F7F6F2] border border-[#E5E3DC] text-[#14281D]">
+            <span className="p-3 rounded-xl bg-[#14281D] text-[#A3E635]">
               <Calendar size={22} />
             </span>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-[#14281D]">
-                  Sesión Ordinaria Nº 04 - 2026
+                  {session.session_number}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
-                  Programada
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-stone-700 border border-stone-200 uppercase">
+                  {session.session_type}
                 </span>
+                {session.is_agenda_closed && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                    <Lock size={10} />
+                    <span>Agenda Cerrada</span>
+                  </span>
+                )}
+                {session.is_completed && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-stone-200 text-stone-800 border border-stone-300">
+                    Finalizada
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Jueves, 12 de Noviembre de 2026 · 09:00 AM · Sala de Juntas de Vicerrectoría
+              <p className="text-xs text-stone-500 mt-1 flex flex-wrap items-center gap-2">
+                <span>{new Date(session.scheduled_at).toLocaleString('es-CO')}</span>
+                <span>·</span>
+                <span>{session.location_or_url}</span>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Monitor de Quórum en tiempo real */}
             <span
-              className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border ${
-                hayQuorum
+              className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${
+                quorum.hasQuorum
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                   : 'bg-rose-50 text-rose-800 border-rose-200'
               }`}
             >
-              <CheckCircle2 size={13} />
+              <CheckCircle2 size={14} />
               <span>
-                {quorumAsistentes} de {miembros.length} miembros ({hayQuorum ? 'Hay Quórum' : 'Sin Quórum'})
+                {quorum.attendedCount} de {quorum.totalMembers} miembros ({quorum.hasQuorum ? 'Hay Quórum' : 'Sin Quórum'})
               </span>
             </span>
+
+            {isSecretaryOrAdmin && !session.is_completed && (
+              <button
+                onClick={handleFinalizeSession}
+                className="px-3.5 py-1.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
+              >
+                Finalizar Sesión
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Alertas de Acción */}
+      {actionError && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0 text-rose-600" />
+            <span>{actionError}</span>
+          </div>
+          <button onClick={() => setActionError(null)} className="cursor-pointer text-stone-500 hover:text-stone-800">
+            <XCircle size={14} />
+          </button>
+        </div>
+      )}
+
+      {actionSuccess && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+          <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+          <span>{actionSuccess}</span>
+        </div>
+      )}
+
       {/* Pestañas de la Sesión */}
-      <div className="flex border-b border-[#E5E3DC] gap-6 text-xs font-bold">
+      <div className="flex border-b border-[#E5E3DC] gap-6 text-xs font-bold overflow-x-auto">
         <button
           onClick={() => setActiveTab('agenda')}
-          className={`pb-3 cursor-pointer transition-colors border-b-2 ${
+          className={`pb-3 cursor-pointer transition-colors border-b-2 shrink-0 ${
             activeTab === 'agenda'
               ? 'border-[#14281D] text-[#14281D]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Orden del Día y Agenda
+          Orden del Día y Agenda ({agenda.length})
         </button>
         <button
           onClick={() => setActiveTab('quorum')}
-          className={`pb-3 cursor-pointer transition-colors border-b-2 ${
+          className={`pb-3 cursor-pointer transition-colors border-b-2 shrink-0 ${
             activeTab === 'quorum'
               ? 'border-[#14281D] text-[#14281D]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Asistencia y Quórum ({quorumAsistentes}/{miembros.length})
+          Asistencia y Quórum ({quorum.attendedCount}/{quorum.totalMembers})
         </button>
         <button
           onClick={() => setActiveTab('decisiones')}
-          className={`pb-3 cursor-pointer transition-colors border-b-2 ${
+          className={`pb-3 cursor-pointer transition-colors border-b-2 shrink-0 ${
             activeTab === 'decisiones'
               ? 'border-[#14281D] text-[#14281D]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Decisiones y Deliberación
+          Decisiones y Deliberación ({decisions.length}/{agenda.length})
         </button>
         <button
           onClick={() => setActiveTab('acta')}
-          className={`pb-3 cursor-pointer transition-colors border-b-2 ${
+          className={`pb-3 cursor-pointer transition-colors border-b-2 shrink-0 ${
             activeTab === 'acta'
               ? 'border-[#14281D] text-[#14281D]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Acta de Sesión
+          Borrador de Acta Oficial
         </button>
       </div>
 
-      {/* Contenido Pestaña Agenda */}
+      {/* Pestaña 1: Orden del Día y Agenda (RF-25, RN-04, RF-26) */}
       {activeTab === 'agenda' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-8 bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4">
-            <h3 className="font-bold text-xs text-[#14281D] uppercase tracking-wider">
-              Expedientes en el Orden del Día
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-4 rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-mono font-bold text-[#14281D] bg-white px-2 py-0.5 rounded border border-stone-200">
-                    Radicado 2026-014
-                  </div>
-                  <span className="font-semibold text-stone-500">Ponente: Dr. Alejandro Restrepo</span>
-                </div>
-                <h4 className="font-bold text-[#14281D]">
-                  Modelamiento de Redes Neuronales Profundas para Detección de Fitopatógenos
-                </h4>
-                <div className="text-[11px] text-stone-500">
-                  Investigador: Dra. Carmen Morales · Tipo: Presentación de Proyecto
-                </div>
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div>
+                <h3 className="font-bold text-xs text-[#14281D] uppercase tracking-wider">
+                  Orden del Día Aprobado
+                </h3>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  Expedientes clasificados para deliberación en esta sesión colegiada.
+                </p>
               </div>
+
+              {isSecretaryOrAdmin && !session.is_agenda_closed && agenda.length > 0 && (
+                <button
+                  onClick={handleCloseAgenda}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Lock size={12} />
+                  <span>Cerrar Agenda y Convocar (RF-26)</span>
+                </button>
+              )}
             </div>
+
+            {agenda.length === 0 ? (
+              <div className="p-8 text-center text-xs text-stone-500 border border-dashed border-stone-200 rounded-xl space-y-1">
+                <FileText size={24} className="mx-auto text-stone-400 mb-1" />
+                <p className="font-bold text-stone-700">No hay expedientes incorporados en la agenda</p>
+                <p className="text-[11px]">
+                  Seleccione solicitudes en estado "Lista para comité" desde el panel lateral.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                {agenda.map((item) => {
+                  const appData = getApplicationById(item.application_id);
+                  const decisionRecorded = decisions.find((d) => d.application_id === item.application_id);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 rounded-xl border border-[#E5E3DC] bg-[#FAF9F6] space-y-2.5 hover:border-stone-400 transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-[#14281D] text-white font-mono font-bold text-[11px] flex items-center justify-center">
+                            {item.agenda_order}
+                          </span>
+                          <span className="font-mono font-bold text-[#14281D] bg-white px-2 py-0.5 rounded border border-stone-200">
+                            {appData?.filing_number || item.application_id}
+                          </span>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                            {appData?.current_status}
+                          </span>
+                          {decisionRecorded && (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              Decisión: {decisionRecorded.decision}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="text-[11px] font-semibold text-stone-600">
+                            Ponente: {item.speaker_name || 'Sin ponente'}
+                          </span>
+                          {isSecretaryOrAdmin && !session.is_agenda_closed && (
+                            <button
+                              onClick={() => handleRemoveFromAgenda(item.application_id)}
+                              className="text-stone-400 hover:text-rose-600 cursor-pointer p-1"
+                              title="Retirar de la agenda"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-xs text-[#14281D]">
+                        {appData?.title || 'Expediente en deliberación'}
+                      </h4>
+
+                      <div className="text-[11px] text-stone-500">
+                        {appData?.abstract}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-[#E5E3DC] p-5 shadow-xs space-y-3 text-xs">
-            <h4 className="font-bold text-xs text-[#14281D]">Expedientes Listos para Comité</h4>
-            <p className="text-[11px] text-stone-500">
-              Solicitudes con concepto técnico favorable listas para ser incorporadas:
-            </p>
-            <div className="p-3 rounded-xl border border-dashed border-stone-300 space-y-2">
-              <div className="font-bold text-[#14281D]">Radicado 2026-003</div>
-              <div className="text-[11px] text-stone-600">Prórroga de Calendario de Campo</div>
-              <button className="w-full mt-1 py-1.5 rounded-lg bg-[#14281D] text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer">
-                <Plus size={12} />
-                <span>Agregar a la Agenda</span>
-              </button>
+          {/* Panel Lateral: Solicitudes Elegibles para Incorporar (RN-04) */}
+          <div className="lg:col-span-4 bg-white rounded-2xl border border-[#E5E3DC] p-5 shadow-xs space-y-4 text-xs">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <Sparkles size={14} className="text-[#14281D]" />
+                <h4 className="font-bold text-xs text-[#14281D]">Expedientes Listos para Comité</h4>
+              </div>
+              <p className="text-[11px] text-stone-500 mt-1">
+                Conforme a la regla <strong>RN-04</strong>, únicamente los expedientes en estado <strong>LISTA_COMITE</strong> con concepto técnico previo son elegibles.
+              </p>
             </div>
+
+            {session.is_agenda_closed ? (
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-stone-600 text-xs flex items-center gap-2">
+                <Lock size={15} className="shrink-0 text-amber-600" />
+                <span>La agenda está cerrada. No se admiten trámites adicionales (RN-04).</span>
+              </div>
+            ) : candidateApps.length === 0 ? (
+              <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-center text-[11px] text-stone-500">
+                No hay más expedientes en estado "Lista para comité" disponibles para incorporar.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1 text-[11px]">
+                    Seleccionar Ponente para el Tema
+                  </label>
+                  <select
+                    value={selectedSpeakerId}
+                    onChange={(e) => setSelectedSpeakerId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white outline-none text-xs"
+                  >
+                    {committeeMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} ({m.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  {candidateApps.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      className="p-3 rounded-xl border border-[#E5E3DC] bg-[#FAF9F6] space-y-2 hover:border-[#14281D] transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-[#14281D] text-[11px]">
+                          {candidate.filing_number}
+                        </span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                          {candidate.current_status}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-stone-800 line-clamp-2 text-[11px]">
+                        {candidate.title}
+                      </p>
+                      <button
+                        onClick={() => handleAddToAgenda(candidate.id)}
+                        className="w-full py-1.5 rounded-lg bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs"
+                      >
+                        <Plus size={12} />
+                        <span>Incorporar a la Agenda (RN-04)</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Contenido Pestaña Asistencia y Quórum */}
+      {/* Pestaña 2: Asistencia y Quórum Reglamentario (RF-27, RN-07) */}
       {activeTab === 'quorum' && (
         <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4 text-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
             <div>
-              <h3 className="font-bold text-sm text-[#14281D]">Registro de Asistencia</h3>
+              <div className="flex items-center gap-2">
+                <Users size={16} className="text-[#14281D]" />
+                <h3 className="font-bold text-sm text-[#14281D]">
+                  Registro de Asistencia y Quórum Reglamentario (RF-27)
+                </h3>
+              </div>
               <p className="text-stone-500 mt-0.5 text-[11px]">
-                Marque la asistencia de los integrantes para verificar el quórum reglamentario.
+                Regla <strong>RN-07</strong>: Se requiere la presencia de al menos la mitad más uno de los integrantes ({quorum.requiredCount} de {quorum.totalMembers}) para deliberar y votar.
               </p>
             </div>
-            <div className="text-right">
-              <span className="font-bold text-sm text-[#14281D]">
-                {quorumAsistentes} de {miembros.length}
-              </span>
-              <span className="block text-[10px] text-stone-400">Asistentes verificados</span>
+
+            <div
+              className={`p-3 rounded-xl border flex items-center gap-3 ${
+                quorum.hasQuorum
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}
+            >
+              <div className="text-right">
+                <span className="font-extrabold text-base block">
+                  {quorum.attendedCount} / {quorum.totalMembers}
+                </span>
+                <span className="text-[10px] font-semibold">
+                  {quorum.hasQuorum ? 'Quórum Reglamentario Válido' : 'Quórum Insuficiente'}
+                </span>
+              </div>
+              {quorum.hasQuorum ? (
+                <CheckCircle2 size={24} className="text-emerald-700" />
+              ) : (
+                <XCircle size={24} className="text-rose-600" />
+              )}
             </div>
           </div>
 
           <div className="divide-y divide-[#E5E3DC]">
-            {miembros.map((m) => (
+            {attendances.map((att) => (
               <div
-                key={m.id}
-                onClick={() => toggleAsistencia(m.id)}
-                className="py-3 px-2 flex items-center justify-between hover:bg-[#FAF9F6] rounded-xl cursor-pointer transition-colors"
+                key={att.id}
+                className="py-3 px-2 flex items-center justify-between hover:bg-[#FAF9F6] rounded-xl transition-colors"
               >
                 <div>
-                  <div className="font-bold text-[#14281D]">{m.nombre}</div>
-                  <div className="text-[11px] text-stone-500">{m.rol}</div>
+                  <div className="font-bold text-[#14281D]">{att.user_name}</div>
+                  <div className="text-[11px] text-stone-500 flex items-center gap-2">
+                    <span>{att.user_role}</span>
+                    <span>·</span>
+                    <span className="text-stone-400">{att.notes || 'Sin anotación'}</span>
+                  </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={m.asistio}
-                  onChange={() => toggleAsistencia(m.id)}
-                  className="w-4 h-4 text-[#14281D] rounded cursor-pointer"
-                />
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className={`text-[11px] font-bold ${att.attended ? 'text-emerald-800' : 'text-stone-400'}`}>
+                    {att.attended ? 'Asistió' : 'Ausente'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={att.attended}
+                    onChange={(e) =>
+                      toggleAttendance(
+                        session.id,
+                        att.user_id,
+                        e.target.checked,
+                        e.target.checked ? 'Presencial' : 'Ausencia sin justificación'
+                      )
+                    }
+                    className="w-4 h-4 text-[#14281D] rounded cursor-pointer accent-[#14281D]"
+                  />
+                </label>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Contenido Pestaña Decisiones */}
+      {/* Pestaña 3: Decisiones Colegiadas y Deliberación (RF-28, RN-05, RN-06, RN-07) */}
       {activeTab === 'decisiones' && (
         <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4 text-xs">
-          <h3 className="font-bold text-sm text-[#14281D]">
-            Decisiones Colegiadas por Expediente
-          </h3>
-
-          <div className="p-4 rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] space-y-3">
-            <div className="font-bold text-xs text-[#14281D]">
-              Radicado 2026-014: Modelamiento de Redes Neuronales
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <Scale size={16} className="text-[#14281D]" />
+                <h3 className="font-bold text-sm text-[#14281D]">
+                  Deliberación y Acuerdos por Expediente (RF-28)
+                </h3>
+              </div>
+              <p className="text-stone-500 text-[11px] mt-0.5">
+                Reglas: <strong>RN-07</strong> (Bloqueo sin quórum), <strong>RN-05</strong> (Justificación obligatoria) y <strong>RN-06</strong> (Aplazamiento preserva estado).
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">Decisión del Comité</label>
-                <select
-                  value={decisiones['sol-001']?.decision || 'Aprobada'}
-                  onChange={(e) =>
-                    setDecisiones({
-                      ...decisiones,
-                      'sol-001': { ...decisiones['sol-001'], decision: e.target.value },
-                    })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none"
-                >
-                  <option value="Aprobada">Aprobada</option>
-                  <option value="Aprobada con ajustes">Aprobada con ajustes</option>
-                  <option value="Rechazada">Rechazada</option>
-                  <option value="Aplazada">Aplazada</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">Justificación / Motivo</label>
-                <input
-                  type="text"
-                  value={decisiones['sol-001']?.motivo || ''}
-                  onChange={(e) =>
-                    setDecisiones({
-                      ...decisiones,
-                      'sol-001': { ...decisiones['sol-001'], motivo: e.target.value },
-                    })
-                  }
-                  placeholder="Justificación del acuerdo adoptado..."
-                  className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none"
-                />
-              </div>
+            <div className="text-right">
+              <span className="font-bold text-xs text-[#14281D]">
+                {decisions.length} de {agenda.length} decididos
+              </span>
             </div>
           </div>
+
+          {!quorum.hasQuorum && (
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-2.5">
+              <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-xs">Votación y Decisión Inhabilitadas por Falta de Quórum (RN-07)</p>
+                <p className="text-[11px] mt-0.5">
+                  El comité cuenta únicamente con {quorum.attendedCount} integrantes de los {quorum.requiredCount} requeridos. Debe verificar la asistencia en la pestaña "Asistencia y Quórum" antes de registrar cualquier acuerdo vinculante.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {agenda.length === 0 ? (
+            <div className="p-6 text-center text-stone-500">
+              No hay expedientes en el orden del día para deliberar.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {agenda.map((item) => {
+                const appData = getApplicationById(item.application_id);
+                const recordedDecision = decisions.find((d) => d.application_id === item.application_id);
+                const currentPayload = decisionPayloads[item.application_id] || {
+                  decision: recordedDecision?.decision || ('APROBADA' as SessionDecisionType),
+                  justification: recordedDecision?.justification || '',
+                };
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-5 rounded-2xl border border-[#E5E3DC] bg-[#FAF9F6] space-y-3.5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-stone-200">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-white bg-[#14281D] px-2 py-0.5 rounded text-[11px]">
+                          Punto #{item.agenda_order}
+                        </span>
+                        <span className="font-mono font-bold text-[#14281D]">
+                          {appData?.filing_number}
+                        </span>
+                        <span className="text-[11px] text-stone-500">
+                          Ponente: {item.speaker_name || 'Sin ponente'}
+                        </span>
+                      </div>
+
+                      {recordedDecision && (
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
+                          Decisión Asentada: {recordedDecision.decision}
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="font-bold text-xs text-[#14281D]">{appData?.title}</h4>
+                    <p className="text-[11px] text-stone-500">{appData?.abstract}</p>
+
+                    {/* Formulario de Decisión Colegiada */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
+                      <div className="md:col-span-4 space-y-1">
+                        <label className="block font-semibold text-stone-700 text-[11px]">
+                          Sentido del Acuerdo
+                        </label>
+                        <select
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          value={currentPayload.decision}
+                          onChange={(e) =>
+                            setDecisionPayloads({
+                              ...decisionPayloads,
+                              [item.application_id]: {
+                                ...currentPayload,
+                                decision: e.target.value as SessionDecisionType,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none font-medium disabled:bg-stone-100 disabled:text-stone-400"
+                        >
+                          <option value="APROBADA">Aprobada</option>
+                          <option value="APROBADA_CON_AJUSTES">Aprobada con ajustes</option>
+                          <option value="RECHAZADA">Rechazada</option>
+                          <option value="APLAZADA">Aplazada (Preserva LISTA_COMITE - RN-06)</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-6 space-y-1">
+                        <label className="block font-semibold text-stone-700 text-[11px]">
+                          Justificación Motivada por Escrito (RN-05)
+                        </label>
+                        <input
+                          type="text"
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          value={currentPayload.justification}
+                          onChange={(e) =>
+                            setDecisionPayloads({
+                              ...decisionPayloads,
+                              [item.application_id]: {
+                                ...currentPayload,
+                                justification: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Fundamento técnico y legal del acuerdo colegiado..."
+                          className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none font-medium disabled:bg-stone-100 disabled:text-stone-400"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2 flex items-end">
+                        <button
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          onClick={() => handleRegisterDecision(item.application_id)}
+                          className="w-full py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+                        >
+                          {recordedDecision ? 'Actualizar' : 'Asentar'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Contenido Pestaña Acta */}
+      {/* Pestaña 4: Borrador del Acta Oficial (RF-29, RF-31) */}
       {activeTab === 'acta' && (
         <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4 text-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
             <div>
-              <h3 className="font-bold text-sm text-[#14281D]">Borrador del Acta de Sesión</h3>
+              <div className="flex items-center gap-2">
+                <FileCheck size={16} className="text-[#14281D]" />
+                <h3 className="font-bold text-sm text-[#14281D]">
+                  Borrador Consolidado de Acta de Sesión (RF-29)
+                </h3>
+              </div>
               <p className="text-stone-500 text-[11px] mt-0.5">
-                Generado automáticamente a partir de las decisiones registradas y la lista de quórum.
+                Generado de forma automática a partir del orden del día, lista de asistencia y acuerdos adoptados.
               </p>
             </div>
-            <button className="px-3 py-1.5 bg-[#14281D] text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer">
+
+            <button
+              onClick={() => navigate('/actas')}
+              className="px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
               <Download size={13} />
-              <span>Descargar PDF</span>
+              <span>Ver en Módulo de Actas</span>
             </button>
           </div>
 
-          <div className="p-6 rounded-xl border border-[#E5E3DC] bg-[#FAF9F6] font-mono text-[11px] text-stone-700 leading-relaxed space-y-3">
-            <div className="font-bold text-center text-[#14281D]">
-              ACTA Nº 04 - 2026 DE SESIÓN ORDINARIA DEL COMITÉ DE INVESTIGACIONES
+          <div className="p-6 rounded-2xl border border-[#E5E3DC] bg-[#FAF9F6] font-mono text-xs text-stone-700 leading-relaxed space-y-4">
+            <div className="text-center font-bold text-[#14281D] text-sm pb-2 border-b border-stone-200">
+              ACTA OFICIAL DE {session.session_number.toUpperCase()}
             </div>
-            <p>
-              En la ciudad de Bogotá D.C., a los 12 días del mes de noviembre de 2026, se reunieron los integrantes del Comité de Investigación Institucional para deliberar sobre los expedientes en agenda.
-            </p>
-            <p>
-              <strong>Quórum verificado:</strong> 5 de 7 integrantes presentes.
-            </p>
-            <p>
-              <strong>Acuerdo 1:</strong> Respecto al Radicado 2026-014, el comité decide: APROBADA con pleno aval institucional para su ejecución.
-            </p>
+
+            <div>
+              <p><strong>FECHA Y HORA:</strong> {new Date(session.scheduled_at).toLocaleString('es-CO')}</p>
+              <p><strong>LUGAR / MODALIDAD:</strong> {session.location_or_url}</p>
+              <p><strong>TIPO DE SESIÓN:</strong> {session.session_type}</p>
+            </div>
+
+            <div>
+              <p className="font-bold text-[#14281D]">1. VERIFICACIÓN DEL QUÓRUM REGLAMENTARIO (RN-07):</p>
+              <p>
+                Asistentes ({quorum.attendedCount} de {quorum.totalMembers}):{' '}
+                {attendances
+                  .filter((a) => a.attended)
+                  .map((a) => `${a.user_name} (${a.user_role})`)
+                  .join(', ')}
+              </p>
+              <p className="text-emerald-800 font-bold">
+                Dictamen: {quorum.hasQuorum ? 'HAY QUÓRUM REGLAMENTARIO VÁLIDO' : 'SIN QUÓRUM'}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-bold text-[#14281D]">2. ACUERDOS Y DECISIONES ADOPTADAS:</p>
+              {decisions.length === 0 ? (
+                <p className="italic text-stone-500">Pendiente de registro de acuerdos en la deliberación.</p>
+              ) : (
+                <ol className="list-decimal pl-4 space-y-2 mt-1">
+                  {decisions.map((dec) => {
+                    const decApp = getApplicationById(dec.application_id);
+                    return (
+                      <li key={dec.id}>
+                        <strong>{decApp?.filing_number}:</strong> {decApp?.title} ·{' '}
+                        <span className="font-bold text-[#14281D]">[{dec.decision}]</span>. Fundamento:{' '}
+                        {dec.justification}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
           </div>
         </div>
       )}
