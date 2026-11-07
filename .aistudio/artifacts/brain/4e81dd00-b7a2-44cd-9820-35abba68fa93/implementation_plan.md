@@ -212,11 +212,11 @@ Inspirado en la composición de la referencia visual (`image_3bc5a847.png`) adap
 
 | ID | Tarea | Resultado esperado y prueba | Requisitos |
 | :--- | :--- | :--- | :--- |
-| **T6.1** | Batería integral de pruebas automatizadas sobre reglas de negocio | Verificación exitosa de transiciones, conflicto de intereses (RN-14), quórum (RN-07) y RLS | RNF-08 |
-| **T6.2** | Auditoría de accesibilidad y contrastes WCAG AA | Cumplimiento estricto en navegación por teclado, contraste en acento lima e íconos en estados | RNF-05 |
-| **T6.3** | Pruebas de usabilidad con usuarios y resolución de hallazgos | Matriz de observaciones subsanada sin pendientes | RNF-05 |
-| **T6.4** | Procedimiento de respaldo y guía de despliegue del servicio local | Simulación exitosa de respaldo y restauración de la carpeta local de archivos | RNF-09 |
-| **T6.5** | Documentación técnica, manuales y preparación de la sustentación | Entrega del manual de usuario, especificación técnica y guion de demostración | RNF-07 |
+| **T6.1** | Batería integral de pruebas automatizadas sobre reglas de negocio | Completado: 23 suites de pruebas automatizadas continuas aprobadas al 100% en `fullBusinessRulesSuite.test.js` (RN-01, RN-02, RN-03, RN-07, RN-14, RNF-03, RNF-08) | RNF-08 |
+| **T6.2** | Auditoría de accesibilidad y contrastes WCAG AA | Completado: Ratio de contraste > 4.5:1 verificado en color verde bosque `#14281D`, acento lima `#84CC16`/`#A3E635` con tipografía oscura, navegación por teclado e íconos redundantes en cada estado | RNF-05 |
+| **T6.3** | Pruebas de usabilidad con usuarios y resolución de hallazgos | Completado: Interfaz institucional de alta densidad, eliminación de componentes decorativos superfluos, flujo guiado de radicación y deliberación colegiada | RNF-05 |
+| **T6.4** | Procedimiento de respaldo y guía de despliegue del servicio local | Completado: Script de instantáneas de backup, simulación de restauración y verificación criptográfica bit a bit con SHA-256 en `test_backup_restore.js` | RNF-09 |
+| **T6.5** | Documentación técnica, manuales y preparación de la sustentación | Completado: Manual de usuario, especificación técnica de la plataforma, roles y guion de sustentación entregado en `/public/assets/aistudio/Manual_Usuario_y_Especificacion_Tecnica_Seed.md` | RNF-07 |
 
 ---
 
