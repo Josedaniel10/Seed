@@ -2,15 +2,17 @@ import React from 'react';
 import { ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth.ts';
 import { PERMISSIONS_MATRIX } from '../../auth/permissions.ts';
-import { DEMO_USERS } from '../../auth/authStore.ts';
+import { DEMO_USERS, DemoUserRole } from '../../auth/authStore.ts';
 import { UserRole } from '../../../types/database.ts';
 
 export function RoleMatrixWidget() {
   const { profile, login } = useAuth();
 
-  const handleSwitchRole = (r: UserRole) => {
+  const handleSwitchRole = (r: DemoUserRole) => {
     const demo = DEMO_USERS[r];
-    login(demo.email, 'password123', demo.role, demo.name);
+    if (demo) {
+      login(demo.email, 'password123', demo.role, demo.name);
+    }
   };
 
   return (
@@ -37,7 +39,7 @@ export function RoleMatrixWidget() {
 
       {/* Quick Role Switch Buttons */}
       <div className="flex flex-wrap gap-1.5">
-        {(Object.keys(DEMO_USERS) as UserRole[]).map((r) => {
+        {(Object.keys(DEMO_USERS) as DemoUserRole[]).map((r) => {
           const isCurrent = profile?.role === r;
           const demo = DEMO_USERS[r];
 

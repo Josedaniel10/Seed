@@ -12,8 +12,10 @@ export type UserRole =
   | 'admin'
   // Legacy Spanish aliases for backward compatibility
   | 'investigador'
+  | 'administrativo'
   | 'integrante_comite'
   | 'miembro_comite'
+  | 'secretario'
   | 'lider_grupo'
   | 'lider';
 
@@ -53,7 +55,7 @@ export type ApplicationType = RequestType;
 
 export interface Requirement {
   id: string;
-  request_type_id: string;
+  request_type_id?: string;
   application_type_id?: string; // Legacy alias
   name: string;
   description: string | null;
@@ -77,6 +79,7 @@ export type RequestDbStatus =
   | 'CLOSED'
   // Legacy Spanish aliases
   | 'RADICADA'
+  | 'PENDIENTE_DOCUMENTOS'
   | 'EN_REVISION'
   | 'LISTA_COMITE'
   | 'APROBADA'
@@ -115,7 +118,7 @@ export type DocumentValidationStatus =
 
 export interface RequestDocument {
   id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   requirement_id: string;
   file_name: string;
@@ -140,7 +143,7 @@ export type ReviewerConcept =
 
 export interface ReviewerAssignment {
   id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   reviewer_id: string;
   deadline_date: string;
@@ -161,7 +164,7 @@ export type ObservationCategory =
 
 export interface Observation {
   id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   assignment_id: string | null;
   author_id: string;
@@ -193,7 +196,7 @@ export interface CommitteeSession {
 export interface SessionAgendaItem {
   id: string;
   session_id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   agenda_order: number;
   speaker_id: string | null;
@@ -225,7 +228,7 @@ export type SessionDecisionType =
 export interface SessionDecision {
   id: string;
   session_id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   decision: SessionDecisionType;
   justification: string;
@@ -247,7 +250,7 @@ export interface CommitteeMinutes {
 
 export interface AuditHistory {
   id: string;
-  request_id: string;
+  request_id?: string;
   application_id?: string; // Legacy alias
   actor_id: string | null;
   action: string;

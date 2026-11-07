@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuthStore, DEMO_USERS } from './authStore.ts';
+import { useAuthStore, DEMO_USERS, DemoUserRole } from './authStore.ts';
 import { UserRole } from '../../types/database.ts';
 import { LogIn, LogOut, ShieldCheck, Mail, Lock, UserCheck, KeyRound, AlertTriangle } from 'lucide-react';
 
@@ -34,16 +34,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleQuickRoleLogin = async (role: UserRole) => {
+  const handleQuickRoleLogin = async (role: DemoUserRole) => {
     clearError();
     const demo = DEMO_USERS[role];
+    if (!demo) return;
     const res = await login(demo.email, 'password123', demo.role, demo.name);
     if (res.success && onLoginSuccess) {
       onLoginSuccess();
     }
   };
 
-  const roleBadges: Record<UserRole, { label: string; bg: string; text: string }> = {
+  const roleBadges: Record<DemoUserRole, { label: string; bg: string; text: string }> = {
     investigador: { label: 'Investigador', bg: 'bg-stone-100', text: 'text-stone-800' },
     administrativo: { label: 'Administrativo', bg: 'bg-emerald-100', text: 'text-emerald-900' },
     integrante_comite: { label: 'Integrante Comité', bg: 'bg-amber-100', text: 'text-amber-900' },
@@ -53,7 +54,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
   };
 
   if (isAuthenticated && profile) {
-    const badge = roleBadges[profile.role] || roleBadges.investigador;
+    const badge = (roleBadges as Record<string, { label: string; bg: string; text: string }>)[profile.role] || roleBadges.investigador;
 
     return (
       <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs max-w-2xl mx-auto space-y-4">
@@ -103,7 +104,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             Perfiles institucionales disponibles:
           </span>
           <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(DEMO_USERS) as UserRole[]).map((r) => {
+            {(Object.keys(DEMO_USERS) as DemoUserRole[]).map((r) => {
               const u = DEMO_USERS[r];
               const isCurrent = profile.role === r;
               return (
@@ -201,7 +202,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
         </p>
 
         <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(DEMO_USERS) as UserRole[]).map((r) => {
+          {(Object.keys(DEMO_USERS) as DemoUserRole[]).map((r) => {
             const u = DEMO_USERS[r];
             const badge = roleBadges[r];
             return (

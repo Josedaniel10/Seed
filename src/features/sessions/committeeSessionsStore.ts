@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   RequestDbStatus,
+  ApplicationDbStatus,
   AuditHistory,
   CommitteeSession,
   SessionAgendaItem,
@@ -645,7 +646,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           // APROBADA, APROBADA_CON_AJUSTES o RECHAZADA
           const transResult = await appStore.transitionApplicationStatus(
             applicationId,
-            decision, // coincide exactamente con ApplicationDbStatus
+            decision as RequestDbStatus,
             registeredBy,
             registeredByName,
             justification.trim(),

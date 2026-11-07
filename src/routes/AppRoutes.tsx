@@ -77,7 +77,7 @@ export function AppRoutes() {
         <Route
           path="/mis-solicitudes"
           element={
-            <RutaProtegida rolesPermitidos={['investigador']}>
+            <RutaProtegida rolesPermitidos={['researcher']}>
               <MisSolicitudesPage />
             </RutaProtegida>
           }
@@ -85,7 +85,7 @@ export function AppRoutes() {
         <Route
           path="/solicitudes/nueva"
           element={
-            <RutaProtegida rolesPermitidos={['investigador']}>
+            <RutaProtegida rolesPermitidos={['researcher']}>
               <NuevaSolicitudPage />
             </RutaProtegida>
           }
@@ -95,7 +95,7 @@ export function AppRoutes() {
         <Route
           path="/validacion"
           element={
-            <RutaProtegida rolesPermitidos={['administrativo', 'secretario']}>
+            <RutaProtegida rolesPermitidos={['administrative', 'secretary']}>
               <ValidacionPage />
             </RutaProtegida>
           }
@@ -103,7 +103,7 @@ export function AppRoutes() {
         <Route
           path="/panel"
           element={
-            <RutaProtegida rolesPermitidos={['secretario', 'administrativo', 'lider']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'administrative', 'leader']}>
               <PanelSeguimientoPage />
             </RutaProtegida>
           }
@@ -111,7 +111,7 @@ export function AppRoutes() {
         <Route
           path="/revisiones"
           element={
-            <RutaProtegida rolesPermitidos={['miembro_comite']}>
+            <RutaProtegida rolesPermitidos={['committee_member']}>
               <RevisionesPage />
             </RutaProtegida>
           }
@@ -119,7 +119,7 @@ export function AppRoutes() {
         <Route
           path="/asignaciones"
           element={
-            <RutaProtegida rolesPermitidos={['secretario']}>
+            <RutaProtegida rolesPermitidos={['secretary']}>
               <AsignacionesPage />
             </RutaProtegida>
           }
@@ -129,7 +129,7 @@ export function AppRoutes() {
         <Route
           path="/sesiones"
           element={
-            <RutaProtegida rolesPermitidos={['secretario', 'miembro_comite']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'committee_member']}>
               <SesionesPage />
             </RutaProtegida>
           }
@@ -137,7 +137,7 @@ export function AppRoutes() {
         <Route
           path="/sesiones/:id"
           element={
-            <RutaProtegida rolesPermitidos={['secretario', 'miembro_comite']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'committee_member']}>
               <DetalleSesionPage />
             </RutaProtegida>
           }
@@ -145,7 +145,7 @@ export function AppRoutes() {
         <Route
           path="/actas"
           element={
-            <RutaProtegida rolesPermitidos={['secretario', 'miembro_comite', 'lider']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'committee_member', 'leader']}>
               <ActasPage />
             </RutaProtegida>
           }
@@ -153,7 +153,7 @@ export function AppRoutes() {
         <Route
           path="/reportes"
           element={
-            <RutaProtegida rolesPermitidos={['secretario', 'lider', 'admin']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'leader', 'admin']}>
               <ReportesPage />
             </RutaProtegida>
           }
@@ -186,13 +186,28 @@ export function AppRoutes() {
         />
 
         {/* Redirecciones de conveniencia hacia rutas normalizadas */}
+        <Route path="/my-requests" element={<Navigate to="/mis-solicitudes" replace />} />
+        <Route path="/requests/new" element={<Navigate to="/solicitudes/nueva" replace />} />
+        <Route path="/validation" element={<Navigate to="/validacion" replace />} />
+        <Route path="/tracking-board" element={<Navigate to="/panel" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/panel" replace />} />
+        <Route path="/reviews" element={<Navigate to="/revisiones" replace />} />
+        <Route path="/assignments" element={<Navigate to="/asignaciones" replace />} />
+        <Route path="/sessions" element={<Navigate to="/sesiones" replace />} />
+        <Route path="/minutes" element={<Navigate to="/actas" replace />} />
+        <Route path="/reports" element={<Navigate to="/reportes" replace />} />
+        <Route path="/admin/users" element={<Navigate to="/admin/usuarios" replace />} />
+        <Route path="/admin/groups" element={<Navigate to="/admin/grupos" replace />} />
+        <Route path="/admin/catalog" element={<Navigate to="/admin/catalogo" replace />} />
         <Route path="/catalog" element={<Navigate to="/admin/catalogo" replace />} />
         <Route path="/users" element={<Navigate to="/admin/usuarios" replace />} />
         <Route path="/groups" element={<Navigate to="/admin/grupos" replace />} />
+        <Route path="/notifications" element={<Navigate to="/notificaciones" replace />} />
+        <Route path="/profile" element={<Navigate to="/perfil" replace />} />
       </Route>
 
       {/* Ruta comodín */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/mis-solicitudes" replace />} />
     </Routes>
   );
 }

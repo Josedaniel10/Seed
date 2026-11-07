@@ -365,8 +365,9 @@ export function DetalleSesionPage() {
             ) : (
               <div className="space-y-3 text-xs">
                 {agenda.map((item) => {
-                  const appData = getApplicationById(item.application_id);
-                  const decisionRecorded = decisions.find((d) => d.application_id === item.application_id);
+                  const appId = item.application_id || item.request_id || '';
+                  const appData = getApplicationById(appId);
+                  const decisionRecorded = decisions.find((d) => (d.application_id || d.request_id) === appId);
 
                   return (
                     <div
@@ -379,7 +380,7 @@ export function DetalleSesionPage() {
                             {item.agenda_order}
                           </span>
                           <span className="font-mono font-bold text-[#14281D] bg-white px-2 py-0.5 rounded border border-stone-200">
-                            {appData?.filing_number || item.application_id}
+                            {appData?.filing_number || appId}
                           </span>
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
                             {appData?.current_status}
@@ -397,7 +398,7 @@ export function DetalleSesionPage() {
                           </span>
                           {isSecretaryOrAdmin && !session.is_agenda_closed && (
                             <button
-                              onClick={() => handleRemoveFromAgenda(item.application_id)}
+                              onClick={() => handleRemoveFromAgenda(appId)}
                               className="text-stone-400 hover:text-rose-600 cursor-pointer p-1"
                               title="Retirar de la agenda"
                             >
@@ -614,9 +615,10 @@ export function DetalleSesionPage() {
           ) : (
             <div className="space-y-4">
               {agenda.map((item) => {
-                const appData = getApplicationById(item.application_id);
-                const recordedDecision = decisions.find((d) => d.application_id === item.application_id);
-                const currentPayload = decisionPayloads[item.application_id] || {
+                const appId = item.application_id || item.request_id || '';
+                const appData = getApplicationById(appId);
+                const recordedDecision = decisions.find((d) => (d.application_id || d.request_id) === appId);
+                const currentPayload = decisionPayloads[appId] || {
                   decision: recordedDecision?.decision || ('APROBADA' as SessionDecisionType),
                   justification: recordedDecision?.justification || '',
                 };
@@ -661,7 +663,7 @@ export function DetalleSesionPage() {
                           onChange={(e) =>
                             setDecisionPayloads({
                               ...decisionPayloads,
-                              [item.application_id]: {
+                              [appId]: {
                                 ...currentPayload,
                                 decision: e.target.value as SessionDecisionType,
                               },
@@ -687,7 +689,7 @@ export function DetalleSesionPage() {
                           onChange={(e) =>
                             setDecisionPayloads({
                               ...decisionPayloads,
-                              [item.application_id]: {
+                              [appId]: {
                                 ...currentPayload,
                                 justification: e.target.value,
                               },
@@ -701,7 +703,7 @@ export function DetalleSesionPage() {
                       <div className="md:col-span-2 flex items-end">
                         <button
                           disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
-                          onClick={() => handleRegisterDecision(item.application_id)}
+                          onClick={() => handleRegisterDecision(appId)}
                           className="w-full py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
                         >
                           {recordedDecision ? 'Actualizar' : 'Asentar'}
@@ -773,7 +775,7 @@ export function DetalleSesionPage() {
               ) : (
                 <ol className="list-decimal pl-4 space-y-2 mt-1">
                   {decisions.map((dec) => {
-                    const decApp = getApplicationById(dec.application_id);
+                    const decApp = getApplicationById(dec.application_id || dec.request_id || '');
                     return (
                       <li key={dec.id}>
                         <strong>{decApp?.filing_number}:</strong> {decApp?.title} ·{' '}

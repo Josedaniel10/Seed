@@ -7,8 +7,11 @@ export type AppRole =
   | 'admin'
   // Legacy Spanish aliases
   | 'investigador'
+  | 'administrativo'
   | 'miembro_comite'
   | 'integrante_comite'
+  | 'secretario'
+  | 'lider'
   | 'lider_grupo';
 
 export interface MenuItem {
@@ -33,77 +36,102 @@ export const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador del Sistema',
 };
 
+export function normalizeRole(role?: string): string {
+  if (!role) return '';
+  if (role === 'investigador') return 'researcher';
+  if (role === 'administrativo') return 'administrative';
+  if (role === 'miembro_comite' || role === 'integrante_comite') return 'committee_member';
+  if (role === 'secretario') return 'secretary';
+  if (role === 'lider' || role === 'lider_grupo') return 'leader';
+  return role;
+}
+
+export function roleMatches(userRole?: string, allowedRole?: string): boolean {
+  if (!userRole || !allowedRole) return false;
+  return normalizeRole(userRole) === normalizeRole(allowedRole);
+}
+
 export const ROLE_HOME_PATHS: Record<string, string> = {
-  researcher: '/my-requests',
-  investigador: '/my-requests',
-  administrative: '/validation',
-  administrativo: '/validation',
-  committee_member: '/reviews',
-  miembro_comite: '/reviews',
-  integrante_comite: '/reviews',
-  secretary: '/tracking-board',
-  secretario: '/tracking-board',
-  leader: '/tracking-board',
-  lider: '/tracking-board',
-  lider_grupo: '/tracking-board',
-  admin: '/admin/users',
+  researcher: '/mis-solicitudes',
+  investigador: '/mis-solicitudes',
+  administrative: '/validacion',
+  administrativo: '/validacion',
+  committee_member: '/revisiones',
+  miembro_comite: '/revisiones',
+  integrante_comite: '/revisiones',
+  secretary: '/panel',
+  secretario: '/panel',
+  leader: '/panel',
+  lider: '/panel',
+  lider_grupo: '/panel',
+  admin: '/admin/usuarios',
 };
 
 export const ROLE_MENU_ITEMS: Record<string, MenuItem[]> = {
   researcher: [
-    { label: 'Mis solicitudes', path: '/my-requests', iconName: 'FileText' },
-    { label: 'Nueva solicitud', path: '/requests/new', iconName: 'PlusCircle' },
+    { label: 'Mis solicitudes', path: '/mis-solicitudes', iconName: 'FileText' },
+    { label: 'Nueva solicitud', path: '/solicitudes/nueva', iconName: 'PlusCircle' },
   ],
   investigador: [
-    { label: 'Mis solicitudes', path: '/my-requests', iconName: 'FileText' },
-    { label: 'Nueva solicitud', path: '/requests/new', iconName: 'PlusCircle' },
+    { label: 'Mis solicitudes', path: '/mis-solicitudes', iconName: 'FileText' },
+    { label: 'Nueva solicitud', path: '/solicitudes/nueva', iconName: 'PlusCircle' },
   ],
   administrative: [
-    { label: 'Validación', path: '/validation', iconName: 'ClipboardCheck' },
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
+    { label: 'Validación', path: '/validacion', iconName: 'ClipboardCheck' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
   ],
   administrativo: [
-    { label: 'Validación', path: '/validation', iconName: 'ClipboardCheck' },
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
+    { label: 'Validación', path: '/validacion', iconName: 'ClipboardCheck' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
   ],
   committee_member: [
-    { label: 'Mis revisiones', path: '/reviews', iconName: 'CheckSquare' },
-    { label: 'Sesiones', path: '/sessions', iconName: 'Calendar' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
+    { label: 'Mis revisiones', path: '/revisiones', iconName: 'CheckSquare' },
+    { label: 'Sesiones', path: '/sesiones', iconName: 'Calendar' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
   ],
   miembro_comite: [
-    { label: 'Mis revisiones', path: '/reviews', iconName: 'CheckSquare' },
-    { label: 'Sesiones', path: '/sessions', iconName: 'Calendar' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
+    { label: 'Mis revisiones', path: '/revisiones', iconName: 'CheckSquare' },
+    { label: 'Sesiones', path: '/sesiones', iconName: 'Calendar' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+  ],
+  integrante_comite: [
+    { label: 'Mis revisiones', path: '/revisiones', iconName: 'CheckSquare' },
+    { label: 'Sesiones', path: '/sesiones', iconName: 'Calendar' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
   ],
   secretary: [
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
-    { label: 'Asignaciones', path: '/assignments', iconName: 'UserCheck' },
-    { label: 'Sesiones', path: '/sessions', iconName: 'Calendar' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
-    { label: 'Reportes', path: '/reports', iconName: 'BarChart3' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
+    { label: 'Asignaciones', path: '/asignaciones', iconName: 'UserCheck' },
+    { label: 'Sesiones', path: '/sesiones', iconName: 'Calendar' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+    { label: 'Reportes', path: '/reportes', iconName: 'BarChart3' },
   ],
   secretario: [
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
-    { label: 'Asignaciones', path: '/assignments', iconName: 'UserCheck' },
-    { label: 'Sesiones', path: '/sessions', iconName: 'Calendar' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
-    { label: 'Reportes', path: '/reports', iconName: 'BarChart3' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
+    { label: 'Asignaciones', path: '/asignaciones', iconName: 'UserCheck' },
+    { label: 'Sesiones', path: '/sesiones', iconName: 'Calendar' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+    { label: 'Reportes', path: '/reportes', iconName: 'BarChart3' },
   ],
   leader: [
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
-    { label: 'Reportes', path: '/reports', iconName: 'BarChart3' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+    { label: 'Reportes', path: '/reportes', iconName: 'BarChart3' },
   ],
   lider: [
-    { label: 'Panel de seguimiento', path: '/tracking-board', iconName: 'LayoutDashboard' },
-    { label: 'Actas y decisiones', path: '/minutes', iconName: 'FileCheck' },
-    { label: 'Reportes', path: '/reports', iconName: 'BarChart3' },
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+    { label: 'Reportes', path: '/reportes', iconName: 'BarChart3' },
+  ],
+  lider_grupo: [
+    { label: 'Panel de seguimiento', path: '/panel', iconName: 'LayoutDashboard' },
+    { label: 'Actas y decisiones', path: '/actas', iconName: 'FileCheck' },
+    { label: 'Reportes', path: '/reportes', iconName: 'BarChart3' },
   ],
   admin: [
-    { label: 'Usuarios y roles', path: '/admin/users', iconName: 'Users' },
-    { label: 'Grupos de investigación', path: '/admin/groups', iconName: 'Layers' },
-    { label: 'Catálogo de trámites', path: '/admin/catalog', iconName: 'BookOpen' },
+    { label: 'Usuarios y roles', path: '/admin/usuarios', iconName: 'Users' },
+    { label: 'Grupos de investigación', path: '/admin/grupos', iconName: 'Layers' },
+    { label: 'Catálogo de trámites', path: '/admin/catalogo', iconName: 'BookOpen' },
   ],
 };
 

@@ -18,7 +18,15 @@ export interface AuthState {
   clearError: () => void;
 }
 
-export const DEMO_USERS: Record<UserRole, { email: string; name: string; program: string; role: UserRole; group: string }> = {
+export type DemoUserRole =
+  | 'investigador'
+  | 'administrativo'
+  | 'integrante_comite'
+  | 'secretario'
+  | 'lider_grupo'
+  | 'admin';
+
+export const DEMO_USERS: Record<DemoUserRole, { email: string; name: string; program: string; role: UserRole; group: string }> = {
   investigador: {
     email: 'investigador@universidad.edu.co',
     name: 'Dra. Carmen Lucía Morales',

@@ -1232,21 +1232,13 @@ export const useRequestStore = create<RequestState>()(
       getStatusCounts: () => {
         const reqs = get().requests;
         const counts: Record<string, number> = {
-          SUBMITTED: 0,
           RADICADA: 0,
-          PENDING_DOCUMENTS: 0,
           PENDIENTE_DOCUMENTOS: 0,
-          UNDER_REVIEW: 0,
           EN_REVISION: 0,
-          COMMITTEE_READY: 0,
           LISTA_COMITE: 0,
-          APPROVED: 0,
           APROBADA: 0,
-          APPROVED_WITH_ADJUSTMENTS: 0,
           APROBADA_CON_AJUSTES: 0,
-          REJECTED: 0,
           RECHAZADA: 0,
-          CLOSED: 0,
           CERRADA: 0,
         };
 
@@ -1254,36 +1246,38 @@ export const useRequestStore = create<RequestState>()(
           const s = req.current_status;
           if (counts[s] !== undefined) {
             counts[s]++;
-          }
-          // Also increment paired status for compatibility
-          if (s === 'RADICADA' || s === 'SUBMITTED') {
-            counts.RADICADA = (counts.RADICADA || 0) + 1;
-            counts.SUBMITTED = counts.RADICADA;
-          } else if (s === 'PENDIENTE_DOCUMENTOS' || s === 'PENDING_DOCUMENTS') {
-            counts.PENDIENTE_DOCUMENTOS = (counts.PENDIENTE_DOCUMENTOS || 0) + 1;
-            counts.PENDING_DOCUMENTS = counts.PENDIENTE_DOCUMENTOS;
-          } else if (s === 'EN_REVISION' || s === 'UNDER_REVIEW') {
-            counts.EN_REVISION = (counts.EN_REVISION || 0) + 1;
-            counts.UNDER_REVIEW = counts.EN_REVISION;
-          } else if (s === 'LISTA_COMITE' || s === 'COMMITTEE_READY') {
-            counts.LISTA_COMITE = (counts.LISTA_COMITE || 0) + 1;
-            counts.COMMITTEE_READY = counts.LISTA_COMITE;
-          } else if (s === 'APROBADA' || s === 'APPROVED') {
-            counts.APROBADA = (counts.APROBADA || 0) + 1;
-            counts.APPROVED = counts.APROBADA;
-          } else if (s === 'APROBADA_CON_AJUSTES' || s === 'APPROVED_WITH_ADJUSTMENTS') {
-            counts.APROBADA_CON_AJUSTES = (counts.APROBADA_CON_AJUSTES || 0) + 1;
-            counts.APPROVED_WITH_ADJUSTMENTS = counts.APROBADA_CON_AJUSTES;
-          } else if (s === 'RECHAZADA' || s === 'REJECTED') {
-            counts.RECHAZADA = (counts.RECHAZADA || 0) + 1;
-            counts.REJECTED = counts.RECHAZADA;
-          } else if (s === 'CERRADA' || s === 'CLOSED') {
-            counts.CERRADA = (counts.CERRADA || 0) + 1;
-            counts.CLOSED = counts.CERRADA;
+          } else if (s === 'SUBMITTED') {
+            counts.RADICADA++;
+          } else if (s === 'PENDING_DOCUMENTS') {
+            counts.PENDIENTE_DOCUMENTOS++;
+          } else if (s === 'UNDER_REVIEW') {
+            counts.EN_REVISION++;
+          } else if (s === 'COMMITTEE_READY') {
+            counts.LISTA_COMITE++;
+          } else if (s === 'APPROVED') {
+            counts.APROBADA++;
+          } else if (s === 'APPROVED_WITH_ADJUSTMENTS') {
+            counts.APROBADA_CON_AJUSTES++;
+          } else if (s === 'REJECTED') {
+            counts.RECHAZADA++;
+          } else if (s === 'CLOSED') {
+            counts.CERRADA++;
           }
         }
 
-        return counts;
+        return new Proxy(counts, {
+          get(target, prop: string) {
+            if (prop === 'SUBMITTED') return target.RADICADA;
+            if (prop === 'PENDING_DOCUMENTS') return target.PENDIENTE_DOCUMENTOS;
+            if (prop === 'UNDER_REVIEW') return target.EN_REVISION;
+            if (prop === 'COMMITTEE_READY') return target.LISTA_COMITE;
+            if (prop === 'APPROVED') return target.APROBADA;
+            if (prop === 'APPROVED_WITH_ADJUSTMENTS') return target.APROBADA_CON_AJUSTES;
+            if (prop === 'REJECTED') return target.RECHAZADA;
+            if (prop === 'CLOSED') return target.CERRADA;
+            return target[prop] ?? 0;
+          },
+        });
       },
 
       getDeadlineStatus: (requestId: string) => {

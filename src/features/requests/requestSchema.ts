@@ -1,9 +1,21 @@
 import { z } from 'zod';
 
-export const step1TypeSchema = z.object({
-  request_type_id: z.string().min(1, 'Debe seleccionar un tipo de solicitud del catálogo.'),
-  application_type_id: z.string().optional(),
-});
+export const step1TypeSchema = z
+  .object({
+    request_type_id: z.string().optional(),
+    application_type_id: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const id = data.request_type_id || data.application_type_id;
+      return typeof id === 'string' && id.trim().length > 0;
+    },
+    {
+      message: 'Debe seleccionar un tipo de solicitud del catálogo.',
+      path: ['request_type_id'],
+    }
+  );
+
 
 export const step2GeneralDataSchema = z.object({
   title: z

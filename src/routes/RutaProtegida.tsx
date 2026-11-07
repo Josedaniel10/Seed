@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSessionStore } from '../stores/session.store.ts';
-import { AppRole } from '../lib/permisos.ts';
+import { AppRole, roleMatches } from '../lib/permisos.ts';
 
 interface RutaProtegidaProps {
   children: React.ReactNode;
@@ -30,7 +30,7 @@ export function RutaProtegida({ children, rolesPermitidos }: RutaProtegidaProps)
 
   // 2. Con sesión pero sin el rol permitido: redirige a /sin-acceso
   if (rolesPermitidos && rolesPermitidos.length > 0) {
-    const hasRole = rolesPermitidos.includes(user.activeRole);
+    const hasRole = rolesPermitidos.some((r) => roleMatches(user.activeRole, r));
     if (!hasRole) {
       return <Navigate to="/sin-acceso" replace />;
     }

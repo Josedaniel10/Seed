@@ -15,7 +15,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
 
   // Contadores reales individuales para cada estado exacto (RF-35)
   const realCounts = useMemo(() => {
-    const counts: Record<ApplicationStatus, number> = {
+    const counts: Record<string, number> = {
       RADICADA: 0,
       PENDIENTE_DOCUMENTOS: 0,
       EN_REVISION: 0,
@@ -27,8 +27,25 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
     };
 
     for (const app of applications) {
-      if (counts[app.current_status] !== undefined) {
-        counts[app.current_status]++;
+      const s = app.current_status as string;
+      if (counts[s] !== undefined) {
+        counts[s]++;
+      } else if (s === 'SUBMITTED') {
+        counts.RADICADA++;
+      } else if (s === 'PENDING_DOCUMENTS') {
+        counts.PENDIENTE_DOCUMENTOS++;
+      } else if (s === 'UNDER_REVIEW') {
+        counts.EN_REVISION++;
+      } else if (s === 'COMMITTEE_READY') {
+        counts.LISTA_COMITE++;
+      } else if (s === 'APPROVED') {
+        counts.APROBADA++;
+      } else if (s === 'APPROVED_WITH_ADJUSTMENTS') {
+        counts.APROBADA_CON_AJUSTES++;
+      } else if (s === 'REJECTED') {
+        counts.RECHAZADA++;
+      } else if (s === 'CLOSED') {
+        counts.CERRADA++;
       }
     }
 

@@ -196,9 +196,10 @@ export const useMinutesStore = create<MinutesState>()(
         } else {
           agreementsText = decisions
             .map((dec, idx) => {
-              const app = appStore.getApplicationById(dec.application_id);
+              const targetId = dec.application_id || dec.request_id || '';
+              const app = appStore.getApplicationById(targetId);
               const appTitle = app ? app.title : 'Solicitud';
-              const appNum = app ? app.filing_number : dec.application_id;
+              const appNum = app ? app.filing_number : targetId;
               return `Acuerdo ${idx + 1} [${appNum} - ${dec.decision}]:\nRespecto al expediente "${appTitle}", el Comité decide: ${dec.decision}.\nFundamento motivado: ${dec.justification}`;
             })
             .join('\n\n');
@@ -220,7 +221,11 @@ ${absenteesList || '- Ninguno'}
 Dictamen de Quórum: ${quorum.hasQuorum ? 'HAY QUÓRUM REGLAMENTARIO VÁLIDO' : 'SIN QUÓRUM'} (Mínimo exigido: ${session.quorum_required} integrantes).
 
 2. ORDEN DEL DÍA Y ASUNTOS TRATADOS:
-${agenda.map((a) => `${a.agenda_order}. ${appStore.getApplicationById(a.application_id)?.filing_number || a.application_id} - ${appStore.getApplicationById(a.application_id)?.title || 'Trámite'} (Ponente: ${a.speaker_name || 'Sin ponente'})`).join('\n') || 'Sin temas en agenda.'}
+${agenda.map((a) => {
+  const reqId = a.application_id || a.request_id || '';
+  const itemApp = appStore.getApplicationById(reqId);
+  return `${a.agenda_order}. ${itemApp?.filing_number || reqId} - ${itemApp?.title || 'Trámite'} (Ponente: ${a.speaker_name || 'Sin ponente'})`;
+}).join('\n') || 'Sin temas en agenda.'}
 
 3. ACUERDOS Y DECISIONES ADOPTADAS:
 ${agreementsText}
