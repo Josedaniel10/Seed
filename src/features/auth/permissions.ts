@@ -1,25 +1,26 @@
-import { UserRole, Application } from '../../types/database.ts';
+import { UserRole, Request, Application } from '../../types/database.ts';
 
 /**
- * Matriz de permisos institucional de Seed basada en roles y políticas RLS
+ * Institutional permissions matrix based on user roles and RLS policies
  */
-export const PERMISSIONS_MATRIX: Record<
-  UserRole,
-  {
-    canFiling: boolean;
-    canViewAllApplications: boolean;
-    canValidateDocuments: boolean;
-    canAssignReviewers: boolean;
-    canSubmitConcept: boolean;
-    canManageSessions: boolean;
-    canRecordDecisions: boolean;
-    canManageCatalog: boolean;
-    canManageUsers: boolean;
-    isReadOnlyKanban: boolean;
-  }
-> = {
-  investigador: {
+export interface RolePermissions {
+  canFiling: boolean;
+  canViewAllRequests: boolean;
+  canViewAllApplications: boolean; // Alias
+  canValidateDocuments: boolean;
+  canAssignReviewers: boolean;
+  canSubmitConcept: boolean;
+  canManageSessions: boolean;
+  canRecordDecisions: boolean;
+  canManageCatalog: boolean;
+  canManageUsers: boolean;
+  isReadOnlyKanban: boolean;
+}
+
+export const PERMISSIONS_MATRIX: Record<string, RolePermissions> = {
+  researcher: {
     canFiling: true,
+    canViewAllRequests: false,
     canViewAllApplications: false,
     canValidateDocuments: false,
     canAssignReviewers: false,
@@ -28,10 +29,24 @@ export const PERMISSIONS_MATRIX: Record<
     canRecordDecisions: false,
     canManageCatalog: false,
     canManageUsers: false,
-    isReadOnlyKanban: true, // El investigador ve el tablero en solo lectura
+    isReadOnlyKanban: true,
   },
-  administrativo: {
+  investigador: {
+    canFiling: true,
+    canViewAllRequests: false,
+    canViewAllApplications: false,
+    canValidateDocuments: false,
+    canAssignReviewers: false,
+    canSubmitConcept: false,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: true,
+  },
+  administrative: {
     canFiling: false,
+    canViewAllRequests: true,
     canViewAllApplications: true,
     canValidateDocuments: true,
     canAssignReviewers: false,
@@ -42,8 +57,22 @@ export const PERMISSIONS_MATRIX: Record<
     canManageUsers: false,
     isReadOnlyKanban: false,
   },
-  integrante_comite: {
+  administrativo: {
     canFiling: false,
+    canViewAllRequests: true,
+    canViewAllApplications: true,
+    canValidateDocuments: true,
+    canAssignReviewers: false,
+    canSubmitConcept: false,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: false,
+  },
+  committee_member: {
+    canFiling: false,
+    canViewAllRequests: true,
     canViewAllApplications: true,
     canValidateDocuments: false,
     canAssignReviewers: false,
@@ -54,8 +83,35 @@ export const PERMISSIONS_MATRIX: Record<
     canManageUsers: false,
     isReadOnlyKanban: false,
   },
-  secretario: {
+  integrante_comite: {
     canFiling: false,
+    canViewAllRequests: true,
+    canViewAllApplications: true,
+    canValidateDocuments: false,
+    canAssignReviewers: false,
+    canSubmitConcept: true,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: false,
+  },
+  miembro_comite: {
+    canFiling: false,
+    canViewAllRequests: true,
+    canViewAllApplications: true,
+    canValidateDocuments: false,
+    canAssignReviewers: false,
+    canSubmitConcept: true,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: false,
+  },
+  secretary: {
+    canFiling: false,
+    canViewAllRequests: true,
     canViewAllApplications: true,
     canValidateDocuments: true,
     canAssignReviewers: true,
@@ -66,9 +122,49 @@ export const PERMISSIONS_MATRIX: Record<
     canManageUsers: false,
     isReadOnlyKanban: false,
   },
+  secretario: {
+    canFiling: false,
+    canViewAllRequests: true,
+    canViewAllApplications: true,
+    canValidateDocuments: true,
+    canAssignReviewers: true,
+    canSubmitConcept: true,
+    canManageSessions: true,
+    canRecordDecisions: true,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: false,
+  },
+  leader: {
+    canFiling: false,
+    canViewAllRequests: false,
+    canViewAllApplications: false,
+    canValidateDocuments: false,
+    canAssignReviewers: false,
+    canSubmitConcept: false,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: true,
+  },
   lider_grupo: {
     canFiling: false,
-    canViewAllApplications: false, // Solo ve las de su grupo
+    canViewAllRequests: false,
+    canViewAllApplications: false,
+    canValidateDocuments: false,
+    canAssignReviewers: false,
+    canSubmitConcept: false,
+    canManageSessions: false,
+    canRecordDecisions: false,
+    canManageCatalog: false,
+    canManageUsers: false,
+    isReadOnlyKanban: true,
+  },
+  lider: {
+    canFiling: false,
+    canViewAllRequests: false,
+    canViewAllApplications: false,
     canValidateDocuments: false,
     canAssignReviewers: false,
     canSubmitConcept: false,
@@ -80,6 +176,7 @@ export const PERMISSIONS_MATRIX: Record<
   },
   admin: {
     canFiling: true,
+    canViewAllRequests: true,
     canViewAllApplications: true,
     canValidateDocuments: true,
     canAssignReviewers: true,
@@ -93,22 +190,33 @@ export const PERMISSIONS_MATRIX: Record<
 };
 
 /**
- * Función que evalúa si un usuario puede visualizar una solicitud específica según las reglas RLS
+ * Checks whether a user has permission to view a specific request based on RLS rules
  */
-export function canUserViewApplication(
+export function canUserViewRequest(
   userRole: UserRole,
   userId: string,
   userGroupId: string | null,
-  application: Application
+  request: Request
 ): boolean {
-  if (userRole === 'admin' || userRole === 'secretario' || userRole === 'administrativo' || userRole === 'integrante_comite') {
+  if (
+    userRole === 'admin' ||
+    userRole === 'secretary' ||
+    userRole === 'secretario' ||
+    userRole === 'administrative' ||
+    userRole === 'administrativo' ||
+    userRole === 'committee_member' ||
+    userRole === 'integrante_comite' ||
+    userRole === 'miembro_comite'
+  ) {
     return true;
   }
-  if (userRole === 'investigador') {
-    return application.applicant_id === userId;
+  if (userRole === 'researcher' || userRole === 'investigador') {
+    return request.applicant_id === userId;
   }
-  if (userRole === 'lider_grupo') {
-    return application.research_group_id === userGroupId;
+  if (userRole === 'leader' || userRole === 'lider_grupo' || userRole === 'lider') {
+    return request.research_group_id === userGroupId;
   }
   return false;
 }
+
+export const canUserViewApplication = canUserViewRequest;

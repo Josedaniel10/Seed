@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { APPLICATION_STATUS_CONFIG, ApplicationStatus } from '../../../types/theme.ts';
 import { useCatalogStore } from '../../catalog/catalogStore.ts';
-import { useApplicationStore } from '../../applications/applicationStore.ts';
+import { useRequestStore } from '../../requests/requestStore.ts';
 
 export interface MetricsStripProps {
   onSelectStatus?: (status: ApplicationStatus | 'TODOS') => void;
@@ -11,7 +11,7 @@ export interface MetricsStripProps {
 export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripProps) {
   const catalogCount = useCatalogStore((s) => s.types.length);
   const requirementsCount = useCatalogStore((s) => s.requirements.length);
-  const applications = useApplicationStore((s) => s.applications);
+  const applications = useRequestStore((s) => s.requests);
 
   // Contadores reales individuales para cada estado exacto (RF-35)
   const realCounts = useMemo(() => {

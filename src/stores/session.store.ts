@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AppRole } from '../lib/permisos.ts';
+import { AppRole } from '../lib/permissions.ts';
 
 export interface UserSession {
   id: string;
@@ -13,67 +13,86 @@ export interface UserSession {
   activeRole: AppRole;
 }
 
-export const TEST_USERS: Record<AppRole, UserSession> = {
-  investigador: {
-    id: 'usr-inv-01',
-    email: 'investigador@universidad.edu.co',
-    fullName: 'Dra. Carmen Lucía Morales',
-    academicProgram: 'Ingeniería Ambiental y Bioprocesos',
-    academicLink: 'Docente planta',
-    researchGroupId: 'grp-bio-01',
-    roles: ['investigador', 'miembro_comite'], // Multi-rol para probar el selector
-    activeRole: 'investigador',
-  },
-  administrativo: {
-    id: 'usr-adm-02',
-    email: 'administrativo@universidad.edu.co',
-    fullName: 'Lic. Fernando Ortiz',
-    academicProgram: 'Dirección de Investigaciones',
-    academicLink: 'Personal administrativo',
-    researchGroupId: 'grp-ti-02',
-    roles: ['administrativo'],
-    activeRole: 'administrativo',
-  },
-  miembro_comite: {
-    id: 'usr-com-03',
-    email: 'comite@universidad.edu.co',
-    fullName: 'Dr. Alejandro Restrepo',
-    academicProgram: 'Facultad de Ciencias Básicas',
-    academicLink: 'Docente planta',
-    researchGroupId: 'grp-mat-03',
-    roles: ['miembro_comite', 'investigador'], // Multi-rol
-    activeRole: 'miembro_comite',
-  },
-  secretario: {
-    id: 'usr-sec-04',
-    email: 'secretario@universidad.edu.co',
-    fullName: 'Dra. Patricia Salamanca',
-    academicProgram: 'Secretaría Técnica de Investigaciones',
-    academicLink: 'Docente ocasional',
-    researchGroupId: 'grp-ti-02',
-    roles: ['secretario', 'administrativo'],
-    activeRole: 'secretario',
-  },
-  lider: {
-    id: 'usr-lid-05',
-    email: 'lider@universidad.edu.co',
-    fullName: 'Dr. Germán Valenzuela',
-    academicProgram: 'Líder Grupo Biotecnología',
-    academicLink: 'Docente titular',
-    researchGroupId: 'grp-bio-01',
-    roles: ['lider', 'investigador'],
-    activeRole: 'lider',
-  },
-  admin: {
-    id: 'usr-adm-06',
-    email: 'admin@universidad.edu.co',
-    fullName: 'Ing. Mateo Cárdenas',
-    academicProgram: 'Administración del Sistema',
-    academicLink: 'Personal administrativo',
-    researchGroupId: 'grp-ti-02',
-    roles: ['admin', 'investigador'],
-    activeRole: 'admin',
-  },
+const RESEARCHER_USER: UserSession = {
+  id: 'usr-inv-01',
+  email: 'investigador@universidad.edu.co',
+  fullName: 'Dra. Carmen Lucía Morales',
+  academicProgram: 'Ingeniería Ambiental y Bioprocesos',
+  academicLink: 'Docente planta',
+  researchGroupId: 'grp-bio-01',
+  roles: ['researcher', 'committee_member', 'investigador', 'miembro_comite'],
+  activeRole: 'researcher',
+};
+
+const ADMINISTRATIVE_USER: UserSession = {
+  id: 'usr-adm-02',
+  email: 'administrativo@universidad.edu.co',
+  fullName: 'Lic. Fernando Ortiz',
+  academicProgram: 'Dirección de Investigaciones',
+  academicLink: 'Personal administrativo',
+  researchGroupId: 'grp-ti-02',
+  roles: ['administrative', 'administrativo'],
+  activeRole: 'administrative',
+};
+
+const COMMITTEE_MEMBER_USER: UserSession = {
+  id: 'usr-com-03',
+  email: 'comite@universidad.edu.co',
+  fullName: 'Dr. Alejandro Restrepo',
+  academicProgram: 'Facultad de Ciencias Básicas',
+  academicLink: 'Docente planta',
+  researchGroupId: 'grp-mat-03',
+  roles: ['committee_member', 'researcher', 'miembro_comite', 'investigador'],
+  activeRole: 'committee_member',
+};
+
+const SECRETARY_USER: UserSession = {
+  id: 'usr-sec-04',
+  email: 'secretario@universidad.edu.co',
+  fullName: 'Dra. Patricia Salamanca',
+  academicProgram: 'Secretaría Técnica de Investigaciones',
+  academicLink: 'Docente ocasional',
+  researchGroupId: 'grp-ti-02',
+  roles: ['secretary', 'administrative', 'secretario', 'administrativo'],
+  activeRole: 'secretary',
+};
+
+const LEADER_USER: UserSession = {
+  id: 'usr-lid-05',
+  email: 'lider@universidad.edu.co',
+  fullName: 'Dr. Germán Valenzuela',
+  academicProgram: 'Líder Grupo Biotecnología',
+  academicLink: 'Docente titular',
+  researchGroupId: 'grp-bio-01',
+  roles: ['leader', 'researcher', 'lider', 'investigador'],
+  activeRole: 'leader',
+};
+
+const ADMIN_USER: UserSession = {
+  id: 'usr-adm-06',
+  email: 'admin@universidad.edu.co',
+  fullName: 'Ing. Mateo Cárdenas',
+  academicProgram: 'Administración del Sistema',
+  academicLink: 'Personal administrativo',
+  researchGroupId: 'grp-ti-02',
+  roles: ['admin', 'researcher', 'investigador'],
+  activeRole: 'admin',
+};
+
+export const TEST_USERS: Record<string, UserSession> = {
+  researcher: RESEARCHER_USER,
+  investigador: RESEARCHER_USER,
+  administrative: ADMINISTRATIVE_USER,
+  administrativo: ADMINISTRATIVE_USER,
+  committee_member: COMMITTEE_MEMBER_USER,
+  miembro_comite: COMMITTEE_MEMBER_USER,
+  integrante_comite: COMMITTEE_MEMBER_USER,
+  secretary: SECRETARY_USER,
+  secretario: SECRETARY_USER,
+  leader: LEADER_USER,
+  lider: LEADER_USER,
+  lider_grupo: LEADER_USER,
+  admin: ADMIN_USER,
 };
 
 interface SessionState {
@@ -91,24 +110,23 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      user: TEST_USERS.investigador, // Default para sesión de prueba activa inicial
+      user: RESEARCHER_USER,
       isAuthenticated: true,
       isLoading: false,
       unreadNotificationsCount: 3,
 
       loginWithTestRole: (role) => {
-        const testUser = TEST_USERS[role];
+        const testUser = TEST_USERS[role] || RESEARCHER_USER;
         set({
           user: { ...testUser, activeRole: role },
           isAuthenticated: true,
         });
       },
 
-      loginWithCredentials: async (email, password) => {
+      loginWithCredentials: async (email, _password) => {
         set({ isLoading: true });
         const cleanEmail = email.trim().toLowerCase();
 
-        // Buscar coincidencia en usuarios de prueba
         const matched = Object.values(TEST_USERS).find(
           (u) => u.email.toLowerCase() === cleanEmail
         );
@@ -122,13 +140,12 @@ export const useSessionStore = create<SessionState>()(
           return { success: true };
         }
 
-        // Si es cualquier otro correo, se autentica por defecto como investigador (Sección 2.2)
         const newUser: UserSession = {
           id: `usr-${Date.now().toString(36)}`,
           email: cleanEmail,
           fullName: cleanEmail.split('@')[0].replace('.', ' '),
-          roles: ['investigador'],
-          activeRole: 'investigador',
+          roles: ['researcher', 'investigador'],
+          activeRole: 'researcher',
         };
 
         set({

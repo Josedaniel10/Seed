@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { CommitteeMinutes } from '../../types/database.ts';
 import { useCommitteeSessionsStore } from '../sessions/committeeSessionsStore.ts';
-import { useApplicationStore } from '../applications/applicationStore.ts';
+import { useRequestStore } from '../requests/requestStore.ts';
 
 export interface MinutesState {
   minutes: CommitteeMinutes[];
@@ -169,7 +169,7 @@ export const useMinutesStore = create<MinutesState>()(
           return { success: true, minute: existing };
         }
 
-        const appStore = useApplicationStore.getState();
+        const appStore = useRequestStore.getState();
         const agenda = sessionsStore.getAgendaBySession(sessionId);
         const attendances = sessionsStore.getAttendanceBySession(sessionId);
         const quorum = sessionsStore.checkSessionQuorum(sessionId);

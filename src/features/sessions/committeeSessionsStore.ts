@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
-  ApplicationDbStatus,
+  RequestDbStatus,
   AuditHistory,
   CommitteeSession,
   SessionAgendaItem,
@@ -10,7 +10,7 @@ import {
   SessionDecisionType,
   SessionType,
 } from '../../types/database.ts';
-import { useApplicationStore } from '../applications/applicationStore.ts';
+import { useRequestStore } from '../requests/requestStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 
 export interface CreateSessionPayload {
@@ -303,7 +303,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         }
 
         // RN-04: Solo solicitudes en estado LISTA_COMITE pueden incorporarse a la agenda
-        const appStore = useApplicationStore.getState();
+        const appStore = useRequestStore.getState();
         const app = appStore.getApplicationById(applicationId);
         if (!app) {
           return { success: false, error: 'Solicitud no encontrada.' };
@@ -371,7 +371,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           created_at: new Date().toISOString(),
         };
 
-        useApplicationStore.setState((state) => ({
+        useRequestStore.setState((state) => ({
           auditHistory: [...state.auditHistory, auditEvent],
         }));
 
@@ -613,7 +613,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         });
 
         // T4.6: Actualización automática de estado y trazabilidad post-decisión
-        const appStore = useApplicationStore.getState();
+        const appStore = useRequestStore.getState();
 
         if (decision === 'APLAZADA') {
           // RN-06: Si la solicitud es aplazada, PRESERVA su estado 'LISTA_COMITE' para ser deliberada en la siguiente sesión
@@ -636,7 +636,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             created_at: new Date().toISOString(),
           };
 
-          useApplicationStore.setState((state) => ({
+          useRequestStore.setState((state) => ({
             auditHistory: [...state.auditHistory, auditEvent],
           }));
 

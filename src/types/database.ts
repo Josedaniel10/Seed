@@ -1,14 +1,21 @@
 /**
- * Definiciones de tipos TypeScript para el modelo de datos de Supabase en Seed
+ * TypeScript type definitions for the Seed platform data model.
+ * Unified English identifiers for requests, documents, users, and committee entities.
  */
 
 export type UserRole =
+  | 'researcher'
+  | 'administrative'
+  | 'committee_member'
+  | 'secretary'
+  | 'leader'
+  | 'admin'
+  // Legacy Spanish aliases for backward compatibility
   | 'investigador'
-  | 'administrativo'
   | 'integrante_comite'
-  | 'secretario'
+  | 'miembro_comite'
   | 'lider_grupo'
-  | 'admin';
+  | 'lider';
 
 export interface Profile {
   id: string;
@@ -32,7 +39,7 @@ export interface ResearchGroup {
   created_at: string;
 }
 
-export interface ApplicationType {
+export interface RequestType {
   id: string;
   code: string;
   name: string;
@@ -42,10 +49,12 @@ export interface ApplicationType {
   display_order: number;
   created_at: string;
 }
+export type ApplicationType = RequestType;
 
 export interface Requirement {
   id: string;
-  application_type_id: string;
+  request_type_id: string;
+  application_type_id?: string; // Legacy alias
   name: string;
   description: string | null;
   is_mandatory: boolean;
@@ -57,9 +66,17 @@ export interface Requirement {
   created_at: string;
 }
 
-export type ApplicationDbStatus =
+export type RequestDbStatus =
+  | 'SUBMITTED'
+  | 'PENDING_DOCUMENTS'
+  | 'UNDER_REVIEW'
+  | 'COMMITTEE_READY'
+  | 'APPROVED'
+  | 'APPROVED_WITH_ADJUSTMENTS'
+  | 'REJECTED'
+  | 'CLOSED'
+  // Legacy Spanish aliases
   | 'RADICADA'
-  | 'PENDIENTE_DOCUMENTOS'
   | 'EN_REVISION'
   | 'LISTA_COMITE'
   | 'APROBADA'
@@ -67,27 +84,39 @@ export type ApplicationDbStatus =
   | 'RECHAZADA'
   | 'CERRADA';
 
-export interface Application {
+export type ApplicationDbStatus = RequestDbStatus;
+
+export interface Request {
   id: string;
   filing_number: string;
-  application_type_id: string;
+  request_type_id: string;
+  application_type_id?: string; // Legacy alias
   applicant_id: string;
   title: string;
   abstract: string | null;
   research_group_id: string | null;
   budget_requested: number;
-  current_status: ApplicationDbStatus;
+  current_status: RequestDbStatus;
   is_tutor_endorsed: boolean;
   requires_committee: boolean;
   created_at: string;
   updated_at: string;
 }
+export type Application = Request;
 
-export type DocumentValidationStatus = 'PENDIENTE' | 'VALIDO' | 'RECHAZADO';
+export type DocumentValidationStatus =
+  | 'PENDING'
+  | 'VALID'
+  | 'REJECTED'
+  // Legacy Spanish aliases
+  | 'PENDIENTE'
+  | 'VALIDO'
+  | 'RECHAZADO';
 
-export interface ApplicationDocument {
+export interface RequestDocument {
   id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   requirement_id: string;
   file_name: string;
   file_path: string;
@@ -100,12 +129,19 @@ export interface ApplicationDocument {
   validated_at: string | null;
   uploaded_at: string;
 }
+export type ApplicationDocument = RequestDocument;
 
-export type ReviewerConcept = 'FAVORABLE' | 'FAVORABLE_CON_AJUSTES' | 'NO_FAVORABLE';
+export type ReviewerConcept =
+  | 'FAVORABLE'
+  | 'FAVORABLE_WITH_ADJUSTMENTS'
+  | 'FAVORABLE_CON_AJUSTES'
+  | 'UNFAVORABLE'
+  | 'NO_FAVORABLE';
 
 export interface ReviewerAssignment {
   id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   reviewer_id: string;
   deadline_date: string;
   is_active: boolean;
@@ -115,11 +151,18 @@ export interface ReviewerAssignment {
   created_at: string;
 }
 
-export type ObservationCategory = 'ACLARACION' | 'AJUSTE_OBLIGATORIO' | 'SUGERENCIA';
+export type ObservationCategory =
+  | 'CLARIFICATION'
+  | 'MANDATORY_ADJUSTMENT'
+  | 'SUGGESTION'
+  | 'ACLARACION'
+  | 'AJUSTE_OBLIGATORIO'
+  | 'SUGERENCIA';
 
 export interface Observation {
   id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   assignment_id: string | null;
   author_id: string;
   category: ObservationCategory;
@@ -129,7 +172,11 @@ export interface Observation {
   created_at: string;
 }
 
-export type SessionType = 'ORDINARIA' | 'EXTRAORDINARIA';
+export type SessionType =
+  | 'ORDINARY'
+  | 'EXTRAORDINARY'
+  | 'ORDINARIA'
+  | 'EXTRAORDINARIA';
 
 export interface CommitteeSession {
   id: string;
@@ -146,7 +193,8 @@ export interface CommitteeSession {
 export interface SessionAgendaItem {
   id: string;
   session_id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   agenda_order: number;
   speaker_id: string | null;
   speaker_name?: string | null;
@@ -164,12 +212,21 @@ export interface SessionAttendance {
   updated_at: string;
 }
 
-export type SessionDecisionType = 'APROBADA' | 'APROBADA_CON_AJUSTES' | 'RECHAZADA' | 'APLAZADA';
+export type SessionDecisionType =
+  | 'APPROVED'
+  | 'APPROVED_WITH_ADJUSTMENTS'
+  | 'REJECTED'
+  | 'POSTPONED'
+  | 'APROBADA'
+  | 'APROBADA_CON_AJUSTES'
+  | 'RECHAZADA'
+  | 'APLAZADA';
 
 export interface SessionDecision {
   id: string;
   session_id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   decision: SessionDecisionType;
   justification: string;
   registered_by: string;
@@ -190,11 +247,12 @@ export interface CommitteeMinutes {
 
 export interface AuditHistory {
   id: string;
-  application_id: string;
+  request_id: string;
+  application_id?: string; // Legacy alias
   actor_id: string | null;
   action: string;
-  previous_status: ApplicationDbStatus | null;
-  new_status: ApplicationDbStatus | null;
+  previous_status: RequestDbStatus | null;
+  new_status: RequestDbStatus | null;
   details: Record<string, unknown>;
   created_at: string;
 }

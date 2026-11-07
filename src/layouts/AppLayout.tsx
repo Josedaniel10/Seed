@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { SeedLogo } from '../components/SeedLogo.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
+import { useNotificationsStore } from '../features/notifications/notificationsStore.ts';
 import {
   ROLE_LABELS,
   ROLE_MENU_ITEMS,
@@ -47,7 +48,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setActiveRole, logout, unreadNotificationsCount } = useSessionStore();
+  const { user, setActiveRole, logout } = useSessionStore();
+  const { getUnreadCountByUser } = useNotificationsStore();
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -56,6 +58,7 @@ export function AppLayout() {
 
   const activeRole = user.activeRole;
   const menuItems = ROLE_MENU_ITEMS[activeRole] || [];
+  const unreadCount = getUnreadCountByUser(user.id);
 
   const handleRoleChange = (newRole: AppRole) => {
     setActiveRole(newRole);
@@ -134,9 +137,9 @@ export function AppLayout() {
             title="Ver notificaciones"
           >
             <Bell size={18} />
-            {unreadNotificationsCount > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute top-1 right-1 w-4 h-4 bg-[#84CC16] text-[#14281D] text-[10px] font-bold rounded-full flex items-center justify-center">
-                {unreadNotificationsCount}
+                {unreadCount}
               </span>
             )}
           </NavLink>
