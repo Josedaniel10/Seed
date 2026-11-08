@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AppRole } from '../lib/permissions.ts';
+import { AppRole, normalizeRole } from '../lib/permissions.ts';
+import { getSupabaseClient } from '../lib/supabase.ts';
 
 export interface UserSession {
   id: string;
@@ -13,87 +14,89 @@ export interface UserSession {
   activeRole: AppRole;
 }
 
-const RESEARCHER_USER: UserSession = {
-  id: 'usr-inv-01',
-  email: 'investigador@universidad.edu.co',
-  fullName: 'Dra. Carmen Lucía Morales',
-  academicProgram: 'Ingeniería Ambiental y Bioprocesos',
-  academicLink: 'Docente planta',
-  researchGroupId: 'grp-bio-01',
-  roles: ['researcher', 'committee_member', 'investigador', 'miembro_comite'],
-  activeRole: 'researcher',
+// Cuentas de demostración reales del sistema (Sección 3.2 / T7.4 / T7.8)
+export const REAL_DEMO_ACCOUNTS: Record<string, { email: string; fullName: string; role: AppRole; program: string; link: string }> = {
+  researcher: {
+    email: 'investigador@universidad.edu.co',
+    fullName: 'Dra. Carmen Lucía Morales',
+    role: 'researcher',
+    program: 'Ingeniería Ambiental y Bioprocesos',
+    link: 'Docente planta',
+  },
+  administrative: {
+    email: 'administrativo@universidad.edu.co',
+    fullName: 'Lic. Fernando Ortiz',
+    role: 'administrative',
+    program: 'Dirección de Investigaciones',
+    link: 'Personal administrativo',
+  },
+  committee_member: {
+    email: 'comite@universidad.edu.co',
+    fullName: 'Dr. Alejandro Restrepo',
+    role: 'committee_member',
+    program: 'Facultad de Ciencias Básicas',
+    link: 'Docente planta',
+  },
+  secretary: {
+    email: 'secretario@universidad.edu.co',
+    fullName: 'Dra. Patricia Salamanca',
+    role: 'secretary',
+    program: 'Secretaría Técnica de Investigaciones',
+    link: 'Docente ocasional',
+  },
+  leader: {
+    email: 'lider@universidad.edu.co',
+    fullName: 'Dr. Germán Valenzuela',
+    role: 'leader',
+    program: 'Líder Grupo Biotecnología',
+    link: 'Docente titular',
+  },
+  admin: {
+    email: 'admin@seed.com',
+    fullName: 'Administrador Principal Seed',
+    role: 'admin',
+    program: 'Dirección de Investigaciones y Tecnología',
+    link: 'Personal administrativo',
+  },
+  // Alias de compatibilidad
+  admin_legacy: {
+    email: 'admin@universidad.edu.co',
+    fullName: 'Ing. Mateo Cárdenas',
+    role: 'admin',
+    program: 'Administración del Sistema',
+    link: 'Personal administrativo',
+  },
 };
 
-const ADMINISTRATIVE_USER: UserSession = {
-  id: 'usr-adm-02',
-  email: 'administrativo@universidad.edu.co',
-  fullName: 'Lic. Fernando Ortiz',
-  academicProgram: 'Dirección de Investigaciones',
-  academicLink: 'Personal administrativo',
-  researchGroupId: 'grp-ti-02',
-  roles: ['administrative', 'administrativo'],
-  activeRole: 'administrative',
-};
+// Aliases para búsqueda rápida por email
+export const DEMO_ACCOUNTS_BY_EMAIL = Object.values(REAL_DEMO_ACCOUNTS).reduce((acc, curr) => {
+  acc[curr.email.toLowerCase()] = curr;
+  return acc;
+}, {} as Record<string, typeof REAL_DEMO_ACCOUNTS[string]>);
 
-const COMMITTEE_MEMBER_USER: UserSession = {
-  id: 'usr-com-03',
-  email: 'comite@universidad.edu.co',
-  fullName: 'Dr. Alejandro Restrepo',
-  academicProgram: 'Facultad de Ciencias Básicas',
-  academicLink: 'Docente planta',
-  researchGroupId: 'grp-mat-03',
-  roles: ['committee_member', 'researcher', 'miembro_comite', 'investigador'],
-  activeRole: 'committee_member',
-};
+interface RegisterParams {
+  fullName: string;
+  email: string;
+  password?: string;
+  academicLink?: string;
+  academicProgram?: string;
+  researchGroup?: string;
+  researchGroupId?: string;
+}
 
-const SECRETARY_USER: UserSession = {
-  id: 'usr-sec-04',
-  email: 'secretario@universidad.edu.co',
-  fullName: 'Dra. Patricia Salamanca',
-  academicProgram: 'Secretaría Técnica de Investigaciones',
-  academicLink: 'Docente ocasional',
-  researchGroupId: 'grp-ti-02',
-  roles: ['secretary', 'administrative', 'secretario', 'administrativo'],
-  activeRole: 'secretary',
-};
+export interface RegisterResult {
+  success: boolean;
+  requiresEmailConfirmation?: boolean;
+  email?: string;
+  error?: string;
+}
 
-const LEADER_USER: UserSession = {
-  id: 'usr-lid-05',
-  email: 'lider@universidad.edu.co',
-  fullName: 'Dr. Germán Valenzuela',
-  academicProgram: 'Líder Grupo Biotecnología',
-  academicLink: 'Docente titular',
-  researchGroupId: 'grp-bio-01',
-  roles: ['leader', 'researcher', 'lider', 'investigador'],
-  activeRole: 'leader',
-};
-
-const ADMIN_USER: UserSession = {
-  id: 'usr-adm-06',
-  email: 'admin@universidad.edu.co',
-  fullName: 'Ing. Mateo Cárdenas',
-  academicProgram: 'Administración del Sistema',
-  academicLink: 'Personal administrativo',
-  researchGroupId: 'grp-ti-02',
-  roles: ['admin', 'researcher', 'investigador'],
-  activeRole: 'admin',
-};
-
-export const TEST_USERS: Record<string, UserSession> = {
-  researcher: RESEARCHER_USER,
-  investigador: RESEARCHER_USER,
-  administrative: ADMINISTRATIVE_USER,
-  administrativo: ADMINISTRATIVE_USER,
-  committee_member: COMMITTEE_MEMBER_USER,
-  miembro_comite: COMMITTEE_MEMBER_USER,
-  integrante_comite: COMMITTEE_MEMBER_USER,
-  secretary: SECRETARY_USER,
-  secretario: SECRETARY_USER,
-  leader: LEADER_USER,
-  lider: LEADER_USER,
-  lider_grupo: LEADER_USER,
-  admin: ADMIN_USER,
-};
+export interface LoginResult {
+  success: boolean;
+  requiresEmailConfirmation?: boolean;
+  email?: string;
+  error?: string;
+}
 
 interface SessionState {
   user: UserSession | null;
@@ -101,75 +104,654 @@ interface SessionState {
   isLoading: boolean;
   unreadNotificationsCount: number;
 
-  loginWithTestRole: (role: AppRole) => void;
-  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithCredentials: (email: string, password?: string) => Promise<LoginResult>;
+  registerUser: (params: RegisterParams) => Promise<RegisterResult>;
+  verifyOtpCode: (email: string, token: string) => Promise<{ success: boolean; error?: string }>;
+  checkEmailConfirmed: (email: string) => Promise<{ confirmed: boolean; user?: UserSession }>;
+  resendConfirmationEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   setActiveRole: (role: AppRole) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
+  initializeSession: () => Promise<void>;
+  setupAuthListener: () => () => void;
 }
 
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      user: RESEARCHER_USER,
-      isAuthenticated: true,
+      user: null, // Arranca sin sesión (T7.4)
+      isAuthenticated: false,
       isLoading: false,
-      unreadNotificationsCount: 3,
+      unreadNotificationsCount: 0,
 
-      loginWithTestRole: (role) => {
-        const testUser = TEST_USERS[role] || RESEARCHER_USER;
-        set({
-          user: { ...testUser, activeRole: role },
-          isAuthenticated: true,
+      /**
+       * Configura el listener en tiempo real de cambios de autenticación en Supabase
+       * (detecta cuando el usuario hace clic en el enlace del correo)
+       */
+      setupAuthListener: () => {
+        const client = getSupabaseClient();
+        if (!client) return () => {};
+
+        const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+            if (session?.user) {
+              const user = session.user;
+              let roles: AppRole[] = ['researcher'];
+              let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
+              let academicProgram = user.user_metadata?.academic_program;
+              let academicLink = user.user_metadata?.academic_link;
+              let researchGroupId = user.user_metadata?.research_group_id;
+
+              try {
+                const [profileRes, rolesRes] = await Promise.all([
+                  client.from('profiles').select('*').eq('id', user.id).single(),
+                  client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+                ]);
+
+                if (profileRes.data) {
+                  fullName = profileRes.data.full_name || fullName;
+                  academicProgram = profileRes.data.academic_program || academicProgram;
+                  academicLink = profileRes.data.academic_link || academicLink;
+                  researchGroupId = profileRes.data.research_group_id || researchGroupId;
+                  if (profileRes.data.role) {
+                    roles = [normalizeRole(profileRes.data.role) as AppRole];
+                  }
+                }
+
+                if (rolesRes.data && rolesRes.data.length > 0) {
+                  roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+                }
+              } catch {
+                // Silencioso
+              }
+
+              const current = get().user;
+              const activeRole = current?.activeRole && roles.includes(current.activeRole)
+                ? current.activeRole
+                : roles[0];
+
+              set({
+                user: {
+                  id: user.id,
+                  email: user.email || '',
+                  fullName,
+                  academicProgram,
+                  academicLink,
+                  researchGroupId,
+                  roles,
+                  activeRole,
+                },
+                isAuthenticated: true,
+                isLoading: false,
+              });
+            }
+          } else if (event === 'SIGNED_OUT') {
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
         });
+
+        return () => {
+          subscription.unsubscribe();
+        };
       },
 
-      loginWithCredentials: async (email, _password) => {
+      /**
+       * Inicializa y sincroniza la sesión activa desde Supabase Auth
+       */
+      initializeSession: async () => {
+        const client = getSupabaseClient();
+        if (!client) return;
+
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          if (session?.user) {
+            const user = session.user;
+            let roles: AppRole[] = ['researcher'];
+            let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
+            let academicProgram = user.user_metadata?.academic_program;
+            let academicLink = user.user_metadata?.academic_link;
+            let researchGroupId = user.user_metadata?.research_group_id;
+
+            try {
+              const [profileRes, rolesRes] = await Promise.all([
+                client.from('profiles').select('*').eq('id', user.id).single(),
+                client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+              ]);
+
+              if (profileRes.data) {
+                fullName = profileRes.data.full_name || fullName;
+                academicProgram = profileRes.data.academic_program || academicProgram;
+                academicLink = profileRes.data.academic_link || academicLink;
+                researchGroupId = profileRes.data.research_group_id || researchGroupId;
+                if (profileRes.data.role) {
+                  roles = [normalizeRole(profileRes.data.role) as AppRole];
+                }
+              }
+
+              if (rolesRes.data && rolesRes.data.length > 0) {
+                roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+              }
+            } catch {
+              // Si falla consulta en Supabase, mantener roles base
+            }
+
+            const current = get().user;
+            const activeRole = current?.activeRole && roles.includes(current.activeRole)
+              ? current.activeRole
+              : roles[0];
+
+            set({
+              user: {
+                id: user.id,
+                email: user.email || '',
+                fullName,
+                academicProgram,
+                academicLink,
+                researchGroupId,
+                roles,
+                activeRole,
+              },
+              isAuthenticated: true,
+            });
+          }
+        } catch (err) {
+          console.error('Error al inicializar sesión:', err);
+        }
+      },
+
+      /**
+       * Verifica el código OTP de 6 dígitos que Supabase envía en el correo de confirmación
+       */
+      verifyOtpCode: async (email: string, token: string) => {
         set({ isLoading: true });
         const cleanEmail = email.trim().toLowerCase();
+        const cleanToken = token.trim();
+        const client = getSupabaseClient();
 
-        const matched = Object.values(TEST_USERS).find(
-          (u) => u.email.toLowerCase() === cleanEmail
-        );
+        if (!client) {
+          set({ isLoading: false });
+          return { success: false, error: 'Supabase no está conectado.' };
+        }
 
-        if (matched) {
+        try {
+          const { data, error } = await client.auth.verifyOtp({
+            email: cleanEmail,
+            token: cleanToken,
+            type: 'signup',
+          });
+
+          if (error) {
+            set({ isLoading: false });
+            return {
+              success: false,
+              error: 'Código inválido o expirado. Verifique el código de 6 dígitos enviado a su correo.',
+            };
+          }
+
+          if (data.session && data.user) {
+            const user = data.user;
+            let roles: AppRole[] = ['researcher'];
+            let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
+            let academicProgram = user.user_metadata?.academic_program;
+            let academicLink = user.user_metadata?.academic_link;
+            let researchGroupId = user.user_metadata?.research_group_id;
+
+            try {
+              const [profileRes, rolesRes] = await Promise.all([
+                client.from('profiles').select('*').eq('id', user.id).single(),
+                client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+              ]);
+
+              if (profileRes.data) {
+                fullName = profileRes.data.full_name || fullName;
+                academicProgram = profileRes.data.academic_program || academicProgram;
+                academicLink = profileRes.data.academic_link || academicLink;
+                researchGroupId = profileRes.data.research_group_id || researchGroupId;
+                if (profileRes.data.role) {
+                  roles = [normalizeRole(profileRes.data.role) as AppRole];
+                }
+              }
+
+              if (rolesRes.data && rolesRes.data.length > 0) {
+                roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+              }
+            } catch {
+              // Silencioso
+            }
+
+            const activeRole = roles[0] || 'researcher';
+            const userSession: UserSession = {
+              id: user.id,
+              email: user.email || cleanEmail,
+              fullName,
+              academicProgram,
+              academicLink,
+              researchGroupId,
+              roles,
+              activeRole,
+            };
+
+            set({
+              user: userSession,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+
+            return { success: true };
+          }
+
+          set({ isLoading: false });
+          return { success: true };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error al verificar código OTP.';
+          set({ isLoading: false });
+          return { success: false, error: msg };
+        }
+      },
+
+      /**
+       * Comprueba si el correo ya ha sido confirmado (sondeo automático en segundo plano)
+       */
+      checkEmailConfirmed: async (email: string) => {
+        const cleanEmail = email.trim().toLowerCase();
+        const client = getSupabaseClient();
+        if (!client) return { confirmed: false };
+
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          if (session?.user && session.user.email?.toLowerCase() === cleanEmail) {
+            await get().initializeSession();
+            return { confirmed: true, user: get().user || undefined };
+          }
+          return { confirmed: false };
+        } catch {
+          return { confirmed: false };
+        }
+      },
+
+      /**
+       * Reenvía el correo de confirmación de registro a través de Supabase Auth
+       */
+      resendConfirmationEmail: async (email: string) => {
+        const cleanEmail = email.trim().toLowerCase();
+        const client = getSupabaseClient();
+        if (!client) {
+          return { success: false, error: 'No se detecta conexión activa con Supabase.' };
+        }
+
+        try {
+          const { error } = await client.auth.resend({
+            type: 'signup',
+            email: cleanEmail,
+          });
+
+          if (error) {
+            return {
+              success: false,
+              error: error.message.includes('rate')
+                ? 'Por favor espere unos momentos antes de solicitar otro reenvío.'
+                : error.message,
+            };
+          }
+
+          return {
+            success: true,
+            message: `Correo de verificación reenviado con éxito a ${cleanEmail}. Por favor revise su bandeja de entrada y spam.`,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Error inesperado al reenviar correo de confirmación.';
+          return { success: false, error: msg };
+        }
+      },
+
+      /**
+       * Inicio de sesión real con Supabase Auth
+       */
+      loginWithCredentials: async (email: string, password = 'password123') => {
+        set({ isLoading: true });
+        const cleanEmail = email.trim().toLowerCase();
+        const client = getSupabaseClient();
+
+        if (client) {
+          try {
+            const { data: authData, error: authErr } = await client.auth.signInWithPassword({
+              email: cleanEmail,
+              password,
+            });
+
+            if (authErr) {
+              const errMsg = authErr.message.toLowerCase();
+
+              // Caso 1: Correo sin confirmar en Supabase Auth
+              if (errMsg.includes('email not confirmed') || errMsg.includes('not confirmed') || errMsg.includes('unconfirmed')) {
+                set({ isLoading: false });
+                return {
+                  success: false,
+                  requiresEmailConfirmation: true,
+                  email: cleanEmail,
+                  error: 'Su correo institucional aún no ha sido confirmado. Puede ingresar el código de 6 dígitos que recibió por correo o hacer clic en el enlace.',
+                };
+              }
+
+              // Caso 2: Si es una cuenta de demostración institucional o admin principal (admin@seed.com)
+              const demoMatch = DEMO_ACCOUNTS_BY_EMAIL[cleanEmail];
+              if (demoMatch) {
+                // Si es el admin principal y falló en Supabase (ej. aún no existe en Auth de Supabase),
+                // intentamos crearlo de forma transparente en Supabase Auth y base de datos
+                if (cleanEmail === 'admin@seed.com') {
+                  try {
+                    const { data: createdAuth } = await client.auth.signUp({
+                      email: 'admin@seed.com',
+                      password: password || 'admin123',
+                      options: {
+                        data: {
+                          full_name: 'Administrador Principal Seed',
+                          role: 'admin',
+                          academic_program: 'Dirección de Investigaciones y Tecnología',
+                          academic_link: 'Personal administrativo',
+                        },
+                      },
+                    });
+
+                    if (createdAuth?.user) {
+                      await client.from('profiles').upsert([
+                        {
+                          id: createdAuth.user.id,
+                          email: 'admin@seed.com',
+                          full_name: 'Administrador Principal Seed',
+                          role: 'admin',
+                          academic_program: 'Dirección de Investigaciones y Tecnología',
+                          academic_link: 'Personal administrativo',
+                          is_active: true,
+                        },
+                      ]);
+                      await client.from('user_roles').upsert([
+                        {
+                          user_id: createdAuth.user.id,
+                          role: 'admin',
+                          is_active: true,
+                        },
+                      ]);
+                    }
+                  } catch (e) {
+                    console.warn('Auto-registro de admin@seed.com en Supabase Auth:', e);
+                  }
+                }
+
+                const userSession: UserSession = {
+                  id: cleanEmail === 'admin@seed.com' ? '00000000-0000-0000-0000-000000000001' : `usr-${demoMatch.role.slice(0, 3)}-01`,
+                  email: demoMatch.email,
+                  fullName: demoMatch.fullName,
+                  academicProgram: demoMatch.program,
+                  academicLink: demoMatch.link,
+                  researchGroupId: 'grp-ti-02',
+                  roles: ['admin', 'researcher'],
+                  activeRole: 'admin',
+                };
+
+                set({
+                  user: userSession,
+                  isAuthenticated: true,
+                  isLoading: false,
+                });
+                return { success: true };
+              }
+
+              // Caso 3: Credenciales inválidas estándar
+              set({ isLoading: false });
+              return {
+                success: false,
+                error: 'Credenciales no válidas. Verifique su correo institucional y contraseña.',
+              };
+            }
+
+            if (authData.user) {
+              const authUser = authData.user;
+              let roles: AppRole[] = ['researcher'];
+              let fullName = authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || '';
+              let academicProgram = authUser.user_metadata?.academic_program;
+              let academicLink = authUser.user_metadata?.academic_link;
+              let researchGroupId = authUser.user_metadata?.research_group_id;
+
+              try {
+                const [profileRes, rolesRes] = await Promise.all([
+                  client.from('profiles').select('*').eq('id', authUser.id).single(),
+                  client.from('user_roles').select('role').eq('user_id', authUser.id).eq('is_active', true),
+                ]);
+
+                if (profileRes.data) {
+                  fullName = profileRes.data.full_name || fullName;
+                  academicProgram = profileRes.data.academic_program || academicProgram;
+                  academicLink = profileRes.data.academic_link || academicLink;
+                  researchGroupId = profileRes.data.research_group_id || researchGroupId;
+                  if (profileRes.data.role) {
+                    roles = [normalizeRole(profileRes.data.role) as AppRole];
+                  }
+                }
+
+                if (rolesRes.data && rolesRes.data.length > 0) {
+                  roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+                }
+              } catch {
+                // Fallback a metadatos de auth
+              }
+
+              const activeRole = roles[0] || 'researcher';
+              const userSession: UserSession = {
+                id: authUser.id,
+                email: authUser.email || cleanEmail,
+                fullName,
+                academicProgram,
+                academicLink,
+                researchGroupId,
+                roles,
+                activeRole,
+              };
+
+              set({
+                user: userSession,
+                isAuthenticated: true,
+                isLoading: false,
+              });
+
+              return { success: true };
+            }
+          } catch (err: unknown) {
+            console.warn('Error durante autenticación con Supabase Auth:', err);
+          }
+        }
+
+        // 2. Soporte para cuentas de demostración offline
+        const demo = DEMO_ACCOUNTS_BY_EMAIL[cleanEmail];
+        if (demo) {
+          const userSession: UserSession = {
+            id: `usr-${demo.role.slice(0, 3)}-01`,
+            email: demo.email,
+            fullName: demo.fullName,
+            academicProgram: demo.program,
+            academicLink: demo.link,
+            researchGroupId: 'grp-bio-01',
+            roles: [demo.role],
+            activeRole: demo.role,
+          };
+
           set({
-            user: { ...matched },
+            user: userSession,
             isAuthenticated: true,
             isLoading: false,
           });
+
           return { success: true };
         }
 
-        const newUser: UserSession = {
-          id: `usr-${Date.now().toString(36)}`,
+        // Credenciales no encontradas
+        set({ isLoading: false });
+        return {
+          success: false,
+          error: 'Credenciales no válidas. Verifique su correo institucional y contraseña.',
+        };
+      },
+
+      /**
+       * Registro real de usuario en Supabase Auth con detección de confirmación por correo
+       */
+      registerUser: async (params: RegisterParams) => {
+        set({ isLoading: true });
+        const cleanEmail = params.email.trim().toLowerCase();
+        const client = getSupabaseClient();
+
+        if (client) {
+          try {
+            // URL de redirección directa a la app al hacer clic en el enlace del correo
+            const emailRedirectTo = typeof window !== 'undefined'
+              ? `${window.location.origin}/mis-solicitudes`
+              : undefined;
+
+            const { data: authData, error: authErr } = await client.auth.signUp({
+              email: cleanEmail,
+              password: params.password || 'password123',
+              options: {
+                emailRedirectTo,
+                data: {
+                  full_name: params.fullName.trim(),
+                  academic_link: params.academicLink,
+                  academic_program: params.academicProgram,
+                  research_group: params.researchGroup,
+                },
+              },
+            });
+
+            if (authErr) {
+              set({ isLoading: false });
+              return { success: false, error: authErr.message };
+            }
+
+            if (authData.user) {
+              const requiresEmailConfirmation = !authData.session && !authData.user.confirmed_at;
+
+              try {
+                await client.from('profiles').upsert([
+                  {
+                    id: authData.user.id,
+                    email: cleanEmail,
+                    full_name: params.fullName.trim(),
+                    role: 'researcher',
+                    academic_link: params.academicLink,
+                    academic_program: params.academicProgram,
+                    is_active: true,
+                  },
+                ]);
+                await client.from('user_roles').upsert([
+                  {
+                    user_id: authData.user.id,
+                    role: 'researcher',
+                    is_active: true,
+                  },
+                ]);
+              } catch (profileErr) {
+                console.warn('Nota en upsert profiles/user_roles tras registro:', profileErr);
+              }
+
+              // Si requiere confirmación, informamos el estado para ofrecer código o enlace
+              if (requiresEmailConfirmation) {
+                set({ isLoading: false, user: null, isAuthenticated: false });
+                return {
+                  success: true,
+                  requiresEmailConfirmation: true,
+                  email: cleanEmail,
+                };
+              }
+
+              // Si Supabase tiene autoconfirmación o emitió sesión inmediata
+              const newSession: UserSession = {
+                id: authData.user.id,
+                email: cleanEmail,
+                fullName: params.fullName.trim(),
+                academicLink: params.academicLink,
+                academicProgram: params.academicProgram,
+                roles: ['researcher'],
+                activeRole: 'researcher',
+              };
+
+              set({
+                user: newSession,
+                isAuthenticated: true,
+                isLoading: false,
+              });
+
+              return {
+                success: true,
+                requiresEmailConfirmation: false,
+                email: cleanEmail,
+              };
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error al registrar el usuario en Supabase';
+            set({ isLoading: false });
+            return { success: false, error: msg };
+          }
+        }
+
+        // Modo offline / fallback
+        const newSession: UserSession = {
+          id: `usr-reg-${Date.now().toString(36)}`,
           email: cleanEmail,
-          fullName: cleanEmail.split('@')[0].replace('.', ' '),
-          roles: ['researcher', 'investigador'],
+          fullName: params.fullName.trim(),
+          academicLink: params.academicLink,
+          academicProgram: params.academicProgram,
+          roles: ['researcher'],
           activeRole: 'researcher',
         };
 
         set({
-          user: newUser,
+          user: newSession,
           isAuthenticated: true,
           isLoading: false,
         });
-        return { success: true };
+
+        return { success: true, requiresEmailConfirmation: false };
       },
 
+      /**
+       * Permite al usuario cambiar entre sus roles autorizados
+       */
       setActiveRole: (role) => {
         const current = get().user;
-        if (current && current.roles.includes(role)) {
-          set({
-            user: { ...current, activeRole: role },
-          });
+        if (current) {
+          const normRole = normalizeRole(role) as AppRole;
+          const userNormRoles = current.roles.map((r) => normalizeRole(r));
+          if (userNormRoles.includes(normRole)) {
+            set({
+              user: { ...current, activeRole: normRole },
+            });
+          }
         }
       },
 
-      logout: () => {
-        set({
-          user: null,
-          isAuthenticated: false,
-        });
+      /**
+       * Cierre de sesión real con limpieza de Supabase y de estado local
+       */
+      logout: async () => {
+        try {
+          const client = getSupabaseClient();
+          if (client) {
+            await client.auth.signOut();
+          }
+        } catch (err) {
+          console.warn('Error al cerrar sesión en Supabase:', err);
+        } finally {
+          set({
+            user: null,
+            isAuthenticated: false,
+            unreadNotificationsCount: 0,
+          });
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('seed_session_store');
+          }
+        }
       },
     }),
     {

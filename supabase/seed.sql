@@ -491,3 +491,35 @@ VALUES
     5
   )
 ON CONFLICT (id) DO NOTHING;
+
+-- 3. Cuenta de Administrador Principal Institucional (admin@seed.com / admin123)
+-- Perfil base y roles preconfigurados para Supabase
+INSERT INTO profiles (
+  id,
+  email,
+  full_name,
+  role,
+  academic_program,
+  academic_link,
+  is_active
+)
+VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  'admin@seed.com',
+  'Administrador Principal Seed',
+  'admin',
+  'Dirección de Investigaciones y Tecnología',
+  'Personal administrativo',
+  true
+)
+ON CONFLICT (email) DO UPDATE
+SET full_name = EXCLUDED.full_name,
+    role = 'admin',
+    is_active = true;
+
+-- Asignación de rol 'admin' en user_roles
+INSERT INTO user_roles (user_id, role, is_active)
+SELECT id, 'admin', true
+FROM profiles
+WHERE email = 'admin@seed.com'
+ON CONFLICT (user_id, role) DO NOTHING;
