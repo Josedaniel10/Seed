@@ -28,10 +28,16 @@ export const ResearchGroupsManagement: React.FC = () => {
     createGroup,
     assignGroupLeader,
     toggleGroupActive,
+    loadFromSupabase,
     syncWithSupabase,
   } = useGroupsStore();
 
   const users = useUserStore((s) => s.users);
+
+  // Carga automática directa desde Supabase al montar la vista
+  React.useEffect(() => {
+    loadFromSupabase();
+  }, [loadFromSupabase]);
 
   const [notification, setNotification] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);

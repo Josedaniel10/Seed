@@ -56,6 +56,9 @@ interface ResearchGroupsState {
   groups: ResearchGroup[];
   searchQuery: string;
   selectedFacultyFilter: string;
+  isLoading: boolean;
+  isInitialized: boolean;
+  error: string | null;
   setSearchQuery: (q: string) => void;
   setSelectedFacultyFilter: (f: string) => void;
   createGroup: (data: {
@@ -73,6 +76,7 @@ interface ResearchGroupsState {
     leaderId: string
   ) => { success: boolean; group?: ResearchGroup; error?: string };
   toggleGroupActive: (groupId: string) => { success: boolean; is_active?: boolean };
+  loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
   syncWithSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
 }
 
@@ -82,6 +86,9 @@ export const useGroupsStore = create<ResearchGroupsState>()(
       groups: INITIAL_RESEARCH_GROUPS,
       searchQuery: '',
       selectedFacultyFilter: 'ALL',
+      isLoading: false,
+      isInitialized: false,
+      error: null,
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       setSelectedFacultyFilter: (selectedFacultyFilter) => set({ selectedFacultyFilter }),
@@ -98,12 +105,16 @@ export const useGroupsStore = create<ResearchGroupsState>()(
           return { success: false, error: `Ya existe un grupo con el código ${cleanCode}.` };
         }
 
+        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'c0000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+
         const newGroup: ResearchGroup = {
-          id: `grp-${Date.now().toString(36)}`,
+          id: newId,
           name: cleanName,
           code: cleanCode,
           faculty: data.faculty.trim(),
-          leader_id: data.leader_id,
+          leader_id: data.leader_id || null,
           is_active: true,
           created_at: new Date().toISOString(),
         };
@@ -119,12 +130,23 @@ export const useGroupsStore = create<ResearchGroupsState>()(
           }
         }
 
-        // Sincronización con Supabase si está disponible
+        // Sincronización directa con Supabase
         const client = getSupabaseClient();
         if (client) {
-          client.from('research_groups').insert([newGroup]).then(({ error }) => {
-            if (error) console.warn('Supabase research_groups insert error:', error.message);
-          });
+          const supabaseLeaderId = (data.leader_id && data.leader_id.length > 20) ? data.leader_id : null;
+          client
+            .from('research_groups')
+            .insert([{
+              id: newGroup.id,
+              name: newGroup.name,
+              code: newGroup.code,
+              faculty: newGroup.faculty,
+              leader_id: supabaseLeaderId,
+              is_active: newGroup.is_active,
+            }])
+            .then(({ error }) => {
+              if (error) console.warn('Supabase research_groups insert error:', error.message);
+            });
         }
 
         return { success: true, group: newGroup };
@@ -145,9 +167,13 @@ export const useGroupsStore = create<ResearchGroupsState>()(
 
         const client = getSupabaseClient();
         if (client && updated) {
-          client.from('research_groups').update(data).eq('id', groupId).then(({ error }) => {
-            if (error) console.warn('Supabase research_groups update error:', error.message);
-          });
+          client
+            .from('research_groups')
+            .update(data)
+            .eq('id', groupId)
+            .then(({ error }) => {
+              if (error) console.warn('Supabase research_groups update error:', error.message);
+            });
         }
 
         return { success: Boolean(updated), group: updated };
@@ -178,9 +204,10 @@ export const useGroupsStore = create<ResearchGroupsState>()(
 
         const client = getSupabaseClient();
         if (client && updatedGroup) {
+          const supabaseLeaderId = (leaderId && leaderId.length > 20) ? leaderId : null;
           client
             .from('research_groups')
-            .update({ leader_id: leaderId })
+            .update({ leader_id: supabaseLeaderId })
             .eq('id', groupId)
             .then(({ error }) => {
               if (error) console.warn('Supabase research_groups leader update error:', error.message);
@@ -209,38 +236,70 @@ export const useGroupsStore = create<ResearchGroupsState>()(
             .from('research_groups')
             .update({ is_active: newStatus })
             .eq('id', groupId)
-            .then(() => {});
+            .then(({ error }) => {
+              if (error) console.warn('Supabase research_groups toggle error:', error.message);
+            });
         }
 
         return { success: true, is_active: newStatus };
       },
 
-      syncWithSupabase: async () => {
+      loadFromSupabase: async () => {
+        set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
+          set({ isLoading: false, error: 'Supabase no está conectado.' });
           return { success: false, error: 'Supabase no está conectado.' };
         }
 
         try {
-          const { data, error } = await client.from('research_groups').select('*');
+          const { data, error } = await client
+            .from('research_groups')
+            .select('*')
+            .order('name', { ascending: true });
+
           if (error) {
+            set({ isLoading: false, error: error.message });
             return { success: false, error: error.message };
           }
 
           if (data && data.length > 0) {
-            set({ groups: data as ResearchGroup[] });
+            set({
+              groups: data as ResearchGroup[],
+              isInitialized: true,
+              isLoading: false,
+              error: null,
+            });
             return { success: true, count: data.length };
           }
 
+          set({ isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al sincronizar grupos';
+          const msg = err instanceof Error ? err.message : 'Error al sincronizar grupos desde Supabase';
+          set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }
+      },
+
+      syncWithSupabase: async () => {
+        return get().loadFromSupabase();
       },
     }),
     {
       name: 'seed_research_groups',
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          // Descartar caché con IDs antiguos grp-
+          return {
+            ...persistedState,
+            groups: [],
+            isInitialized: false,
+          };
+        }
+        return persistedState;
+      },
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

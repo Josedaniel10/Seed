@@ -30,6 +30,7 @@ export function CatalogManagement() {
     selectedTypeId,
     searchQuery,
     filterStatus,
+    isLoading,
     setSelectedTypeId,
     setSearchQuery,
     setFilterStatus,
@@ -41,8 +42,14 @@ export function CatalogManagement() {
     updateRequirement,
     removeRequirement,
     resetToStandardCatalog,
+    loadFromSupabase,
     syncWithSupabase,
   } = useCatalogStore();
+
+  // Cargar catálogo en vivo desde Supabase al montar la vista
+  React.useEffect(() => {
+    loadFromSupabase();
+  }, [loadFromSupabase]);
 
   // Modals state
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);

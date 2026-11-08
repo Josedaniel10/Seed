@@ -20,6 +20,7 @@ import { useSessionStore } from '../../stores/session.store.ts';
 import { useRequestStore, UploadedFilePayload } from './requestStore.ts';
 import { validateDocumentFile, computeFileSha256 } from './documentValidator.ts';
 import { step2GeneralDataSchema } from './requestSchema.ts';
+import { getSupabaseClient } from '../../lib/supabase.ts';
 
 const STEPS = [
   { num: 1, title: 'Tipo y Requisitos' },
@@ -94,24 +95,23 @@ export function RequestSubmissionWizard() {
 
       let savedFilePath = `file-service/storage/${sha256.substring(0, 12)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
-      try {
-        const response = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileBase64: base64,
-            mimeType: file.type || 'application/pdf',
-          }),
-        });
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData?.filePath) {
-            savedFilePath = resData.filePath;
+      // Subida real a Supabase Storage (Bucket 'documents')
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${Date.now()}_${sha256.substring(0, 8)}_${cleanName}`;
+          const { data: uploadData, error: uploadErr } = await client.storage
+            .from('documents')
+            .upload(storagePath, file, { cacheControl: '3600', upsert: true });
+
+          if (!uploadErr && uploadData?.path) {
+            const { data: publicUrlData } = client.storage.from('documents').getPublicUrl(uploadData.path);
+            savedFilePath = publicUrlData?.publicUrl || uploadData.path;
           }
+        } catch (storageErr) {
+          console.warn('Nota: Subida a bucket documents:', storageErr);
         }
-      } catch {
-        // Fallback
       }
 
       const payload: UploadedFilePayload = {

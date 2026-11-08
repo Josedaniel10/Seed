@@ -616,6 +616,9 @@ interface CatalogState {
   selectedTypeId: string | null;
   searchQuery: string;
   filterStatus: 'ALL' | 'ACTIVE' | 'INACTIVE';
+  isLoading: boolean;
+  isInitialized: boolean;
+  error: string | null;
 
   // Filters & selection
   setSelectedTypeId: (id: string | null) => void;
@@ -661,9 +664,16 @@ interface CatalogState {
   removeRequirement: (id: string) => { success: boolean; error?: string };
 
   // Precarga y restauración del estándar inicial (T1.8 / RF-37)
-  resetToStandardCatalog: () => void;
+  resetToStandardCatalog: () => Promise<void> | void;
 
-  // Sincronización Supabase
+  // Carga y Sincronización directa con Supabase
+  loadFromSupabase: () => Promise<{
+    success: boolean;
+    error?: string;
+    typesCount?: number;
+    reqsCount?: number;
+  }>;
+
   syncWithSupabase: () => Promise<{
     success: boolean;
     error?: string;
@@ -680,6 +690,9 @@ export const useCatalogStore = create<CatalogState>()(
       selectedTypeId: 'apt-001',
       searchQuery: '',
       filterStatus: 'ALL',
+      isLoading: false,
+      isInitialized: false,
+      error: null,
 
       setSelectedTypeId: (id) => set({ selectedTypeId: id }),
       setSearchQuery: (query) => set({ searchQuery: query }),
@@ -693,8 +706,12 @@ export const useCatalogStore = create<CatalogState>()(
           return { success: false, error: `Ya existe un tipo de trámite con el código "${cleanCode}"` };
         }
 
+        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'a0000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+
         const newType: ApplicationType = {
-          id: `apt-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+          id: newId,
           code: cleanCode,
           name: data.name.trim(),
           description: data.description?.trim() || null,
@@ -709,17 +726,25 @@ export const useCatalogStore = create<CatalogState>()(
           selectedTypeId: newType.id,
         }));
 
-        // Sincronización en segundo plano con Supabase si está disponible
+        // Sincronización primaria en Supabase
         const client = getSupabaseClient();
         if (client) {
-          client.from('application_types').insert({
-            code: newType.code,
-            name: newType.name,
-            description: newType.description,
-            requires_committee: newType.requires_committee,
-            is_active: newType.is_active,
-            display_order: newType.display_order,
-          }).then();
+          client
+            .from('application_types')
+            .insert({
+              id: newType.id,
+              code: newType.code,
+              name: newType.name,
+              description: newType.description,
+              requires_committee: newType.requires_committee,
+              is_active: newType.is_active,
+              display_order: newType.display_order,
+            })
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error insertando tipo de trámite en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true, type: newType };
@@ -750,7 +775,15 @@ export const useCatalogStore = create<CatalogState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('application_types').update(updates).eq('id', id).then();
+          client
+            .from('application_types')
+            .update(updates)
+            .eq('id', id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error actualizando tipo en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true };
@@ -782,7 +815,15 @@ export const useCatalogStore = create<CatalogState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('application_types').delete().eq('id', id).then();
+          client
+            .from('application_types')
+            .delete()
+            .eq('id', id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error eliminando tipo en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true };
@@ -794,8 +835,12 @@ export const useCatalogStore = create<CatalogState>()(
           return { success: false, error: 'El tipo de solicitud especificado no existe' };
         }
 
+        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'b0000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
+
         const newReq: Requirement = {
-          id: `req-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+          id: newId,
           application_type_id: data.application_type_id,
           name: data.name.trim(),
           description: data.description?.trim() || null,
@@ -814,17 +859,25 @@ export const useCatalogStore = create<CatalogState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('requirements').insert({
-            application_type_id: newReq.application_type_id,
-            name: newReq.name,
-            description: newReq.description,
-            is_mandatory: newReq.is_mandatory,
-            is_subsanable: newReq.is_subsanable,
-            cure_deadline_days: newReq.cure_deadline_days,
-            max_size_mb: newReq.max_size_mb,
-            allowed_formats: newReq.allowed_formats,
-            template_url: newReq.template_url,
-          }).then();
+          client
+            .from('requirements')
+            .insert({
+              id: newReq.id,
+              application_type_id: newReq.application_type_id,
+              name: newReq.name,
+              description: newReq.description,
+              is_mandatory: newReq.is_mandatory,
+              is_subsanable: newReq.is_subsanable,
+              cure_deadline_days: newReq.cure_deadline_days,
+              max_size_mb: newReq.max_size_mb,
+              allowed_formats: newReq.allowed_formats,
+              template_url: newReq.template_url,
+            })
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error insertando requisito en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true, requirement: newReq };
@@ -850,7 +903,15 @@ export const useCatalogStore = create<CatalogState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('requirements').update(updates).eq('id', id).then();
+          client
+            .from('requirements')
+            .update(updates)
+            .eq('id', id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error actualizando requisito en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true, requirement: updatedReq };
@@ -863,68 +924,98 @@ export const useCatalogStore = create<CatalogState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('requirements').delete().eq('id', id).then();
+          client
+            .from('requirements')
+            .delete()
+            .eq('id', id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error eliminando requisito en Supabase:', error.message);
+              }
+            });
         }
 
         return { success: true };
       },
 
-      resetToStandardCatalog: () => {
-        set({
-          types: INITIAL_APPLICATION_TYPES,
-          requirements: INITIAL_REQUIREMENTS,
-          selectedTypeId: 'apt-001',
-        });
-      },
-
-      syncWithSupabase: async () => {
+      loadFromSupabase: async () => {
+        set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
-          return { success: false, error: 'Supabase no está configurado (falta VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY)' };
+          set({ isLoading: false, error: 'Supabase no está configurado (falta VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY)' });
+          return { success: false, error: 'Supabase no está configurado' };
         }
 
         try {
           const [typesRes, reqsRes] = await Promise.all([
             client.from('application_types').select('*').order('display_order', { ascending: true }),
-            client.from('requirements').select('*'),
+            client.from('requirements').select('*').order('created_at', { ascending: true }),
           ]);
 
           if (typesRes.error) throw typesRes.error;
           if (reqsRes.error) throw reqsRes.error;
 
-          const typesData = typesRes.data as ApplicationType[];
-          const reqsData = reqsRes.data as Requirement[];
+          const typesData = (typesRes.data || []) as ApplicationType[];
+          const reqsData = (reqsRes.data || []) as Requirement[];
 
-          if (typesData && typesData.length > 0) {
+          if (typesData.length > 0) {
+            const currentSelectedId = get().selectedTypeId;
+            const validSelectedId = typesData.some((t) => t.id === currentSelectedId)
+              ? currentSelectedId
+              : typesData[0].id;
+
             set({
               types: typesData,
-              requirements: reqsData || [],
-              selectedTypeId: typesData[0].id,
+              requirements: reqsData,
+              selectedTypeId: validSelectedId,
+              isInitialized: true,
+              isLoading: false,
+              error: null,
             });
+          } else {
+            set({ isInitialized: true, isLoading: false, error: null });
           }
 
           return {
             success: true,
-            typesCount: typesData?.length ?? 0,
-            reqsCount: reqsData?.length ?? 0,
+            typesCount: typesData.length,
+            reqsCount: reqsData.length,
           };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error desconocido al sincronizar catálogo';
+          const msg = err instanceof Error ? err.message : 'Error al cargar catálogo desde Supabase';
+          console.error('Error loadFromSupabase:', msg);
+          set({ isLoading: false, error: msg });
           return { success: false, error: msg };
+        }
+      },
+
+      syncWithSupabase: async () => {
+        return get().loadFromSupabase();
+      },
+
+      resetToStandardCatalog: async () => {
+        const syncRes = await get().loadFromSupabase();
+        if (!syncRes.success || (syncRes.typesCount ?? 0) === 0) {
+          set({
+            types: INITIAL_APPLICATION_TYPES,
+            requirements: INITIAL_REQUIREMENTS,
+            selectedTypeId: 'apt-001',
+          });
         }
       },
     }),
     {
       name: 'seed_catalog_store',
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, version: number) => {
-        // Si no existe versión 2 o tiene menos de los 12 tipos estándar, cargar el catálogo completo
-        if (version < 2 || !persistedState?.types || persistedState.types.length < 12) {
+        if (version < 3) {
+          // Limpiar caché antigua con IDs no-UUID si existía
           return {
             ...persistedState,
-            types: INITIAL_APPLICATION_TYPES,
-            requirements: INITIAL_REQUIREMENTS,
-            selectedTypeId: 'apt-001',
+            types: [],
+            requirements: [],
+            selectedTypeId: null,
+            isInitialized: false,
           };
         }
         return persistedState;

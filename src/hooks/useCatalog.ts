@@ -1,7 +1,15 @@
+import { useEffect } from 'react';
 import { useCatalogStore } from '../features/catalog/catalogStore.ts';
 
 export function useCatalog() {
   const store = useCatalogStore();
+
+  // Carga automática directa desde Supabase al consumir el catálogo
+  useEffect(() => {
+    if (!store.isInitialized && !store.isLoading) {
+      store.loadFromSupabase();
+    }
+  }, [store.isInitialized, store.isLoading, store.loadFromSupabase]);
 
   const activeTypes = store.types.filter((t) => t.is_active);
   const inactiveTypes = store.types.filter((t) => !t.is_active);

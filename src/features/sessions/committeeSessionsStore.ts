@@ -13,6 +13,7 @@ import {
 } from '../../types/database.ts';
 import { useRequestStore } from '../requests/requestStore.ts';
 import { useUserStore } from '../users/userStore.ts';
+import { getSupabaseClient } from '../../lib/supabase.ts';
 
 export interface CreateSessionPayload {
   session_type: SessionType;
@@ -27,6 +28,7 @@ export interface CommitteeSessionsState {
   attendances: SessionAttendance[];
   decisions: SessionDecision[];
   isLoading: boolean;
+  loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
 
   // Acciones T4.1: Programación y Gestión de Sesiones
   createSession: (
@@ -253,7 +255,9 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             payload.session_type === 'ORDINARIA' ? 'Sesión Ordinaria' : 'Sesión Extraordinaria';
           const sessionNumber = `${typeLabel} Nº ${formattedNum} - ${year}`;
 
-          const newSessionId = `ses-${year}-${Date.now().toString(36)}`;
+          const newSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `ses-${year}-${Date.now().toString(36)}`;
           const quorum = payload.quorum_required ?? 4; // Quórum reglamentario por defecto
 
           const newSession: CommitteeSession = {
@@ -271,6 +275,26 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           set((state) => ({
             sessions: [newSession, ...state.sessions],
           }));
+
+          // Sincronización en Supabase
+          const client = getSupabaseClient();
+          if (client) {
+            client
+              .from('committee_sessions')
+              .insert({
+                id: newSession.id,
+                session_number: newSession.session_number,
+                session_type: newSession.session_type,
+                scheduled_at: newSession.scheduled_at,
+                location_or_url: newSession.location_or_url,
+                quorum_required: newSession.quorum_required,
+                is_agenda_closed: newSession.is_agenda_closed,
+                is_completed: newSession.is_completed,
+              })
+              .then(({ error }) => {
+                if (error) console.warn('Supabase session insert error:', error.message);
+              });
+          }
 
           // Inicializar automáticamente lista de asistencia con miembros del comité
           get().initializeSessionAttendance(newSessionId);
@@ -699,6 +723,38 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         }));
 
         return { success: true, session: updatedSession };
+      },
+
+      loadFromSupabase: async () => {
+        set({ isLoading: true });
+        const client = getSupabaseClient();
+        if (!client) {
+          set({ isLoading: false });
+          return { success: false, error: 'Supabase no está conectado.' };
+        }
+
+        try {
+          const [sessRes, decRes] = await Promise.all([
+            client.from('committee_sessions').select('*').order('scheduled_at', { ascending: false }),
+            client.from('session_decisions').select('*'),
+          ]);
+
+          if (sessRes.data && sessRes.data.length > 0) {
+            set({
+              sessions: sessRes.data as CommitteeSession[],
+              decisions: (decRes.data || []) as SessionDecision[],
+              isLoading: false,
+            });
+            return { success: true, count: sessRes.data.length };
+          }
+
+          set({ isLoading: false });
+          return { success: true, count: 0 };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error al cargar sesiones desde Supabase';
+          set({ isLoading: false });
+          return { success: false, error: msg };
+        }
       },
 
       resetToInitialSeed: () => {

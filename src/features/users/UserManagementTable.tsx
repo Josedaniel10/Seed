@@ -37,6 +37,7 @@ export const UserManagementTable: React.FC = () => {
     updateUserRole,
     toggleUserActive,
     addUser,
+    loadFromSupabase,
   } = useUserStore();
 
   const [notification, setNotification] = useState<string | null>(null);
@@ -49,17 +50,8 @@ export const UserManagementTable: React.FC = () => {
 
   // Cargar perfiles reales de Supabase al montar la pantalla
   React.useEffect(() => {
-    const client = getSupabaseClient();
-    if (!client) return;
-    client
-      .from('profiles')
-      .select('*')
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          data.forEach((p) => addUser(p as Profile));
-        }
-      });
-  }, [addUser]);
+    loadFromSupabase();
+  }, [loadFromSupabase]);
 
   const showFeedback = (msg: string) => {
     setNotification(msg);

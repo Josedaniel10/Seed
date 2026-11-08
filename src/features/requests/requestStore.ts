@@ -14,6 +14,7 @@ import {
 } from '../../types/database.ts';
 import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useUserStore } from '../users/userStore.ts';
+import { getSupabaseClient } from '../../lib/supabase.ts';
 
 export interface UploadedFilePayload {
   requirement_id: string;
@@ -79,6 +80,12 @@ export interface RequestState {
   assignments: ReviewerAssignment[];
   observations: Observation[];
   isSubmitting: boolean;
+  isLoading: boolean;
+  isInitialized: boolean;
+
+  // Supabase synchronization
+  loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
+  syncWithSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
 
   // Actions
   generateNextFilingNumber: (year?: number) => Promise<string>;
@@ -519,6 +526,8 @@ export const useRequestStore = create<RequestState>()(
       assignments: INITIAL_ASSIGNMENTS,
       observations: INITIAL_OBSERVATIONS,
       isSubmitting: false,
+      isLoading: false,
+      isInitialized: false,
 
       generateNextFilingNumber: async (year?: number): Promise<string> => {
         const targetYear = year || new Date().getFullYear();
@@ -583,7 +592,9 @@ export const useRequestStore = create<RequestState>()(
 
           const filingNumber = await get().generateNextFilingNumber();
           const nowIso = new Date().toISOString();
-          const reqId = `sol-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+          const reqId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `sol-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
           const newRequest: Request = {
             id: reqId,
@@ -603,7 +614,9 @@ export const useRequestStore = create<RequestState>()(
           };
 
           const newDocuments: RequestDocument[] = payload.documents.map((doc, idx) => ({
-            id: `doc-${Date.now().toString(36)}-${idx}`,
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : `doc-${Date.now().toString(36)}-${idx}`,
             request_id: reqId,
             application_id: reqId,
             requirement_id: doc.requirement_id,
@@ -620,7 +633,9 @@ export const useRequestStore = create<RequestState>()(
           }));
 
           const newAuditEvent: AuditHistory = {
-            id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
             request_id: reqId,
             application_id: reqId,
             actor_id: payload.applicant_id,
@@ -645,6 +660,72 @@ export const useRequestStore = create<RequestState>()(
             auditHistory: [...state.auditHistory, newAuditEvent],
             isSubmitting: false,
           }));
+
+          // Sincronización directa con Supabase
+          const client = getSupabaseClient();
+          if (client) {
+            const supabaseGroupId = (payload.research_group_id && payload.research_group_id.length > 20)
+              ? payload.research_group_id
+              : null;
+            const supabaseApplicantId = (payload.applicant_id && payload.applicant_id.length > 20)
+              ? payload.applicant_id
+              : null;
+
+            if (supabaseApplicantId) {
+              client
+                .from('applications')
+                .insert({
+                  id: newRequest.id,
+                  filing_number: newRequest.filing_number,
+                  application_type_id: newRequest.request_type_id,
+                  applicant_id: supabaseApplicantId,
+                  title: newRequest.title,
+                  abstract: newRequest.abstract,
+                  research_group_id: supabaseGroupId,
+                  budget_requested: newRequest.budget_requested,
+                  current_status: newRequest.current_status,
+                  is_tutor_endorsed: newRequest.is_tutor_endorsed,
+                  requires_committee: newRequest.requires_committee,
+                })
+                .then(({ error }) => {
+                  if (error) console.warn('Supabase application insert error:', error.message);
+                });
+
+              if (newDocuments.length > 0) {
+                const docsPayload = newDocuments.map((d) => ({
+                  id: d.id,
+                  application_id: reqId,
+                  requirement_id: d.requirement_id,
+                  file_name: d.file_name,
+                  file_path: d.file_path,
+                  file_size_bytes: d.file_size_bytes,
+                  file_hash_sha256: d.file_hash_sha256,
+                  mime_type: d.mime_type,
+                  validation_status: d.validation_status,
+                }));
+                client
+                  .from('application_documents')
+                  .insert(docsPayload)
+                  .then(({ error }) => {
+                    if (error) console.warn('Supabase application_documents insert error:', error.message);
+                  });
+              }
+
+              client
+                .from('audit_history')
+                .insert({
+                  id: newAuditEvent.id,
+                  application_id: reqId,
+                  actor_id: supabaseApplicantId,
+                  action: newAuditEvent.action,
+                  new_status: newAuditEvent.new_status,
+                  details: newAuditEvent.details,
+                })
+                .then(({ error }) => {
+                  if (error) console.warn('Supabase audit_history insert error:', error.message);
+                });
+            }
+          }
 
           return { success: true, request: newRequest, application: newRequest };
         } catch (err: unknown) {
@@ -712,6 +793,44 @@ export const useRequestStore = create<RequestState>()(
             documents: state.documents.map((d) => (d.id === targetDoc.id ? updatedDoc : d)),
             auditHistory: [...state.auditHistory, newAudit],
           }));
+
+          const client = getSupabaseClient();
+          if (client) {
+            client
+              .from('application_documents')
+              .update({
+                file_name: updatedDoc.file_name,
+                file_path: updatedDoc.file_path,
+                file_size_bytes: updatedDoc.file_size_bytes,
+                file_hash_sha256: updatedDoc.file_hash_sha256,
+                mime_type: updatedDoc.mime_type,
+                validation_status: updatedDoc.validation_status,
+                validation_observations: null,
+                validated_by: null,
+                validated_at: null,
+                uploaded_at: nowIso,
+              })
+              .eq('id', targetDoc.id)
+              .then(({ error }) => {
+                if (error) console.warn('Supabase document cure update error:', error.message);
+              });
+
+            const supabaseActorId = (actorId && actorId.length > 20) ? actorId : null;
+            client
+              .from('audit_history')
+              .insert({
+                id: newAudit.id,
+                application_id: requestId,
+                actor_id: supabaseActorId,
+                action: newAudit.action,
+                previous_status: newAudit.previous_status,
+                new_status: newAudit.new_status,
+                details: newAudit.details,
+              })
+              .then(({ error }) => {
+                if (error) console.warn('Supabase audit insert error:', error.message);
+              });
+          }
 
           return { success: true, document: updatedDoc };
         }
@@ -946,6 +1065,34 @@ export const useRequestStore = create<RequestState>()(
           requests: state.requests.map((a) => (a.id === requestId ? updatedReq : a)),
           auditHistory: [...state.auditHistory, auditItem],
         }));
+
+        // Sincronización de cambio de estado e historial en Supabase
+        const client = getSupabaseClient();
+        if (client) {
+          client
+            .from('applications')
+            .update({ current_status: newStatus, updated_at: nowIso })
+            .eq('id', requestId)
+            .then(({ error }) => {
+              if (error) console.warn('Supabase status update error:', error.message);
+            });
+
+          const supabaseActorId = (actorId && actorId.length > 20) ? actorId : null;
+          client
+            .from('audit_history')
+            .insert({
+              id: auditItem.id,
+              application_id: requestId,
+              actor_id: supabaseActorId,
+              action: auditItem.action,
+              previous_status: auditItem.previous_status,
+              new_status: auditItem.new_status,
+              details: auditItem.details,
+            })
+            .then(({ error }) => {
+              if (error) console.warn('Supabase audit insert error:', error.message);
+            });
+        }
 
         return { success: true, request: updatedReq, application: updatedReq };
       },
@@ -1417,6 +1564,121 @@ export const useRequestStore = create<RequestState>()(
         return get().computePendingRequirements(req);
       },
 
+      loadFromSupabase: async () => {
+        set({ isLoading: true });
+        const client = getSupabaseClient();
+        if (!client) {
+          set({ isLoading: false });
+          return { success: false, error: 'Supabase no está conectado.' };
+        }
+
+        try {
+          const [appsRes, docsRes, audRes, asgRes, obsRes] = await Promise.all([
+            client.from('applications').select('*').order('created_at', { ascending: false }),
+            client.from('application_documents').select('*'),
+            client.from('audit_history').select('*').order('created_at', { ascending: true }),
+            client.from('reviewer_assignments').select('*'),
+            client.from('observations').select('*'),
+          ]);
+
+          if (appsRes.data && appsRes.data.length > 0) {
+            const mappedApps: Request[] = appsRes.data.map((app: any) => ({
+              id: app.id,
+              filing_number: app.filing_number,
+              request_type_id: app.application_type_id,
+              application_type_id: app.application_type_id,
+              applicant_id: app.applicant_id,
+              title: app.title,
+              abstract: app.abstract,
+              research_group_id: app.research_group_id,
+              budget_requested: Number(app.budget_requested || 0),
+              current_status: app.current_status,
+              is_tutor_endorsed: !!app.is_tutor_endorsed,
+              requires_committee: !!app.requires_committee,
+              created_at: app.created_at,
+              updated_at: app.updated_at,
+            }));
+
+            const mappedDocs: RequestDocument[] = (docsRes.data || []).map((d: any) => ({
+              id: d.id,
+              request_id: d.application_id,
+              application_id: d.application_id,
+              requirement_id: d.requirement_id,
+              file_name: d.file_name,
+              file_path: d.file_path,
+              file_size_bytes: Number(d.file_size_bytes || 0),
+              file_hash_sha256: d.file_hash_sha256,
+              mime_type: d.mime_type,
+              validation_status: d.validation_status,
+              validation_observations: d.validation_observations,
+              validated_by: d.validated_by,
+              validated_at: d.validated_at,
+              uploaded_at: d.uploaded_at,
+            }));
+
+            const mappedAud: AuditHistory[] = (audRes.data || []).map((a: any) => ({
+              id: a.id,
+              request_id: a.application_id,
+              application_id: a.application_id,
+              actor_id: a.actor_id,
+              action: a.action,
+              previous_status: a.previous_status,
+              new_status: a.new_status,
+              details: a.details || {},
+              created_at: a.created_at,
+            }));
+
+            const mappedAsg: ReviewerAssignment[] = (asgRes.data || []).map((asg: any) => ({
+              id: asg.id,
+              request_id: asg.application_id,
+              application_id: asg.application_id,
+              reviewer_id: asg.reviewer_id,
+              deadline_date: asg.deadline_date,
+              is_active: asg.is_active,
+              assigned_by: asg.assigned_by,
+              concept: asg.concept,
+              concept_date: asg.concept_date,
+              created_at: asg.created_at,
+            }));
+
+            const mappedObs: Observation[] = (obsRes.data || []).map((o: any) => ({
+              id: o.id,
+              request_id: o.application_id,
+              application_id: o.application_id,
+              assignment_id: o.assignment_id,
+              author_id: o.author_id,
+              category: o.category,
+              content: o.content,
+              is_resolved: o.is_resolved,
+              applicant_response: o.applicant_response,
+              created_at: o.created_at,
+            }));
+
+            set({
+              requests: mappedApps,
+              documents: mappedDocs,
+              auditHistory: mappedAud,
+              assignments: mappedAsg,
+              observations: mappedObs,
+              isInitialized: true,
+              isLoading: false,
+            });
+            return { success: true, count: mappedApps.length };
+          }
+
+          set({ isInitialized: true, isLoading: false });
+          return { success: true, count: 0 };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error al sincronizar solicitudes desde Supabase';
+          set({ isLoading: false });
+          return { success: false, error: msg };
+        }
+      },
+
+      syncWithSupabase: async () => {
+        return get().loadFromSupabase();
+      },
+
       resetToInitialSeed: () => {
         set({
           requests: INITIAL_REQUESTS,
@@ -1429,6 +1691,21 @@ export const useRequestStore = create<RequestState>()(
     }),
     {
       name: 'seed_requests_store',
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          return {
+            ...persistedState,
+            requests: [],
+            documents: [],
+            auditHistory: [],
+            assignments: [],
+            observations: [],
+            isInitialized: false,
+          };
+        }
+        return persistedState;
+      },
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

@@ -78,11 +78,15 @@ interface UserManagementState {
   users: Profile[];
   searchQuery: string;
   selectedRoleFilter: UserRole | 'ALL';
+  isLoading: boolean;
+  isInitialized: boolean;
+  error: string | null;
   setSearchQuery: (q: string) => void;
   setSelectedRoleFilter: (role: UserRole | 'ALL') => void;
   updateUserRole: (userId: string, newRole: UserRole) => { success: boolean; updatedUser?: Profile };
   toggleUserActive: (userId: string) => { success: boolean; is_active?: boolean };
   addUser: (userData: Omit<Profile, 'id' | 'created_at'> & { id?: string; created_at?: string }) => Profile;
+  loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
   resetToInitial: () => void;
 }
 
@@ -92,6 +96,9 @@ export const useUserStore = create<UserManagementState>()(
       users: INITIAL_PROFILES,
       searchQuery: '',
       selectedRoleFilter: 'ALL',
+      isLoading: false,
+      isInitialized: false,
+      error: null,
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       setSelectedRoleFilter: (selectedRoleFilter) => set({ selectedRoleFilter }),
@@ -112,9 +119,25 @@ export const useUserStore = create<UserManagementState>()(
         // Sincronización real con Supabase en la tabla 'profiles'
         const client = getSupabaseClient();
         if (client) {
-          client.from('profiles').update({ role: newRole }).eq('id', userId).then(({ error }) => {
-            if (error) console.warn('Supabase profile role update error:', error.message);
-          });
+          client
+            .from('profiles')
+            .update({ role: newRole })
+            .eq('id', userId)
+            .then(({ error }) => {
+              if (error) console.warn('Supabase profile role update error:', error.message);
+            });
+
+          // Actualizar o insertar en user_roles también
+          client
+            .from('user_roles')
+            .upsert([
+              {
+                user_id: userId,
+                role: newRole,
+                is_active: true,
+              },
+            ])
+            .then(() => {});
         }
 
         return {
@@ -138,16 +161,26 @@ export const useUserStore = create<UserManagementState>()(
 
         const client = getSupabaseClient();
         if (client && newStatus !== undefined) {
-          client.from('profiles').update({ is_active: newStatus }).eq('id', userId).then(() => {});
+          client
+            .from('profiles')
+            .update({ is_active: newStatus })
+            .eq('id', userId)
+            .then(({ error }) => {
+              if (error) console.warn('Supabase profile status update error:', error.message);
+            });
         }
 
         return { success: true, is_active: newStatus };
       },
 
       addUser: (userData) => {
+        const newId = userData.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `usr-${Date.now()}`);
+
         const newUser: Profile = {
           ...userData,
-          id: userData.id || `usr-${Date.now()}`,
+          id: newId,
           created_at: userData.created_at || new Date().toISOString(),
         };
 
@@ -163,18 +196,70 @@ export const useUserStore = create<UserManagementState>()(
 
         const client = getSupabaseClient();
         if (client) {
-          client.from('profiles').upsert([newUser]).then(({ error }) => {
-            if (error) console.warn('Supabase profile upsert error:', error.message);
-          });
+          client
+            .from('profiles')
+            .upsert([newUser])
+            .then(({ error }) => {
+              if (error) console.warn('Supabase profile upsert error:', error.message);
+            });
         }
 
         return newUser;
+      },
+
+      loadFromSupabase: async () => {
+        set({ isLoading: true, error: null });
+        const client = getSupabaseClient();
+        if (!client) {
+          set({ isLoading: false, error: 'Supabase no está conectado.' });
+          return { success: false, error: 'Supabase no está conectado.' };
+        }
+
+        try {
+          const { data, error } = await client
+            .from('profiles')
+            .select('*')
+            .order('full_name', { ascending: true });
+
+          if (error) {
+            set({ isLoading: false, error: error.message });
+            return { success: false, error: error.message };
+          }
+
+          if (data && data.length > 0) {
+            set({
+              users: data as Profile[],
+              isInitialized: true,
+              isLoading: false,
+              error: null,
+            });
+            return { success: true, count: data.length };
+          }
+
+          set({ isInitialized: true, isLoading: false, error: null });
+          return { success: true, count: 0 };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error al cargar perfiles desde Supabase';
+          set({ isLoading: false, error: msg });
+          return { success: false, error: msg };
+        }
       },
 
       resetToInitial: () => set({ users: INITIAL_PROFILES }),
     }),
     {
       name: 'seed_users_management',
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          return {
+            ...persistedState,
+            users: [],
+            isInitialized: false,
+          };
+        }
+        return persistedState;
+      },
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;
