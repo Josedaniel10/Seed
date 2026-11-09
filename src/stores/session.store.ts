@@ -140,14 +140,16 @@ export const useSessionStore = create<SessionState>()(
               let academicProgram = user.user_metadata?.academic_program;
               let academicLink = user.user_metadata?.academic_link;
               let researchGroupId = user.user_metadata?.research_group_id;
+              let resolvedId = user.id;
 
               try {
                 const [profileRes, rolesRes] = await Promise.all([
-                  client.from('profiles').select('*').eq('id', user.id).single(),
-                  client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+                  client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
+                  client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
                 ]);
 
                 if (profileRes.data) {
+                  resolvedId = profileRes.data.id || resolvedId;
                   fullName = profileRes.data.full_name || fullName;
                   academicProgram = profileRes.data.academic_program || academicProgram;
                   academicLink = profileRes.data.academic_link || academicLink;
@@ -171,7 +173,7 @@ export const useSessionStore = create<SessionState>()(
 
               set({
                 user: {
-                  id: user.id,
+                  id: resolvedId,
                   email: user.email || '',
                   fullName,
                   academicProgram,
@@ -214,14 +216,16 @@ export const useSessionStore = create<SessionState>()(
             let academicProgram = user.user_metadata?.academic_program;
             let academicLink = user.user_metadata?.academic_link;
             let researchGroupId = user.user_metadata?.research_group_id;
+            let resolvedId = user.id;
 
             try {
               const [profileRes, rolesRes] = await Promise.all([
-                client.from('profiles').select('*').eq('id', user.id).single(),
-                client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+                client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
+                client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
               ]);
 
               if (profileRes.data) {
+                resolvedId = profileRes.data.id || resolvedId;
                 fullName = profileRes.data.full_name || fullName;
                 academicProgram = profileRes.data.academic_program || academicProgram;
                 academicLink = profileRes.data.academic_link || academicLink;
@@ -245,7 +249,7 @@ export const useSessionStore = create<SessionState>()(
 
             set({
               user: {
-                id: user.id,
+                id: resolvedId,
                 email: user.email || '',
                 fullName,
                 academicProgram,
@@ -301,8 +305,8 @@ export const useSessionStore = create<SessionState>()(
 
             try {
               const [profileRes, rolesRes] = await Promise.all([
-                client.from('profiles').select('*').eq('id', user.id).single(),
-                client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true),
+                client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
+                client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
               ]);
 
               if (profileRes.data) {
@@ -515,14 +519,16 @@ export const useSessionStore = create<SessionState>()(
               let academicProgram = authUser.user_metadata?.academic_program;
               let academicLink = authUser.user_metadata?.academic_link;
               let researchGroupId = authUser.user_metadata?.research_group_id;
+              let resolvedId = authUser.id;
 
               try {
                 const [profileRes, rolesRes] = await Promise.all([
-                  client.from('profiles').select('*').eq('id', authUser.id).single(),
-                  client.from('user_roles').select('role').eq('user_id', authUser.id).eq('is_active', true),
+                  client.from('profiles').select('*').or(`id.eq.${authUser.id},email.eq.${cleanEmail}`).maybeSingle(),
+                  client.from('user_roles').select('role').or(`user_id.eq.${authUser.id}`).eq('is_active', true),
                 ]);
 
                 if (profileRes.data) {
+                  resolvedId = profileRes.data.id || resolvedId;
                   fullName = profileRes.data.full_name || fullName;
                   academicProgram = profileRes.data.academic_program || academicProgram;
                   academicLink = profileRes.data.academic_link || academicLink;
@@ -541,7 +547,7 @@ export const useSessionStore = create<SessionState>()(
 
               const activeRole = roles[0] || 'researcher';
               const userSession: UserSession = {
-                id: authUser.id,
+                id: resolvedId,
                 email: authUser.email || cleanEmail,
                 fullName,
                 academicProgram,

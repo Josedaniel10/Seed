@@ -271,8 +271,8 @@ export const useAuthStore = create<AuthState>()(
             const { data: dbProfile } = await client
               .from('profiles')
               .select('*')
-              .eq('id', user.id)
-              .single();
+              .or(`id.eq.${user.id},email.eq.${cleanEmail}`)
+              .maybeSingle();
 
             if (dbProfile) {
               userProfile = dbProfile as Profile;
