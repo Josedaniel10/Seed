@@ -18,6 +18,7 @@ import { useApplicationStore } from '../../features/applications/applicationStor
 import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { useGroupsStore } from '../../features/groups/groupsStore.ts';
 import { useUserStore } from '../../features/users/userStore.ts';
+import { normalizeRole } from '../../lib/permissions.ts';
 import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 
 export function AsignacionesPage() {
@@ -46,15 +47,12 @@ export function AsignacionesPage() {
     return requests.filter((a) => a.current_status === 'EN_REVISION');
   }, [requests]);
 
-  // Lista de posibles evaluadores (integrantes del comité y docentes calificados)
   const committeeMembers = useMemo(() => {
     return users.filter(
       (u) =>
         u.is_active &&
-        (u.role === 'integrante_comite' ||
-          u.role === 'admin' ||
-          u.role === 'secretario' ||
-          u.academic_link === 'docente_planta')
+        (normalizeRole(u.role) === 'committee_member' ||
+          u.roles?.some((role) => normalizeRole(role) === 'committee_member'))
     );
   }, [users]);
 
@@ -68,7 +66,7 @@ export function AsignacionesPage() {
   }, [committeeMembers, assignments]);
 
   const handleAssign = async (appId: string, revId: string) => {
-    if (!revId) {
+    if (!committeeMembers.some((member) => member.id === revId)) {
       setFeedback({ type: 'error', message: 'Debe seleccionar un evaluador de la lista.' });
       return;
     }
