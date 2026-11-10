@@ -200,16 +200,6 @@ export const useUserStore = create<UserManagementState>()(
           return { users: [newUser, ...state.users] };
         });
 
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('profiles')
-            .upsert([newUser])
-            .then(({ error }) => {
-              if (error) console.warn('Supabase profile upsert error:', error.message);
-            });
-        }
-
         return newUser;
       },
 

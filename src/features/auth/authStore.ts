@@ -124,7 +124,6 @@ export const useAuthStore = create<AuthState>()(
             options: {
               data: {
                 full_name: data.fullName.trim(),
-                role: 'investigador',
                 academic_program: data.academicProgram.trim(),
                 academic_link: data.academicLink,
                 research_group_id: data.researchGroupId,
@@ -143,45 +142,20 @@ export const useAuthStore = create<AuthState>()(
             return { success: false, error: msg };
           }
 
-          // 2. Creación / inserción directa en la tabla relacional 'profiles' de Supabase
-          const newProfile: Profile = {
-            id: authData.user.id,
-            email: cleanEmail,
-            full_name: data.fullName.trim(),
-            role: 'investigador',
-            academic_program: data.academicProgram.trim(),
-            academic_link: data.academicLink,
-            research_group_id: data.researchGroupId,
-            is_active: true,
-            created_at: new Date().toISOString(),
-          };
-
-          try {
-            await client.from('profiles').upsert([newProfile]);
-          } catch (profileErr) {
-            console.warn('Nota: Inserción en profiles:', profileErr);
-          }
-
-          // Si Supabase devuelve sesión inmediata (sin confirmación de correo requerida)
-          const requiresConfirmation = !authData.session && !authData.user.confirmed_at;
-
-          if (authData.session) {
-            set({
-              profile: newProfile,
-              token: authData.session.access_token,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            });
-          } else {
+          if (!authData.session) {
             set({ isLoading: false });
+            return { success: true, requiresConfirmation: true };
           }
 
-          return {
-            success: true,
-            profile: newProfile,
-            requiresConfirmation,
-          };
+          const { data: profiles, error: profileError } = await client.from('profiles')
+            .select('*').eq('id', authData.user.id).eq('is_active', true)
+            .overrideTypes<Profile[], { merge: false }>();
+          const profile = profiles?.[0];
+          if (profileError || !profile) {
+            throw new Error('La cuenta necesita un perfil activo vinculado en Supabase.');
+          }
+          set({ profile, token: authData.session.access_token, isAuthenticated: true, isLoading: false, error: null });
+          return { success: true, profile, requiresConfirmation: false };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Error inesperado al registrar usuario en Supabase';
           set({ isLoading: false, error: msg });
@@ -264,37 +238,15 @@ export const useAuthStore = create<AuthState>()(
           const user = authData.user;
           const token = authData.session?.access_token || '';
 
-          // 2. Obtener el perfil real de la base de datos PostgreSQL de Supabase
-          let userProfile: Profile | null = null;
-
-          try {
-            const { data: dbProfile } = await client
-              .from('profiles')
-              .select('*')
-              .or(`id.eq.${user.id},email.eq.${cleanEmail}`)
-              .maybeSingle();
-
-            if (dbProfile) {
-              userProfile = dbProfile as Profile;
-            }
-          } catch {
-            // Fallback a los metadatos almacenados en el JWT si la tabla aún no tiene el registro
+          const { data: profiles, error: profileError } = await client.from('profiles')
+            .select('*').eq('id', user.id).eq('is_active', true)
+            .overrideTypes<Profile[], { merge: false }>();
+          const userProfile = profiles?.[0];
+          if (profileError || !userProfile) {
+            const msg = 'La cuenta necesita un perfil activo vinculado en Supabase.';
+            set({ isLoading: false, error: msg, isAuthenticated: false, profile: null, token: null });
+            return { success: false, error: msg };
           }
-
-          if (!userProfile) {
-            userProfile = {
-              id: user.id,
-              email: user.email || cleanEmail,
-              full_name: (user.user_metadata?.full_name as string) || mockName || cleanEmail.split('@')[0],
-              role: (user.user_metadata?.role as UserRole) || mockRole || 'investigador',
-              academic_program: (user.user_metadata?.academic_program as string) || 'Investigación General',
-              academic_link: (user.user_metadata?.academic_link as string) || 'docente_planta',
-              research_group_id: (user.user_metadata?.research_group_id as string) || 'grp-bio-01',
-              is_active: true,
-              created_at: user.created_at || new Date().toISOString(),
-            };
-          }
-
           set({
             profile: userProfile,
             token,

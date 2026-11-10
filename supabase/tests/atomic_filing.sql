@@ -1,10 +1,10 @@
 -- Run with psql -v ON_ERROR_STOP=1 against a migrated test database.
 BEGIN;
 
-INSERT INTO public.profiles (id, email, full_name)
+INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES
-  ('29355a94-3419-445c-bd4d-617af8954c01', 'filing-a@example.invalid', 'Investigator A'),
-  ('29355a94-3419-445c-bd4d-617af8954c02', 'filing-b@example.invalid', 'Investigator B');
+  ('29355a94-3419-445c-bd4d-617af8954c01', 'filing-a@example.invalid', '{"full_name":"Investigator A"}'),
+  ('29355a94-3419-445c-bd4d-617af8954c02', 'filing-b@example.invalid', '{"full_name":"Investigator B"}');
 
 INSERT INTO public.application_types (id, code, name)
 VALUES ('29355a94-3419-445c-bd4d-617af8954c03', 'TEST-ATOMIC-FILING', 'Atomic filing test');

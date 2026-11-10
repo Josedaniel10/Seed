@@ -1,10 +1,10 @@
 -- Run with psql -v ON_ERROR_STOP=1 against a migrated test database.
 BEGIN;
 
-INSERT INTO public.profiles (id, email, full_name, role)
+INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data)
 VALUES
-  ('37fda525-7f6f-48c1-b1d8-4f97e9134a01', 'validation-owner@example.invalid', 'Owner', 'researcher'),
-  ('37fda525-7f6f-48c1-b1d8-4f97e9134a02', 'validation-staff@example.invalid', 'Staff', 'administrative');
+  ('37fda525-7f6f-48c1-b1d8-4f97e9134a01', 'validation-owner@example.invalid', '{"full_name":"Owner"}', '{}'),
+  ('37fda525-7f6f-48c1-b1d8-4f97e9134a02', 'validation-staff@example.invalid', '{"full_name":"Staff"}', '{"seed_initial_role":"administrativo"}');
 
 INSERT INTO public.application_types (id, code, name)
 VALUES ('37fda525-7f6f-48c1-b1d8-4f97e9134a03', 'TEST-PERSIST-VALIDATION', 'Test validation');

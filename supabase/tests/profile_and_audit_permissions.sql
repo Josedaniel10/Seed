@@ -1,11 +1,11 @@
 -- Run with psql -v ON_ERROR_STOP=1 against a migrated test database.
 BEGIN;
 
-INSERT INTO public.profiles (id, email, full_name, role)
+INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data)
 VALUES
-  ('93946a13-9c72-4d05-80a5-ff34f9de61a1', 'seed-rls-a@example.invalid', 'Investigator A', 'researcher'),
-  ('93946a13-9c72-4d05-80a5-ff34f9de61a2', 'seed-rls-b@example.invalid', 'Investigator B', 'researcher'),
-  ('93946a13-9c72-4d05-80a5-ff34f9de61a3', 'seed-rls-admin@example.invalid', 'Administrator', 'admin');
+  ('93946a13-9c72-4d05-80a5-ff34f9de61a1', 'seed-rls-a@example.invalid', '{"full_name":"Investigator A"}', '{}'),
+  ('93946a13-9c72-4d05-80a5-ff34f9de61a2', 'seed-rls-b@example.invalid', '{"full_name":"Investigator B"}', '{}'),
+  ('93946a13-9c72-4d05-80a5-ff34f9de61a3', 'seed-rls-admin@example.invalid', '{"full_name":"Administrator"}', '{"seed_initial_role":"admin"}');
 
 INSERT INTO public.application_types (id, code, name)
 VALUES ('93946a13-9c72-4d05-80a5-ff34f9de61b1', 'TEST-PROFILE-AUDIT', 'RLS test');

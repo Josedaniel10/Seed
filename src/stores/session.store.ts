@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AppRole, normalizeRole } from '../lib/permissions.ts';
+import { AppRole, normalizeRole, ROLE_HOME_PATHS } from '../lib/permissions.ts';
 import { getSupabaseClient } from '../lib/supabase.ts';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { Profile, UserRole } from '../types/database.ts';
 
 export interface UserSession {
   id: string;
@@ -12,6 +14,36 @@ export interface UserSession {
   researchGroupId?: string;
   roles: AppRole[];
   activeRole: AppRole;
+}
+
+async function loadAuthenticatedSession(client: SupabaseClient, user: User): Promise<UserSession> {
+  const [profile, assignments] = await Promise.all([
+    client.from('profiles').select('*').eq('id', user.id).eq('is_active', true)
+      .overrideTypes<Profile[], { merge: false }>(),
+    client.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true)
+      .overrideTypes<{ role: UserRole }[], { merge: false }>(),
+  ]);
+  if (profile.error || assignments.error) {
+    throw new Error('No se pudo consultar el perfil y sus permisos en Supabase.');
+  }
+  const record = profile.data?.[0];
+  if (!record) {
+    throw new Error('La cuenta necesita un perfil activo vinculado en Supabase.');
+  }
+  const roles = [...new Set([record.role, ...(assignments.data ?? []).map(({ role }) => role)].map(normalizeRole))]
+    .filter((role): role is AppRole => Object.hasOwn(ROLE_HOME_PATHS, role));
+  const activeRole = roles[0];
+  if (!activeRole) throw new Error('El perfil no tiene un rol válido.');
+  return {
+    id: record.id,
+    email: record.email,
+    fullName: record.full_name,
+    academicProgram: record.academic_program ?? undefined,
+    academicLink: record.academic_link ?? undefined,
+    researchGroupId: record.research_group_id ?? undefined,
+    roles,
+    activeRole,
+  };
 }
 
 // Cuentas de demostración reales del sistema (Sección 3.2 / T7.4 / T7.8)
@@ -173,58 +205,12 @@ export const useSessionStore = create<SessionState>()(
           if (error) throw error;
 
           if (session?.user) {
-            const user = session.user;
-            let roles: AppRole[] = ['researcher'];
-            let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
-            let academicProgram = user.user_metadata?.academic_program;
-            let academicLink = user.user_metadata?.academic_link;
-            let researchGroupId = user.user_metadata?.research_group_id;
-
-            try {
-              const [profileRes, rolesRes] = await Promise.all([
-                client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
-                client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
-              ]);
-
-              if (profileRes.data) {
-                fullName = profileRes.data.full_name || fullName;
-                academicProgram = profileRes.data.academic_program || academicProgram;
-                academicLink = profileRes.data.academic_link || academicLink;
-                researchGroupId = profileRes.data.research_group_id || researchGroupId;
-                if (profileRes.data.role) {
-                  roles = [normalizeRole(profileRes.data.role) as AppRole];
-                }
-              }
-
-              if (rolesRes.data && rolesRes.data.length > 0) {
-                roles = Array.from(new Set([
-                  ...roles,
-                  ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
-                ]));
-              }
-            } catch {
-              // Si falla consulta en Supabase, mantener roles base
-            }
-
+            const restored = await loadAuthenticatedSession(client, session.user);
             const current = get().user;
-            const activeRole = current?.activeRole && roles.includes(current.activeRole)
-              ? current.activeRole
-              : roles[0];
-
-            set({
-              user: {
-                id: user.id,
-                email: user.email || '',
-                fullName,
-                academicProgram,
-                academicLink,
-                researchGroupId,
-                roles,
-                activeRole,
-              },
-              isAuthenticated: true,
-              isLoading: false,
-            });
+            if (current?.id === restored.id && restored.roles.includes(current.activeRole)) {
+              restored.activeRole = current.activeRole;
+            }
+            set({ user: restored, isAuthenticated: true, isLoading: false });
           } else {
             set({ user: null, isAuthenticated: false, isLoading: false });
           }
@@ -263,62 +249,13 @@ export const useSessionStore = create<SessionState>()(
             };
           }
 
-          if (data.session && data.user) {
-            const user = data.user;
-            let roles: AppRole[] = ['researcher'];
-            let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
-            let academicProgram = user.user_metadata?.academic_program;
-            let academicLink = user.user_metadata?.academic_link;
-            let researchGroupId = user.user_metadata?.research_group_id;
-
-            try {
-              const [profileRes, rolesRes] = await Promise.all([
-                client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
-                client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
-              ]);
-
-              if (profileRes.data) {
-                fullName = profileRes.data.full_name || fullName;
-                academicProgram = profileRes.data.academic_program || academicProgram;
-                academicLink = profileRes.data.academic_link || academicLink;
-                researchGroupId = profileRes.data.research_group_id || researchGroupId;
-                if (profileRes.data.role) {
-                  roles = [normalizeRole(profileRes.data.role) as AppRole];
-                }
-              }
-
-              if (rolesRes.data && rolesRes.data.length > 0) {
-                roles = Array.from(new Set([
-                  ...roles,
-                  ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
-                ]));
-              }
-            } catch {
-              // Silencioso
-            }
-
-            const activeRole = roles[0] || 'researcher';
-            const userSession: UserSession = {
-              id: user.id,
-              email: user.email || cleanEmail,
-              fullName,
-              academicProgram,
-              academicLink,
-              researchGroupId,
-              roles,
-              activeRole,
-            };
-
-            set({
-              user: userSession,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-
-            return { success: true };
+          if (!data.session || !data.user) {
+            set({ isLoading: false });
+            return { success: false, error: 'Supabase no inició una sesión tras verificar el código.' };
           }
 
-          set({ isLoading: false });
+          const verified = await loadAuthenticatedSession(client, data.user);
+          set({ user: verified, isAuthenticated: true, isLoading: false });
           return { success: true };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Error al verificar código OTP.';
@@ -339,7 +276,8 @@ export const useSessionStore = create<SessionState>()(
           const { data: { session } } = await client.auth.getSession();
           if (session?.user && session.user.email?.toLowerCase() === cleanEmail) {
             await get().initializeSession();
-            return { confirmed: true, user: get().user || undefined };
+            const user = get().user;
+            return user?.id === session.user.id ? { confirmed: true, user } : { confirmed: false };
           }
           return { confirmed: false };
         } catch {
@@ -430,57 +368,8 @@ export const useSessionStore = create<SessionState>()(
             }
 
             if (authData.user) {
-              const authUser = authData.user;
-              let roles: AppRole[] = ['researcher'];
-              let fullName = authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || '';
-              let academicProgram = authUser.user_metadata?.academic_program;
-              let academicLink = authUser.user_metadata?.academic_link;
-              let researchGroupId = authUser.user_metadata?.research_group_id;
-
-              try {
-                const [profileRes, rolesRes] = await Promise.all([
-                  client.from('profiles').select('*').or(`id.eq.${authUser.id},email.eq.${cleanEmail}`).maybeSingle(),
-                  client.from('user_roles').select('role').or(`user_id.eq.${authUser.id}`).eq('is_active', true),
-                ]);
-
-                if (profileRes.data) {
-                  fullName = profileRes.data.full_name || fullName;
-                  academicProgram = profileRes.data.academic_program || academicProgram;
-                  academicLink = profileRes.data.academic_link || academicLink;
-                  researchGroupId = profileRes.data.research_group_id || researchGroupId;
-                  if (profileRes.data.role) {
-                    roles = [normalizeRole(profileRes.data.role) as AppRole];
-                  }
-                }
-
-                if (rolesRes.data && rolesRes.data.length > 0) {
-                  roles = Array.from(new Set([
-                    ...roles,
-                    ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
-                  ]));
-                }
-              } catch {
-                // Fallback a metadatos de auth
-              }
-
-              const activeRole = roles[0] || 'researcher';
-              const userSession: UserSession = {
-                id: authUser.id,
-                email: authUser.email || cleanEmail,
-                fullName,
-                academicProgram,
-                academicLink,
-                researchGroupId,
-                roles,
-                activeRole,
-              };
-
-              set({
-                user: userSession,
-                isAuthenticated: true,
-                isLoading: false,
-              });
-
+              const loggedIn = await loadAuthenticatedSession(client, authData.user);
+              set({ user: loggedIn, isAuthenticated: true, isLoading: false });
               return { success: true };
             }
           } catch (err: unknown) {
@@ -535,6 +424,10 @@ export const useSessionStore = create<SessionState>()(
         const client = getSupabaseClient();
 
         if (client) {
+          if (!params.password) {
+            set({ isLoading: false });
+            return { success: false, error: 'Ingresa una contraseña para crear tu cuenta.' };
+          }
           try {
             // URL de redirección directa a la app al hacer clic en el enlace del correo
             const emailRedirectTo = typeof window !== 'undefined'
@@ -543,7 +436,7 @@ export const useSessionStore = create<SessionState>()(
 
             const { data: authData, error: authErr } = await client.auth.signUp({
               email: cleanEmail,
-              password: params.password || 'password123',
+              password: params.password,
               options: {
                 emailRedirectTo,
                 data: {
@@ -561,30 +454,7 @@ export const useSessionStore = create<SessionState>()(
             }
 
             if (authData.user) {
-              const requiresEmailConfirmation = !authData.session && !authData.user.confirmed_at;
-
-              try {
-                await client.from('profiles').upsert([
-                  {
-                    id: authData.user.id,
-                    email: cleanEmail,
-                    full_name: params.fullName.trim(),
-                    role: 'researcher',
-                    academic_link: params.academicLink,
-                    academic_program: params.academicProgram,
-                    is_active: true,
-                  },
-                ]);
-                await client.from('user_roles').upsert([
-                  {
-                    user_id: authData.user.id,
-                    role: 'researcher',
-                    is_active: true,
-                  },
-                ], { onConflict: 'user_id,role' });
-              } catch (profileErr) {
-                console.warn('Nota en upsert profiles/user_roles tras registro:', profileErr);
-              }
+              const requiresEmailConfirmation = !authData.session;
 
               // Si requiere confirmación, informamos el estado para ofrecer código o enlace
               if (requiresEmailConfirmation) {
@@ -597,15 +467,7 @@ export const useSessionStore = create<SessionState>()(
               }
 
               // Si Supabase tiene autoconfirmación o emitió sesión inmediata
-              const newSession: UserSession = {
-                id: authData.user.id,
-                email: cleanEmail,
-                fullName: params.fullName.trim(),
-                academicLink: params.academicLink,
-                academicProgram: params.academicProgram,
-                roles: ['researcher'],
-                activeRole: 'researcher',
-              };
+              const newSession = await loadAuthenticatedSession(client, authData.user);
 
               set({
                 user: newSession,

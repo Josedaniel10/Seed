@@ -13,11 +13,11 @@ DECLARE
   document_id uuid;
   assignment_id uuid;
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role) VALUES
-    (owner_id, owner_id || '@example.invalid', 'Test researcher', 'researcher'),
-    (staff_id, staff_id || '@example.invalid', 'Test administrative', 'administrative'),
-    (secretary_id, secretary_id || '@example.invalid', 'Test secretary', 'secretary'),
-    (reviewer_id, reviewer_id || '@example.invalid', 'Test reviewer', 'committee_member');
+  INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data) VALUES
+    (owner_id, owner_id || '@example.invalid', '{"full_name":"Test researcher"}', '{}'),
+    (staff_id, staff_id || '@example.invalid', '{"full_name":"Test administrative"}', '{"seed_initial_role":"administrativo"}'),
+    (secretary_id, secretary_id || '@example.invalid', '{"full_name":"Test secretary"}', '{"seed_initial_role":"secretario"}'),
+    (reviewer_id, reviewer_id || '@example.invalid', '{"full_name":"Test reviewer"}', '{"seed_initial_role":"integrante_comite"}');
   INSERT INTO public.application_types (id, code, name) VALUES (type_id, type_id::text, 'Test lifecycle');
   INSERT INTO public.requirements (id, application_type_id, name) VALUES (requirement_id, type_id, 'Test PDF');
 

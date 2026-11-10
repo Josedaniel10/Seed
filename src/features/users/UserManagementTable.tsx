@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUserStore } from './userStore.ts';
-import { UserRole, Profile } from '../../types/database.ts';
+import { UserRole } from '../../types/database.ts';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import {
   Users,
   Search,
@@ -46,6 +47,8 @@ export const UserManagementTable: React.FC = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('investigador');
   const [newProgram, setNewProgram] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Cargar perfiles reales de Supabase al montar la pantalla
@@ -72,23 +75,9 @@ export const UserManagementTable: React.FC = () => {
 
   const handleSyncSupabase = async () => {
     setIsSyncing(true);
-    const client = getSupabaseClient();
-    if (!client) {
-      showFeedback('Supabase no está conectado. Configure su URL y Anon Key primero.');
-      setIsSyncing(false);
-      return;
-    }
-
     try {
-      const { data, error } = await client.from('profiles').select('*');
-      if (error) {
-        showFeedback(`Error al consultar profiles en Supabase: ${error.message}`);
-      } else if (data && data.length > 0) {
-        data.forEach((p) => addUser(p as Profile));
-        showFeedback(`Sincronizados ${data.length} perfiles reales desde Supabase.`);
-      } else {
-        showFeedback('Conectado a Supabase: No hay registros previos en la tabla profiles.');
-      }
+      const result = await loadFromSupabase();
+      showFeedback(result.success ? `Perfiles cargados desde Supabase: ${result.count ?? 0}.` : result.error ?? 'No se pudieron cargar los perfiles.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al sincronizar';
       showFeedback(`Fallo de sincronización: ${msg}`);
@@ -97,25 +86,45 @@ export const UserManagementTable: React.FC = () => {
     }
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newEmail || !newProgram) return;
+    if (isCreating || !newName.trim() || !newEmail.trim() || !newProgram.trim()) return;
 
-    addUser({
-      email: newEmail,
-      full_name: newName,
-      role: newRole,
-      academic_program: newProgram,
-      academic_link: 'docente_planta',
-      research_group_id: 'grp-bio-01',
-      is_active: true,
-    });
+    setIsCreating(true);
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        const { data, error } = await client.functions.invoke<{ id: string }>('create-seed-user', {
+          body: { email: newEmail, fullName: newName, program: newProgram, role: newRole, password: newPassword },
+        });
+        if (error || !data?.id) {
+          const body = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null;
+          showFeedback(typeof body?.error === 'string' ? body.error : error?.message ?? 'No se confirmó la creación.');
+          return;
+        }
+        const refreshed = await loadFromSupabase();
+        showFeedback(refreshed.success ? `Cuenta de ${newName} creada.` : `Cuenta de ${newName} creada. Vuelve a sincronizar el listado.`);
+      } else {
+        addUser({
+          email: newEmail.trim().toLowerCase(),
+          full_name: newName.trim(),
+          role: newRole,
+          academic_program: newProgram.trim(),
+          academic_link: null,
+          research_group_id: null,
+          is_active: true,
+        });
+        showFeedback(`Perfil de demostración de ${newName} creado.`);
+      }
 
-    showFeedback(`Usuario ${newName} creado con rol ${newRole.replace('_', ' ')}`);
-    setNewName('');
-    setNewEmail('');
-    setNewProgram('');
-    setShowAddModal(false);
+      setNewName('');
+      setNewEmail('');
+      setNewProgram('');
+      setNewPassword('');
+      setShowAddModal(false);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   // Filtrado de usuarios
@@ -372,6 +381,22 @@ export const UserManagementTable: React.FC = () => {
                 />
               </div>
 
+              {getSupabaseClient() && (
+                <div>
+                  <label htmlFor="new-user-password" className="block font-semibold text-stone-700 mb-1">Contraseña inicial *</label>
+                  <input
+                    id="new-user-password"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D]"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block font-semibold text-stone-700 mb-1">Rol Institucional Inicial *</label>
                 <select
@@ -397,6 +422,7 @@ export const UserManagementTable: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={isCreating}
                   className="px-4 py-1.5 rounded-lg bg-[#14281D] text-white font-semibold hover:bg-[#1E3A2B] cursor-pointer"
                 >
                   Guardar Usuario
