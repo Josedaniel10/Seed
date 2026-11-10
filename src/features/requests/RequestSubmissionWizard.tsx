@@ -315,14 +315,14 @@ export function RequestSubmissionWizard() {
 
         <div className="pt-3 flex flex-col sm:flex-row justify-center gap-3">
           <button
-            onClick={() => navigate(`/requests/${submittedRequest.id}`)}
+            onClick={() => navigate(`/solicitudes/${submittedRequest.id}`)}
             className="px-6 py-3 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-xs inline-flex items-center justify-center gap-2"
           >
             <FileText size={15} />
             <span>Ver Detalle del Expediente</span>
           </button>
           <button
-            onClick={() => navigate('/my-requests')}
+            onClick={() => navigate('/mis-solicitudes')}
             className="px-6 py-3 border border-[#E5E3DC] bg-white hover:bg-stone-50 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
           >
             <span>Ir a Mis Solicitudes</span>
