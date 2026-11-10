@@ -125,4 +125,14 @@ GRANT EXECUTE ON FUNCTION public.file_application(uuid, uuid, uuid, text, text, 
 
 DROP POLICY applications_insert_policy ON public.applications;
 
+ALTER POLICY audit_insert_policy ON public.audit_history
+  WITH CHECK (
+    action <> 'RADICACION_INICIAL'
+    AND actor_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.applications AS application
+      WHERE application.id = audit_history.application_id
+    )
+  );
+
 COMMIT;

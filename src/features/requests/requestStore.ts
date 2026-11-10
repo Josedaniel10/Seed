@@ -28,6 +28,7 @@ export interface UploadedFilePayload {
 }
 
 export interface CreateRequestPayload {
+  submission_id?: string;
   request_type_id: string;
   application_type_id?: string; // Legacy alias
   applicant_id: string;
@@ -42,6 +43,12 @@ export interface CreateRequestPayload {
 }
 
 export type CreateApplicationPayload = CreateRequestPayload;
+
+interface FiledApplication {
+  application: Omit<Request, 'request_type_id'> & { application_type_id: string };
+  documents: Omit<RequestDocument, 'request_id'>[];
+  audit: Omit<AuditHistory, 'request_id'>;
+}
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -564,11 +571,60 @@ export const useRequestStore = create<RequestState>()(
 
         try {
           const typeId = payload.request_type_id || payload.application_type_id || '';
+          const client = getSupabaseClient();
+          const reqId = payload.submission_id ?? createUuid();
+
+          if (client) {
+            if (!isUuid(typeId) || (payload.research_group_id && !isUuid(payload.research_group_id))) {
+              return {
+                success: false,
+                error: 'El tipo de solicitud o el grupo seleccionado no corresponde al catálogo de Supabase. Actualice la página e intente nuevamente.',
+              };
+            }
+
+            const { data, error } = await client.rpc('file_application', {
+              p_id: reqId,
+              p_applicant_id: payload.applicant_id,
+              p_type_id: typeId,
+              p_title: payload.title,
+              p_abstract: payload.abstract,
+              p_group_id: payload.research_group_id || null,
+              p_budget: payload.budget_requested ?? 0,
+              p_tutor_endorsed: !!payload.is_tutor_endorsed,
+              p_documents: payload.documents.map(({
+                requirement_id, file_name, file_path, file_size_bytes, file_hash_sha256, mime_type,
+              }) => ({
+                requirement_id, file_name, file_path, file_size_bytes, file_hash_sha256,
+                mime_type: mime_type || 'application/pdf',
+              })),
+            }).overrideTypes<FiledApplication, { merge: false }>();
+
+            if (error || !data || typeof data !== 'object' || !('application' in data)) {
+              return {
+                success: false,
+                error: `No se pudo confirmar la radicación en Supabase: ${error?.message ?? 'respuesta inválida'}`,
+              };
+            }
+
+            const request = { ...data.application, request_type_id: data.application.application_type_id };
+            set((state) => ({
+              requests: [request, ...state.requests.filter((item) => item.id !== reqId)],
+              documents: [
+                ...data.documents.map((document) => ({ ...document, request_id: reqId })),
+                ...state.documents.filter((item) => item.application_id !== reqId),
+              ],
+              auditHistory: [
+                ...state.auditHistory.filter((item) => item.id !== data.audit.id),
+                { ...data.audit, request_id: reqId },
+              ],
+            }));
+            return { success: true, request, application: request };
+          }
+
           const catalog = useCatalogStore.getState();
           const targetType = catalog.types.find((t) => t.id === typeId);
 
           if (!targetType) {
-            set({ isSubmitting: false });
             return {
               success: false,
               error: `El tipo de solicitud especificado (${typeId}) no existe en el catálogo institucional.`,
@@ -584,7 +640,6 @@ export const useRequestStore = create<RequestState>()(
           const missingMandatory = mandatoryRequirements.filter((m) => !uploadedReqIds.has(m.id));
 
           if (missingMandatory.length > 0) {
-            set({ isSubmitting: false });
             return {
               success: false,
               error: `Faltan requisitos obligatorios por adjuntar: ${missingMandatory.map((m) => `"${m.name}"`).join(', ')}.`,
@@ -593,7 +648,6 @@ export const useRequestStore = create<RequestState>()(
 
           const filingNumber = await get().generateNextFilingNumber();
           const nowIso = new Date().toISOString();
-          const reqId = createUuid();
 
           const newRequest: Request = {
             id: reqId,
@@ -649,108 +703,22 @@ export const useRequestStore = create<RequestState>()(
             created_at: nowIso,
           };
 
-          const client = getSupabaseClient();
-          let persistenceWarning: string | undefined;
-          if (client) {
-            if (!isUuid(typeId) || (payload.research_group_id && !isUuid(payload.research_group_id))) {
-              set({ isSubmitting: false });
-              return {
-                success: false,
-                error: 'El tipo de solicitud o el grupo seleccionado no corresponde al catálogo de Supabase. Actualice la página e intente nuevamente.',
-              };
-            }
-
-            const { data: authData, error: authError } = await client.auth.getUser();
-            if (authError || !authData.user) {
-              set({ isSubmitting: false });
-              return {
-                success: false,
-                error: `No se pudo verificar la sesión de Supabase${authError ? `: ${authError.message}` : '.'}`,
-              };
-            }
-
-            if (authData.user.id !== payload.applicant_id) {
-              set({ isSubmitting: false });
-              return {
-                success: false,
-                error: 'La sesión activa no coincide con el investigador que radica la solicitud. Ingrese nuevamente.',
-              };
-            }
-
-            const { error: insertError } = await client.from('applications').insert({
-              id: newRequest.id,
-              filing_number: newRequest.filing_number,
-              application_type_id: newRequest.request_type_id,
-              applicant_id: authData.user.id,
-              title: newRequest.title,
-              abstract: newRequest.abstract,
-              research_group_id: payload.research_group_id || null,
-              budget_requested: newRequest.budget_requested,
-              current_status: newRequest.current_status,
-              is_tutor_endorsed: newRequest.is_tutor_endorsed,
-              requires_committee: newRequest.requires_committee,
-            });
-            if (insertError) {
-              set({ isSubmitting: false });
-              return {
-                success: false,
-                error: `No se pudo guardar la solicitud en Supabase: ${insertError.message}`,
-              };
-            }
-
-            if (newDocuments.length > 0) {
-              const docsPayload = newDocuments.map((document) => ({
-                id: document.id,
-                application_id: reqId,
-                requirement_id: document.requirement_id,
-                file_name: document.file_name,
-                file_path: document.file_path,
-                file_size_bytes: document.file_size_bytes,
-                file_hash_sha256: document.file_hash_sha256,
-                mime_type: document.mime_type,
-                validation_status: document.validation_status,
-              }));
-              const { error: documentsError } = await client
-                .from('application_documents')
-                .insert(docsPayload);
-              if (documentsError) {
-                persistenceWarning = `La solicitud se guardó, pero no se pudieron guardar sus documentos: ${documentsError.message}`;
-              }
-            }
-
-            const { error: auditError } = await client.from('audit_history').insert({
-                id: newAuditEvent.id,
-                application_id: reqId,
-                actor_id: authData.user.id,
-                action: newAuditEvent.action,
-                new_status: newAuditEvent.new_status,
-                details: newAuditEvent.details,
-              });
-            if (auditError) {
-              persistenceWarning = [
-                persistenceWarning,
-                `No se pudo registrar la auditoría: ${auditError.message}`,
-              ].filter(Boolean).join(' ');
-            }
-          }
-
           set((state) => ({
             requests: [newRequest, ...state.requests],
             documents: [...newDocuments, ...state.documents],
             auditHistory: [...state.auditHistory, newAuditEvent],
-            isSubmitting: false,
           }));
 
           return {
             success: true,
             request: newRequest,
             application: newRequest,
-            warning: persistenceWarning,
           };
         } catch (err: unknown) {
-          set({ isSubmitting: false });
           const msg = err instanceof Error ? err.message : 'Error interno al radicar solicitud.';
           return { success: false, error: msg };
+        } finally {
+          set({ isSubmitting: false });
         }
       },
 
@@ -889,6 +857,27 @@ export const useRequestStore = create<RequestState>()(
 
         if (!doc) {
           return { success: false, error: 'Documento no encontrado en el expediente.' };
+        }
+
+        const client = getSupabaseClient();
+        if (client) {
+          const { data, error } = await client.rpc('validate_application_document', {
+            p_application_id: requestId,
+            p_document_id: doc.id,
+            p_file_hash: doc.file_hash_sha256,
+            p_status: status,
+            p_observations: observations,
+          }).overrideTypes<Pick<FiledApplication, 'audit'> & { document: RequestDocument }, { merge: false }>();
+          if (error || !data || typeof data !== 'object' || !('document' in data)) {
+            return { success: false, error: error?.message ?? 'Supabase no confirmó la validación del documento.' };
+          }
+
+          const document = { ...data.document, request_id: requestId };
+          set((state) => ({
+            documents: state.documents.map((item) => item.id === document.id ? document : item),
+            auditHistory: [...state.auditHistory, { ...data.audit, request_id: requestId }],
+          }));
+          return { success: true, document };
         }
 
         const updatedDoc: RequestDocument = {
@@ -1060,6 +1049,27 @@ export const useRequestStore = create<RequestState>()(
           }
         }
 
+        const client = getSupabaseClient();
+        if (client) {
+          const { data, error } = await client.rpc('transition_application_status', {
+            p_application_id: requestId,
+            p_previous_status: currentStatus,
+            p_new_status: newStatus,
+            p_reason: reason ?? null,
+            p_details: details ?? {},
+          }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'>, { merge: false }>();
+          if (error || !data || typeof data !== 'object' || !('application' in data)) {
+            return { success: false, error: error?.message ?? 'Supabase no confirmó el cambio de estado.' };
+          }
+
+          const request = { ...data.application, request_type_id: data.application.application_type_id };
+          set((state) => ({
+            requests: state.requests.map((item) => item.id === requestId ? request : item),
+            auditHistory: [...state.auditHistory, { ...data.audit, request_id: requestId }],
+          }));
+          return { success: true, request, application: request };
+        }
+
         const nowIso = new Date().toISOString();
         const updatedReq: Request = {
           ...req,
@@ -1088,34 +1098,6 @@ export const useRequestStore = create<RequestState>()(
           requests: state.requests.map((a) => (a.id === requestId ? updatedReq : a)),
           auditHistory: [...state.auditHistory, auditItem],
         }));
-
-        // Sincronización de cambio de estado e historial en Supabase
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('applications')
-            .update({ current_status: newStatus, updated_at: nowIso })
-            .eq('id', requestId)
-            .then(({ error }) => {
-              if (error) console.warn('Supabase status update error:', error.message);
-            });
-
-          const supabaseActorId = (actorId && actorId.length > 20) ? actorId : null;
-          client
-            .from('audit_history')
-            .insert({
-              id: auditItem.id,
-              application_id: requestId,
-              actor_id: supabaseActorId,
-              action: auditItem.action,
-              previous_status: auditItem.previous_status,
-              new_status: auditItem.new_status,
-              details: auditItem.details,
-            })
-            .then(({ error }) => {
-              if (error) console.warn('Supabase audit insert error:', error.message);
-            });
-        }
 
         return { success: true, request: updatedReq, application: updatedReq };
       },
@@ -1172,6 +1154,30 @@ export const useRequestStore = create<RequestState>()(
 
         const req = get().requests.find((a) => a.id === requestId);
         if (!req) return { success: false, error: 'Solicitud no encontrada.' };
+
+        const client = getSupabaseClient();
+        if (client) {
+          const { data, error } = await client.rpc('assign_application_reviewer', {
+            p_application_id: requestId,
+            p_reviewer_id: reviewerId,
+            p_deadline: deadlineDate,
+          }).overrideTypes<Pick<FiledApplication, 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
+          if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
+            return { success: false, error: error?.message ?? 'Supabase no confirmó la asignación.' };
+          }
+
+          const assignment = { ...data.assignment, request_id: requestId };
+          set((state) => ({
+            assignments: [
+              ...state.assignments
+                .filter((item) => item.id !== assignment.id)
+                .map((item) => item.application_id === requestId ? { ...item, is_active: false } : item),
+              assignment,
+            ],
+            auditHistory: [...state.auditHistory, { ...data.audit, request_id: requestId }],
+          }));
+          return { success: true, assignment };
+        }
 
         const nowIso = new Date().toISOString();
         const reviewerUser = useUserStore.getState().users.find((u) => u.id === reviewerId);
@@ -1368,6 +1374,29 @@ export const useRequestStore = create<RequestState>()(
           };
         }
 
+        const client = getSupabaseClient();
+        if (client) {
+          const { data, error } = await client.rpc('submit_application_review', {
+            p_application_id: requestId,
+            p_assignment_id: activeAsg.id,
+            p_concept: concept,
+            p_justification: justification,
+          }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
+          if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
+            return { success: false, error: error?.message ?? 'Supabase no confirmó el concepto técnico.' };
+          }
+
+          const request = { ...data.application, request_type_id: data.application.application_type_id };
+          set((state) => ({
+            requests: state.requests.map((item) => item.id === requestId ? request : item),
+            assignments: state.assignments.map((item) => item.id === activeAsg.id
+              ? { ...data.assignment, request_id: requestId }
+              : item),
+            auditHistory: [...state.auditHistory, { ...data.audit, request_id: requestId }],
+          }));
+          return { success: true, request, application: request };
+        }
+
         const nowIso = new Date().toISOString();
         const updatedAsg: ReviewerAssignment = {
           ...activeAsg,
@@ -1382,11 +1411,7 @@ export const useRequestStore = create<RequestState>()(
           targetStatus = 'RECHAZADA';
         }
 
-        set((state) => ({
-          assignments: state.assignments.map((a) => (a.id === activeAsg.id ? updatedAsg : a)),
-        }));
-
-        return get().transitionRequestStatus(
+        const result = await get().transitionRequestStatus(
           requestId,
           targetStatus,
           reviewerId,
@@ -1397,6 +1422,12 @@ export const useRequestStore = create<RequestState>()(
             concept_date: nowIso,
           }
         );
+        if (result.success) {
+          set((state) => ({
+            assignments: state.assignments.map((a) => (a.id === activeAsg.id ? updatedAsg : a)),
+          }));
+        }
+        return result;
       },
 
       getStatusCounts: () => {

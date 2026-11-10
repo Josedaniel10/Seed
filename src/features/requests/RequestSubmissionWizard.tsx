@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -21,6 +21,7 @@ import { useRequestStore, UploadedFilePayload } from './requestStore.ts';
 import { validateDocumentFile, computeFileSha256 } from './documentValidator.ts';
 import { step2GeneralDataSchema } from './requestSchema.ts';
 import { getSupabaseClient } from '../../lib/supabase.ts';
+import { createUuid } from '../../lib/uuid.ts';
 
 const STEPS = [
   { num: 1, title: 'Tipo y Requisitos' },
@@ -35,6 +36,7 @@ export function RequestSubmissionWizard() {
   const { types, requirements } = useCatalogStore();
   const { groups } = useGroupsStore();
   const { createRequest, isSubmitting } = useRequestStore();
+  const submissionId = useRef<string | null>(null);
 
   const activeTypes = types.filter((t) => t.is_active);
 
@@ -249,9 +251,10 @@ export function RequestSubmissionWizard() {
   };
 
   const handleSubmitFiling = async () => {
+    if (useRequestStore.getState().isSubmitting) return;
     setGeneralError(null);
 
-    const docsPayload: UploadedFilePayload[] = Object.values(uploadedFiles);
+    const docsPayload = typeRequirements.flatMap(({ id }) => uploadedFiles[id] ? [uploadedFiles[id]] : []);
     if (!user?.id) {
       setGeneralError('No se pudo identificar la sesión del investigador. Cierre sesión e ingrese nuevamente.');
       return;
@@ -261,6 +264,7 @@ export function RequestSubmissionWizard() {
     const applicantName = user?.fullName || 'Investigador Principal';
 
     const result = await createRequest({
+      submission_id: (submissionId.current ??= createUuid()),
       request_type_id: selectedTypeId,
       application_type_id: selectedTypeId,
       applicant_id: applicantId,
