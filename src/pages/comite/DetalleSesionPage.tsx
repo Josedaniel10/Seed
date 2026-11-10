@@ -44,7 +44,7 @@ export function DetalleSesionPage() {
     finalizeSession,
   } = useCommitteeSessionsStore();
 
-  const { applications, getApplicationById } = useApplicationStore();
+  const { requests, getApplicationById } = useApplicationStore();
   const { users } = useUserStore();
 
   const session = sessions.find((s) => s.id === id);
@@ -85,7 +85,7 @@ export function DetalleSesionPage() {
 
   // Candidatos para agregar a la agenda: Solicitudes en estado LISTA_COMITE (RN-04)
   const agendaAppIds = new Set(agenda.map((a) => a.application_id));
-  const candidateApps = applications.filter(
+  const candidateApps = requests.filter(
     (a) => a.current_status === 'LISTA_COMITE' && !agendaAppIds.has(a.id)
   );
 

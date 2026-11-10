@@ -769,6 +769,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
     }),
     {
       name: 'seed_committee_sessions_store',
+      partialize: () => ({}),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

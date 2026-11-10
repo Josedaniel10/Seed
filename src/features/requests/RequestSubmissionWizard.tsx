@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -50,6 +50,19 @@ export function RequestSubmissionWizard() {
     is_tutor_endorsed: false,
   });
 
+  useEffect(() => {
+    if (!types.some((type) => type.id === selectedTypeId && type.is_active)) {
+      const firstActiveType = types.find((type) => type.is_active);
+      if (firstActiveType) setSelectedTypeId(firstActiveType.id);
+    }
+  }, [types, selectedTypeId]);
+
+  useEffect(() => {
+    if (!groups.some((group) => group.id === formData.research_group_id)) {
+      setFormData((current) => ({ ...current, research_group_id: groups[0]?.id || '' }));
+    }
+  }, [groups, formData.research_group_id]);
+
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedFilePayload>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
@@ -58,6 +71,7 @@ export function RequestSubmissionWizard() {
   const [submittedRequest, setSubmittedRequest] = useState<{
     id: string;
     filing_number: string;
+    warning?: string;
   } | null>(null);
   const [copiedRadicado, setCopiedRadicado] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -98,20 +112,38 @@ export function RequestSubmissionWizard() {
       // Subida real a Supabase Storage (Bucket 'documents')
       const client = getSupabaseClient();
       if (client) {
-        try {
-          const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const storagePath = `${Date.now()}_${sha256.substring(0, 8)}_${cleanName}`;
-          const { data: uploadData, error: uploadErr } = await client.storage
-            .from('documents')
-            .upload(storagePath, file, { cacheControl: '3600', upsert: true });
-
-          if (!uploadErr && uploadData?.path) {
-            const { data: publicUrlData } = client.storage.from('documents').getPublicUrl(uploadData.path);
-            savedFilePath = publicUrlData?.publicUrl || uploadData.path;
-          }
-        } catch (storageErr) {
-          console.warn('Nota: Subida a bucket documents:', storageErr);
+        const { data: authData, error: authError } = await client.auth.getSession();
+        if (authError) {
+          throw new Error(`No se pudo verificar la sesión de Supabase: ${authError.message}`);
         }
+        if (!authData.session) {
+          throw new Error(
+            'No hay una sesión real de Supabase activa. Cierre sesión e ingrese con una cuenta registrada en Supabase Auth; una cuenta de demostración no puede subir archivos.'
+          );
+        }
+        if (user?.id !== authData.session.user.id) {
+          throw new Error(
+            'La cuenta de la aplicación no coincide con la sesión de Supabase. Cierre sesión e ingrese nuevamente con su cuenta real.'
+          );
+        }
+
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${Date.now()}_${sha256.substring(0, 8)}_${cleanName}`;
+        const { data: uploadData, error: uploadError } = await client.storage
+          .from('documents')
+          .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+
+        if (uploadError) {
+          throw new Error(
+            `Supabase Storage rechazó la carga (${uploadError.statusCode || 'sin código'}): ${uploadError.message}`
+          );
+        }
+        if (!uploadData.path) {
+          throw new Error('Supabase Storage no devolvió la ruta del archivo cargado.');
+        }
+
+        const { data: publicUrlData } = client.storage.from('documents').getPublicUrl(uploadData.path);
+        savedFilePath = publicUrlData.publicUrl || uploadData.path;
       }
 
       const payload: UploadedFilePayload = {
@@ -128,10 +160,12 @@ export function RequestSubmissionWizard() {
         ...prev,
         [requirementId]: payload,
       }));
-    } catch {
+    } catch (error: unknown) {
       setUploadErrors((prev) => ({
         ...prev,
-        [requirementId]: 'Error al procesar el archivo. Inténtelo nuevamente.',
+        [requirementId]: error instanceof Error
+          ? error.message
+          : 'Error desconocido al procesar o subir el archivo.',
       }));
     } finally {
       setUploadingReqId(null);
@@ -218,7 +252,12 @@ export function RequestSubmissionWizard() {
     setGeneralError(null);
 
     const docsPayload: UploadedFilePayload[] = Object.values(uploadedFiles);
-    const applicantId = user?.id || 'usr-001';
+    if (!user?.id) {
+      setGeneralError('No se pudo identificar la sesión del investigador. Cierre sesión e ingrese nuevamente.');
+      return;
+    }
+
+    const applicantId = user.id;
     const applicantName = user?.fullName || 'Investigador Principal';
 
     const result = await createRequest({
@@ -243,6 +282,7 @@ export function RequestSubmissionWizard() {
     setSubmittedRequest({
       id: result.request.id,
       filing_number: result.request.filing_number,
+      warning: result.warning,
     });
   };
 
@@ -299,6 +339,12 @@ export function RequestSubmissionWizard() {
             </span>
           )}
         </div>
+
+        {submittedRequest.warning && (
+          <div role="alert" className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-left text-xs text-amber-950">
+            {submittedRequest.warning}
+          </div>
+        )}
 
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-left text-xs text-amber-950 flex items-start gap-3">
           <Info size={18} className="text-amber-700 shrink-0 mt-0.5" />
@@ -580,6 +626,7 @@ export function RequestSubmissionWizard() {
                     }
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-800"
                   >
+                    <option value="">Sin grupo asignado</option>
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         [{g.code}] {g.name}

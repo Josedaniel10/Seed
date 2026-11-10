@@ -15,6 +15,7 @@ import {
 import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 import { getSupabaseClient } from '../../lib/supabase.ts';
+import { createUuid } from '../../lib/uuid.ts';
 
 export interface UploadedFilePayload {
   requirement_id: string;
@@ -41,6 +42,10 @@ export interface CreateRequestPayload {
 }
 
 export type CreateApplicationPayload = CreateRequestPayload;
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 
 export interface DeadlineInfo {
   deadlineDate: string | null;
@@ -74,7 +79,6 @@ export const ALLOWED_TRANSITIONS = ALLOWED_REQUEST_TRANSITIONS;
 
 export interface RequestState {
   requests: Request[];
-  applications: Request[]; // Alias
   documents: RequestDocument[];
   auditHistory: AuditHistory[];
   assignments: ReviewerAssignment[];
@@ -91,10 +95,10 @@ export interface RequestState {
   generateNextFilingNumber: (year?: number) => Promise<string>;
   createRequest: (
     payload: CreateRequestPayload
-  ) => Promise<{ success: boolean; request?: Request; application?: Request; error?: string }>;
+  ) => Promise<{ success: boolean; request?: Request; application?: Request; error?: string; warning?: string }>;
   createApplication: (
     payload: CreateRequestPayload
-  ) => Promise<{ success: boolean; request?: Request; application?: Request; error?: string }>;
+  ) => Promise<{ success: boolean; request?: Request; application?: Request; error?: string; warning?: string }>;
   getRequestById: (id: string) => Request | undefined;
   getApplicationById: (id: string) => Request | undefined;
   getRequestsByApplicant: (applicantId: string) => Request[];
@@ -518,9 +522,6 @@ export const useRequestStore = create<RequestState>()(
   persist(
     (set, get) => ({
       requests: INITIAL_REQUESTS,
-      get applications() {
-        return get().requests;
-      },
       documents: INITIAL_DOCUMENTS,
       auditHistory: INITIAL_AUDIT_HISTORY,
       assignments: INITIAL_ASSIGNMENTS,
@@ -592,9 +593,7 @@ export const useRequestStore = create<RequestState>()(
 
           const filingNumber = await get().generateNextFilingNumber();
           const nowIso = new Date().toISOString();
-          const reqId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-            ? crypto.randomUUID()
-            : `sol-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+          const reqId = createUuid();
 
           const newRequest: Request = {
             id: reqId,
@@ -613,10 +612,8 @@ export const useRequestStore = create<RequestState>()(
             updated_at: nowIso,
           };
 
-          const newDocuments: RequestDocument[] = payload.documents.map((doc, idx) => ({
-            id: (typeof crypto !== 'undefined' && crypto.randomUUID)
-              ? crypto.randomUUID()
-              : `doc-${Date.now().toString(36)}-${idx}`,
+          const newDocuments: RequestDocument[] = payload.documents.map((doc) => ({
+            id: createUuid(),
             request_id: reqId,
             application_id: reqId,
             requirement_id: doc.requirement_id,
@@ -633,9 +630,7 @@ export const useRequestStore = create<RequestState>()(
           }));
 
           const newAuditEvent: AuditHistory = {
-            id: (typeof crypto !== 'undefined' && crypto.randomUUID)
-              ? crypto.randomUUID()
-              : `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+            id: createUuid(),
             request_id: reqId,
             application_id: reqId,
             actor_id: payload.applicant_id,
@@ -654,6 +649,91 @@ export const useRequestStore = create<RequestState>()(
             created_at: nowIso,
           };
 
+          const client = getSupabaseClient();
+          let persistenceWarning: string | undefined;
+          if (client) {
+            if (!isUuid(typeId) || (payload.research_group_id && !isUuid(payload.research_group_id))) {
+              set({ isSubmitting: false });
+              return {
+                success: false,
+                error: 'El tipo de solicitud o el grupo seleccionado no corresponde al catálogo de Supabase. Actualice la página e intente nuevamente.',
+              };
+            }
+
+            const { data: authData, error: authError } = await client.auth.getUser();
+            if (authError || !authData.user) {
+              set({ isSubmitting: false });
+              return {
+                success: false,
+                error: `No se pudo verificar la sesión de Supabase${authError ? `: ${authError.message}` : '.'}`,
+              };
+            }
+
+            if (authData.user.id !== payload.applicant_id) {
+              set({ isSubmitting: false });
+              return {
+                success: false,
+                error: 'La sesión activa no coincide con el investigador que radica la solicitud. Ingrese nuevamente.',
+              };
+            }
+
+            const { error: insertError } = await client.from('applications').insert({
+              id: newRequest.id,
+              filing_number: newRequest.filing_number,
+              application_type_id: newRequest.request_type_id,
+              applicant_id: authData.user.id,
+              title: newRequest.title,
+              abstract: newRequest.abstract,
+              research_group_id: payload.research_group_id || null,
+              budget_requested: newRequest.budget_requested,
+              current_status: newRequest.current_status,
+              is_tutor_endorsed: newRequest.is_tutor_endorsed,
+              requires_committee: newRequest.requires_committee,
+            });
+            if (insertError) {
+              set({ isSubmitting: false });
+              return {
+                success: false,
+                error: `No se pudo guardar la solicitud en Supabase: ${insertError.message}`,
+              };
+            }
+
+            if (newDocuments.length > 0) {
+              const docsPayload = newDocuments.map((document) => ({
+                id: document.id,
+                application_id: reqId,
+                requirement_id: document.requirement_id,
+                file_name: document.file_name,
+                file_path: document.file_path,
+                file_size_bytes: document.file_size_bytes,
+                file_hash_sha256: document.file_hash_sha256,
+                mime_type: document.mime_type,
+                validation_status: document.validation_status,
+              }));
+              const { error: documentsError } = await client
+                .from('application_documents')
+                .insert(docsPayload);
+              if (documentsError) {
+                persistenceWarning = `La solicitud se guardó, pero no se pudieron guardar sus documentos: ${documentsError.message}`;
+              }
+            }
+
+            const { error: auditError } = await client.from('audit_history').insert({
+                id: newAuditEvent.id,
+                application_id: reqId,
+                actor_id: authData.user.id,
+                action: newAuditEvent.action,
+                new_status: newAuditEvent.new_status,
+                details: newAuditEvent.details,
+              });
+            if (auditError) {
+              persistenceWarning = [
+                persistenceWarning,
+                `No se pudo registrar la auditoría: ${auditError.message}`,
+              ].filter(Boolean).join(' ');
+            }
+          }
+
           set((state) => ({
             requests: [newRequest, ...state.requests],
             documents: [...newDocuments, ...state.documents],
@@ -661,73 +741,12 @@ export const useRequestStore = create<RequestState>()(
             isSubmitting: false,
           }));
 
-          // Sincronización directa con Supabase
-          const client = getSupabaseClient();
-          if (client) {
-            const supabaseGroupId = (payload.research_group_id && payload.research_group_id.length > 20)
-              ? payload.research_group_id
-              : null;
-            const supabaseApplicantId = (payload.applicant_id && payload.applicant_id.length > 20)
-              ? payload.applicant_id
-              : null;
-
-            if (supabaseApplicantId) {
-              client
-                .from('applications')
-                .insert({
-                  id: newRequest.id,
-                  filing_number: newRequest.filing_number,
-                  application_type_id: newRequest.request_type_id,
-                  applicant_id: supabaseApplicantId,
-                  title: newRequest.title,
-                  abstract: newRequest.abstract,
-                  research_group_id: supabaseGroupId,
-                  budget_requested: newRequest.budget_requested,
-                  current_status: newRequest.current_status,
-                  is_tutor_endorsed: newRequest.is_tutor_endorsed,
-                  requires_committee: newRequest.requires_committee,
-                })
-                .then(({ error }) => {
-                  if (error) console.warn('Supabase application insert error:', error.message);
-                });
-
-              if (newDocuments.length > 0) {
-                const docsPayload = newDocuments.map((d) => ({
-                  id: d.id,
-                  application_id: reqId,
-                  requirement_id: d.requirement_id,
-                  file_name: d.file_name,
-                  file_path: d.file_path,
-                  file_size_bytes: d.file_size_bytes,
-                  file_hash_sha256: d.file_hash_sha256,
-                  mime_type: d.mime_type,
-                  validation_status: d.validation_status,
-                }));
-                client
-                  .from('application_documents')
-                  .insert(docsPayload)
-                  .then(({ error }) => {
-                    if (error) console.warn('Supabase application_documents insert error:', error.message);
-                  });
-              }
-
-              client
-                .from('audit_history')
-                .insert({
-                  id: newAuditEvent.id,
-                  application_id: reqId,
-                  actor_id: supabaseApplicantId,
-                  action: newAuditEvent.action,
-                  new_status: newAuditEvent.new_status,
-                  details: newAuditEvent.details,
-                })
-                .then(({ error }) => {
-                  if (error) console.warn('Supabase audit_history insert error:', error.message);
-                });
-            }
-          }
-
-          return { success: true, request: newRequest, application: newRequest };
+          return {
+            success: true,
+            request: newRequest,
+            application: newRequest,
+            warning: persistenceWarning,
+          };
         } catch (err: unknown) {
           set({ isSubmitting: false });
           const msg = err instanceof Error ? err.message : 'Error interno al radicar solicitud.';
@@ -772,7 +791,7 @@ export const useRequestStore = create<RequestState>()(
           };
 
           const newAudit: AuditHistory = {
-            id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+            id: createUuid(),
             request_id: requestId,
             application_id: requestId,
             actor_id: actorId,
@@ -881,7 +900,7 @@ export const useRequestStore = create<RequestState>()(
         };
 
         const auditItem: AuditHistory = {
-          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          id: createUuid(),
           request_id: requestId,
           application_id: requestId,
           actor_id: validatedBy,
@@ -961,6 +980,10 @@ export const useRequestStore = create<RequestState>()(
           targetStatus = 'EN_REVISION';
           transitionReason =
             '100% de los requisitos obligatorios verificados conformes a la normativa. Expediente habilitado para evaluación técnica.';
+        }
+
+        if (req.current_status === targetStatus) {
+          return { success: true, request: req, application: req };
         }
 
         return get().transitionRequestStatus(
@@ -1045,7 +1068,7 @@ export const useRequestStore = create<RequestState>()(
         };
 
         const auditItem: AuditHistory = {
-          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          id: createUuid(),
           request_id: requestId,
           application_id: requestId,
           actor_id: actorId,
@@ -1179,7 +1202,7 @@ export const useRequestStore = create<RequestState>()(
         };
 
         const auditItem: AuditHistory = {
-          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          id: createUuid(),
           request_id: requestId,
           application_id: requestId,
           actor_id: assignedBy,
@@ -1243,7 +1266,7 @@ export const useRequestStore = create<RequestState>()(
         };
 
         const auditItem: AuditHistory = {
-          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          id: createUuid(),
           request_id: requestId,
           application_id: requestId,
           actor_id: authorId,
@@ -1288,7 +1311,7 @@ export const useRequestStore = create<RequestState>()(
         };
 
         const auditItem: AuditHistory = {
-          id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          id: createUuid(),
           request_id: obs.request_id || obs.application_id || '',
           application_id: obs.request_id || obs.application_id || '',
           actor_id: actorId,
@@ -1581,6 +1604,12 @@ export const useRequestStore = create<RequestState>()(
             client.from('observations').select('*'),
           ]);
 
+          const queryError = appsRes.error ?? docsRes.error ?? audRes.error ?? asgRes.error ?? obsRes.error;
+          if (queryError) {
+            set({ isLoading: false });
+            return { success: false, error: queryError.message };
+          }
+
           if (appsRes.data && appsRes.data.length > 0) {
             const mappedApps: Request[] = appsRes.data.map((app: any) => ({
               id: app.id,
@@ -1666,7 +1695,15 @@ export const useRequestStore = create<RequestState>()(
             return { success: true, count: mappedApps.length };
           }
 
-          set({ isInitialized: true, isLoading: false });
+          set({
+            requests: [],
+            documents: [],
+            auditHistory: [],
+            assignments: [],
+            observations: [],
+            isInitialized: true,
+            isLoading: false,
+          });
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Error al sincronizar solicitudes desde Supabase';
@@ -1706,6 +1743,7 @@ export const useRequestStore = create<RequestState>()(
         }
         return persistedState;
       },
+      partialize: () => ({}),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

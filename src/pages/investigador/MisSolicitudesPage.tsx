@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -14,28 +14,44 @@ import { useSessionStore } from '../../stores/session.store.ts';
 import { useApplicationStore } from '../../features/applications/applicationStore.ts';
 import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
-import { ApplicationDbStatus } from '../../types/database.ts';
+import { getSupabaseClient } from '../../lib/supabase.ts';
 
 export function MisSolicitudesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
-  const { applications, computeQueFalta } = useApplicationStore();
+  const { requests, computeQueFalta, loadFromSupabase, isLoading } = useApplicationStore();
   const { types } = useCatalogStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState<string>('TODOS');
   const [filterTipo, setFilterTipo] = useState<string>('TODOS');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const currentUserId = user?.id || 'usr-001';
+  useEffect(() => {
+    let isMounted = true;
+    if (!getSupabaseClient()) return;
+
+    void loadFromSupabase().then((result) => {
+      if (isMounted && !result.success) {
+        setLoadError(result.error || 'No se pudieron cargar las solicitudes.');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loadFromSupabase]);
+
+  const currentUserId = user?.id || '';
   const isAdminOrSecretario = user?.activeRole === 'admin' || user?.activeRole === 'secretario';
 
   // Investigador visualiza exclusivamente sus trámites radicados (RF-11)
   const userApplications = useMemo(() => {
     if (isAdminOrSecretario) {
-      return applications;
+      return requests;
     }
-    return applications.filter((app) => app.applicant_id === currentUserId);
-  }, [applications, currentUserId, isAdminOrSecretario]);
+    return requests.filter((app) => app.applicant_id === currentUserId);
+  }, [requests, currentUserId, isAdminOrSecretario]);
 
   // Aplicar filtros en vivo por texto, estado y tipo
   const filteredApplications = useMemo(() => {
@@ -136,7 +152,14 @@ export function MisSolicitudesPage() {
 
       {/* 3. Tabla de Solicitudes con radicado, tipo, título, estado, actualización y Qué Falta */}
       <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-hidden shadow-xs">
-        {filteredApplications.length === 0 ? (
+        {loadError && (
+          <div role="alert" className="m-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            No fue posible actualizar las solicitudes desde Supabase: {loadError}
+          </div>
+        )}
+        {isLoading ? (
+          <div className="p-12 text-center text-xs text-stone-500">Cargando sus solicitudes...</div>
+        ) : filteredApplications.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <FolderOpen size={40} className="mx-auto text-stone-300" />
             <h3 className="font-bold text-sm text-[#14281D]">No se encontraron solicitudes</h3>

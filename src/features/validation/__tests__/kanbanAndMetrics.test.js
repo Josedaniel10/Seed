@@ -22,7 +22,7 @@ const store = useApplicationStore.getState();
 // 1. Verificación de Franja de Métricas Unificada (RF-35, T3.13)
 // Cada contador individual debe coincidir exactamente con el conteo real en la base de datos
 const counts = store.getStatusCounts();
-const applications = store.applications;
+const applications = store.requests;
 
 let totalCounted = 0;
 for (const status in counts) {

@@ -33,7 +33,7 @@ export function DetalleSolicitudPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
-    applications,
+    requests,
     documents,
     auditHistory,
     subsanarDocument,
@@ -54,8 +54,8 @@ export function DetalleSolicitudPage() {
 
   // Buscar la solicitud en el store
   const application = useMemo(() => {
-    return applications.find((a) => a.id === id || a.filing_number === id);
-  }, [applications, id]);
+    return requests.find((a) => a.id === id || a.filing_number === id);
+  }, [requests, id]);
 
   const applicant = useMemo(() => {
     return users.find((p) => p.id === application?.applicant_id);

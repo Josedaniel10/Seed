@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useGroupsStore } from './groupsStore.ts';
+import React, { useMemo, useState } from 'react';
+import { isGroupLeaderRole, useGroupsStore } from './groupsStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 import { ResearchGroup } from '../../types/database.ts';
 import {
@@ -32,12 +32,22 @@ export const ResearchGroupsManagement: React.FC = () => {
     syncWithSupabase,
   } = useGroupsStore();
 
-  const users = useUserStore((s) => s.users);
+  const {
+    users,
+    loadFromSupabase: loadUsers,
+    error: usersError,
+    isLoading: isLoadingUsers,
+  } = useUserStore();
+  const leaders = useMemo(
+    () => users.filter((user) => user.is_active && (user.roles ?? [user.role]).some(isGroupLeaderRole)),
+    [users]
+  );
 
   // Carga automática directa desde Supabase al montar la vista
   React.useEffect(() => {
-    loadFromSupabase();
-  }, [loadFromSupabase]);
+    void loadFromSupabase();
+    void loadUsers();
+  }, [loadFromSupabase, loadUsers]);
 
   const [notification, setNotification] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -55,13 +65,15 @@ export const ResearchGroupsManagement: React.FC = () => {
     setTimeout(() => setNotification(null), 3500);
   };
 
-  const handleLeaderChange = (groupId: string, newLeaderId: string, groupName: string) => {
-    const leaderUser = users.find((u) => u.id === newLeaderId);
-    const result = assignGroupLeader(groupId, newLeaderId);
+  const handleLeaderChange = async (groupId: string, newLeaderId: string, groupName: string) => {
+    const leaderUser = leaders.find((u) => u.id === newLeaderId);
+    const result = await assignGroupLeader(groupId, newLeaderId);
     if (result.success) {
       showFeedback(
         `Líder de "${groupName}" asignado verificablemente a ${leaderUser?.full_name || 'nuevo líder'}.`
       );
+    } else {
+      showFeedback(result.error || 'No se pudo asignar el líder.');
     }
   };
 
@@ -81,7 +93,7 @@ export const ResearchGroupsManagement: React.FC = () => {
     setIsSyncing(false);
   };
 
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -90,7 +102,7 @@ export const ResearchGroupsManagement: React.FC = () => {
       return;
     }
 
-    const res = createGroup({
+    const res = await createGroup({
       code: newCode,
       name: newName,
       faculty: newFaculty,
@@ -102,7 +114,7 @@ export const ResearchGroupsManagement: React.FC = () => {
       return;
     }
 
-    const leaderName = users.find((u) => u.id === newLeaderId)?.full_name || 'Líder';
+    const leaderName = leaders.find((u) => u.id === newLeaderId)?.full_name || 'Líder';
     showFeedback(`Grupo "${newName}" (${newCode.toUpperCase()}) creado y asignado a ${leaderName}.`);
     setNewCode('');
     setNewName('');
@@ -169,6 +181,11 @@ export const ResearchGroupsManagement: React.FC = () => {
         <div className="bg-[#A3E635]/25 border border-[#84CC16] rounded-xl p-3 text-xs text-[#14281D] font-medium flex items-center gap-2 shadow-2xs animate-fade-in">
           <CheckCircle2 size={16} className="text-[#14281D] shrink-0" />
           <span>{notification}</span>
+        </div>
+      )}
+      {usersError && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+          No fue posible cargar los usuarios y sus roles desde Supabase: {usersError}
         </div>
       )}
 
@@ -259,14 +276,15 @@ export const ResearchGroupsManagement: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <UserCheck size={14} className="text-[#84CC16] shrink-0" />
                         <select
-                          value={group.leader_id || ''}
+                          value={leaders.some((user) => user.id === group.leader_id) ? group.leader_id || '' : ''}
                           onChange={(e) => handleLeaderChange(group.id, e.target.value, group.name)}
+                          disabled={isLoadingUsers || leaders.length === 0}
                           className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-[#E5E3DC] bg-white text-stone-800 focus:outline-none focus:ring-2 focus:ring-[#14281D] cursor-pointer"
                         >
                           <option value="" disabled>
                             Seleccione un líder...
                           </option>
-                          {users.map((u) => (
+                          {leaders.map((u) => (
                             <option key={u.id} value={u.id}>
                               {u.full_name} ({u.role.replace('_', ' ')})
                             </option>
@@ -275,7 +293,9 @@ export const ResearchGroupsManagement: React.FC = () => {
                       </div>
                       {currentLeader && (
                         <div className="text-[10px] text-stone-500 font-mono mt-0.5 pl-5">
-                          ID: {group.leader_id} · {currentLeader.email}
+                          {leaders.some((user) => user.id === currentLeader.id)
+                            ? `ID: ${group.leader_id} · ${currentLeader.email}`
+                            : `${currentLeader.full_name} no tiene un rol de líder activo; reasigne el grupo.`}
                         </div>
                       )}
                     </td>
@@ -375,17 +395,28 @@ export const ResearchGroupsManagement: React.FC = () => {
                   required
                   value={newLeaderId}
                   onChange={(e) => setNewLeaderId(e.target.value)}
+                  disabled={isLoadingUsers || leaders.length === 0}
                   className="w-full px-3 py-2 rounded-lg border border-[#E5E3DC] focus:outline-none focus:ring-2 focus:ring-[#14281D] bg-white font-medium"
                 >
                   <option value="" disabled>
                     Seleccione al investigador líder...
                   </option>
-                  {users.map((u) => (
+                  {leaders.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.full_name} ({u.role.replace('_', ' ')})
                     </option>
                   ))}
                 </select>
+                {isLoadingUsers && (
+                  <p className="text-[10px] text-stone-500 mt-1">
+                    Cargando usuarios y roles desde Supabase...
+                  </p>
+                )}
+                {!isLoadingUsers && leaders.length === 0 && (
+                  <p className="text-[10px] text-rose-700 mt-1">
+                    No hay usuarios activos con rol de líder. Asigne ese rol desde la gestión de usuarios antes de crear el grupo.
+                  </p>
+                )}
                 <p className="text-[10px] text-stone-500 mt-1">
                   El docente líder tendrá acceso y supervisión sobre las propuestas radicadas por los miembros del grupo.
                 </p>

@@ -24,6 +24,7 @@ export interface Profile {
   email: string;
   full_name: string;
   role: UserRole;
+  roles?: UserRole[];
   academic_program: string | null;
   academic_link: string | null; // Docente planta, ocasional, estudiante, monitor
   research_group_id: string | null;

@@ -66,7 +66,7 @@ interface ResearchGroupsState {
     code: string;
     faculty: string;
     leader_id: string;
-  }) => { success: boolean; group?: ResearchGroup; error?: string };
+  }) => Promise<{ success: boolean; group?: ResearchGroup; error?: string }>;
   updateGroup: (
     groupId: string,
     data: Partial<Omit<ResearchGroup, 'id' | 'created_at'>>
@@ -74,10 +74,25 @@ interface ResearchGroupsState {
   assignGroupLeader: (
     groupId: string,
     leaderId: string
-  ) => { success: boolean; group?: ResearchGroup; error?: string };
+  ) => Promise<{ success: boolean; group?: ResearchGroup; error?: string }>;
   toggleGroupActive: (groupId: string) => { success: boolean; is_active?: boolean };
   loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
   syncWithSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
+}
+
+export function isGroupLeaderRole(role: UserRole): boolean {
+  return role === 'leader' || role === 'lider_grupo' || role === 'lider';
+}
+
+function isAssignableLeader(user: Profile | undefined): user is Profile {
+  return Boolean(
+    user?.is_active &&
+      (user.roles ?? [user.role]).some(isGroupLeaderRole)
+  );
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 export const useGroupsStore = create<ResearchGroupsState>()(
@@ -93,7 +108,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       setSelectedFacultyFilter: (selectedFacultyFilter) => set({ selectedFacultyFilter }),
 
-      createGroup: (data) => {
+      createGroup: async (data) => {
         const cleanCode = data.code.trim().toUpperCase();
         const cleanName = data.name.trim();
 
@@ -103,6 +118,14 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         );
         if (existing) {
           return { success: false, error: `Ya existe un grupo con el código ${cleanCode}.` };
+        }
+
+        const selectedLeader = useUserStore.getState().users.find((user) => user.id === data.leader_id);
+        if (!isAssignableLeader(selectedLeader)) {
+          return {
+            success: false,
+            error: 'Solo se puede asignar un usuario activo con rol de líder de investigación.',
+          };
         }
 
         const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -119,36 +142,26 @@ export const useGroupsStore = create<ResearchGroupsState>()(
           created_at: new Date().toISOString(),
         };
 
-        set((state) => ({ groups: [newGroup, ...state.groups] }));
-
-        // Asignar rol lider_grupo al líder seleccionado si no es admin
-        if (data.leader_id) {
-          const userStore = useUserStore.getState();
-          const targetUser = userStore.users.find((u) => u.id === data.leader_id);
-          if (targetUser && targetUser.role !== 'admin') {
-            userStore.updateUserRole(data.leader_id, 'lider_grupo');
-          }
-        }
-
-        // Sincronización directa con Supabase
         const client = getSupabaseClient();
         if (client) {
-          const supabaseLeaderId = (data.leader_id && data.leader_id.length > 20) ? data.leader_id : null;
-          client
-            .from('research_groups')
-            .insert([{
+          if (!isUuid(newGroup.id) || !isUuid(data.leader_id)) {
+            return { success: false, error: 'El grupo y el líder deben tener identificadores válidos de Supabase.' };
+          }
+
+          const { error } = await client.from('research_groups').insert({
               id: newGroup.id,
               name: newGroup.name,
               code: newGroup.code,
               faculty: newGroup.faculty,
-              leader_id: supabaseLeaderId,
+              leader_id: data.leader_id,
               is_active: newGroup.is_active,
-            }])
-            .then(({ error }) => {
-              if (error) console.warn('Supabase research_groups insert error:', error.message);
             });
+          if (error) {
+            return { success: false, error: `No se pudo guardar el grupo: ${error.message}` };
+          }
         }
 
+        set((state) => ({ groups: [newGroup, ...state.groups] }));
         return { success: true, group: newGroup };
       },
 
@@ -179,42 +192,40 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         return { success: Boolean(updated), group: updated };
       },
 
-      assignGroupLeader: (groupId, leaderId) => {
-        let updatedGroup: ResearchGroup | undefined;
+      assignGroupLeader: async (groupId, leaderId) => {
+        const group = get().groups.find((item) => item.id === groupId);
+        if (!group) {
+          return { success: false, error: 'No se encontró el grupo de investigación.' };
+        }
 
-        set((state) => {
-          const nextGroups = state.groups.map((g) => {
-            if (g.id === groupId) {
-              updatedGroup = { ...g, leader_id: leaderId };
-              return updatedGroup;
-            }
-            return g;
-          });
-          return { groups: nextGroups };
-        });
+        const selectedLeader = useUserStore.getState().users.find((user) => user.id === leaderId);
+        if (!isAssignableLeader(selectedLeader)) {
+          return {
+            success: false,
+            error: 'Solo se puede asignar un usuario activo con rol de líder de investigación.',
+          };
+        }
 
-        // Actualizar rol del usuario seleccionado a lider_grupo y vincularlo
-        if (leaderId) {
-          const userStore = useUserStore.getState();
-          const targetUser = userStore.users.find((u) => u.id === leaderId);
-          if (targetUser && targetUser.role !== 'admin') {
-            userStore.updateUserRole(leaderId, 'lider_grupo');
+        const updatedGroup = { ...group, leader_id: leaderId };
+        const client = getSupabaseClient();
+        if (client) {
+          if (!isUuid(groupId) || !isUuid(leaderId)) {
+            return { success: false, error: 'El grupo y el líder deben tener identificadores válidos de Supabase.' };
+          }
+
+          const { error } = await client
+            .from('research_groups')
+            .update({ leader_id: leaderId })
+            .eq('id', groupId);
+          if (error) {
+            return { success: false, error: `No se pudo guardar el líder: ${error.message}` };
           }
         }
 
-        const client = getSupabaseClient();
-        if (client && updatedGroup) {
-          const supabaseLeaderId = (leaderId && leaderId.length > 20) ? leaderId : null;
-          client
-            .from('research_groups')
-            .update({ leader_id: supabaseLeaderId })
-            .eq('id', groupId)
-            .then(({ error }) => {
-              if (error) console.warn('Supabase research_groups leader update error:', error.message);
-            });
-        }
-
-        return { success: Boolean(updatedGroup), group: updatedGroup };
+        set((state) => ({
+          groups: state.groups.map((item) => item.id === groupId ? updatedGroup : item),
+        }));
+        return { success: true, group: updatedGroup };
       },
 
       toggleGroupActive: (groupId) => {
@@ -273,7 +284,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
             return { success: true, count: data.length };
           }
 
-          set({ isInitialized: true, isLoading: false, error: null });
+          set({ groups: [], isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Error al sincronizar grupos desde Supabase';
@@ -300,6 +311,10 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         }
         return persistedState;
       },
+      partialize: (state) => ({
+        searchQuery: state.searchQuery,
+        selectedFacultyFilter: state.selectedFacultyFilter,
+      }),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

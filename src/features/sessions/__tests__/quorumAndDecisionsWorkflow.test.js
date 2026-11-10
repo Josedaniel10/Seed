@@ -36,7 +36,7 @@ const sessionRes = await sessionsStore.createSession(
 const testSessionId = sessionRes.session.id;
 
 // Obtener o preparar solicitud en LISTA_COMITE
-const app = appStore.applications.find((a) => a.current_status === 'LISTA_COMITE');
+const app = appStore.requests.find((a) => a.current_status === 'LISTA_COMITE');
 if (!app) {
   console.error('ERROR: No hay solicitud en LISTA_COMITE.');
   process.exit(1);

@@ -17,7 +17,7 @@ import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { useCommitteeSessionsStore } from '../../features/sessions/committeeSessionsStore.ts';
 
 export function ReportesPage() {
-  const { applications } = useApplicationStore();
+  const { requests } = useApplicationStore();
   const { types } = useCatalogStore();
   const { sessions, decisions } = useCommitteeSessionsStore();
 
@@ -25,13 +25,13 @@ export function ReportesPage() {
   const [tipoReporte, setTipoReporte] = useState('solicitudes_por_tipo');
 
   // Cálculos analíticos basados en la base de datos real (RF-36)
-  const totalApplications = applications.length;
-  const approvedCount = applications.filter((a) => a.current_status === 'APROBADA').length;
-  const approvedWithAdjustmentsCount = applications.filter(
+  const totalApplications = requests.length;
+  const approvedCount = requests.filter((a) => a.current_status === 'APROBADA').length;
+  const approvedWithAdjustmentsCount = requests.filter(
     (a) => a.current_status === 'APROBADA_CON_AJUSTES'
   ).length;
-  const rejectedCount = applications.filter((a) => a.current_status === 'RECHAZADA').length;
-  const inProgressCount = applications.filter(
+  const rejectedCount = requests.filter((a) => a.current_status === 'RECHAZADA').length;
+  const inProgressCount = requests.filter(
     (a) =>
       a.current_status === 'RADICADA' ||
       a.current_status === 'PENDIENTE_DOCUMENTOS' ||
@@ -48,7 +48,7 @@ export function ReportesPage() {
   const breakdownByType = types
     .filter((t) => t.is_active)
     .map((t) => {
-      const appsOfType = applications.filter((a) => a.application_type_id === t.id);
+      const appsOfType = requests.filter((a) => a.application_type_id === t.id);
       const approved = appsOfType.filter(
         (a) => a.current_status === 'APROBADA' || a.current_status === 'APROBADA_CON_AJUSTES'
       ).length;

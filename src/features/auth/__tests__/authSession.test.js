@@ -44,19 +44,19 @@ if (!stateAfterLogin.isAuthenticated || !stateAfterLogin.profile || stateAfterLo
 }
 console.log('2. Inicio de sesión exitoso con rol:', stateAfterLogin.profile.role, 'y usuario:', stateAfterLogin.profile.full_name);
 
-// 3. Simular recarga de página: serializar a storage y reconstruir
+// 3. La identidad de la sesión no se persiste como datos locales.
 await new Promise((r) => setTimeout(r, 20));
 const serialized = globalThis.localStorage.getItem('seed_auth_session');
 if (!serialized) {
-  console.error('ERROR: La sesión no fue guardada en el almacenamiento local persistente');
+  console.error('ERROR: No se encontró el estado persistido del store');
   process.exit(1);
 }
 const parsed = JSON.parse(serialized);
-if (!parsed.state.isAuthenticated || parsed.state.profile.role !== 'secretario') {
-  console.error('ERROR: La sesión persistida no contiene los datos correctos');
+if (parsed.state.isAuthenticated || parsed.state.profile || parsed.state.token) {
+  console.error('ERROR: Se persistieron credenciales o datos de perfil localmente');
   process.exit(1);
 }
-console.log('3. Sesión verificada en almacenamiento persistente tras simulación de recarga.');
+console.log('3. Datos de sesión no persistidos en localStorage.');
 
 // 4. Cerrar sesión
 await useAuthStore.getState().logout();
@@ -108,4 +108,3 @@ if (!stateNewUser.isAuthenticated || stateNewUser.profile?.email !== 'apena@univ
 console.log('6. Login con usuario recién registrado: ¡ÉXITO TOTAL!', stateNewUser.profile.full_name);
 
 console.log('--- ¡Todas las pruebas de sesión y persistencia T1.2 pasaron exitosamente! ---');
-

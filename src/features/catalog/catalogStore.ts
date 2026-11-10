@@ -663,9 +663,6 @@ interface CatalogState {
 
   removeRequirement: (id: string) => { success: boolean; error?: string };
 
-  // Precarga y restauración del estándar inicial (T1.8 / RF-37)
-  resetToStandardCatalog: () => Promise<void> | void;
-
   // Carga y Sincronización directa con Supabase
   loadFromSupabase: () => Promise<{
     success: boolean;
@@ -993,16 +990,6 @@ export const useCatalogStore = create<CatalogState>()(
         return get().loadFromSupabase();
       },
 
-      resetToStandardCatalog: async () => {
-        const syncRes = await get().loadFromSupabase();
-        if (!syncRes.success || (syncRes.typesCount ?? 0) === 0) {
-          set({
-            types: INITIAL_APPLICATION_TYPES,
-            requirements: INITIAL_REQUIREMENTS,
-            selectedTypeId: 'apt-001',
-          });
-        }
-      },
     }),
     {
       name: 'seed_catalog_store',
@@ -1020,6 +1007,10 @@ export const useCatalogStore = create<CatalogState>()(
         }
         return persistedState;
       },
+      partialize: (state) => ({
+        searchQuery: state.searchQuery,
+        filterStatus: state.filterStatus,
+      }),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

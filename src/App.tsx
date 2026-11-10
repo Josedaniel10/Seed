@@ -13,20 +13,15 @@ export default function App() {
   const setupAuthListener = useSessionStore((s) => s.setupAuthListener);
 
   useEffect(() => {
-    // 1. Inicializar sesión persistente
-    initializeSession();
-
-    // 2. Precargar todo en vivo desde Supabase
-    useCatalogStore.getState().loadFromSupabase();
-    useGroupsStore.getState().loadFromSupabase();
-    useUserStore.getState().loadFromSupabase();
-    useRequestStore.getState().loadFromSupabase();
-    useCommitteeSessionsStore.getState().loadFromSupabase();
-
-    // 3. Suscribirse a cambios en tiempo real de Supabase Auth
-    // Si el usuario hace clic en el correo en otra pestaña o en su celular,
-    // la sesión se activa instantáneamente y la app se actualiza
+    // Suscribirse primero para no perder eventos mientras Supabase restaura la sesión.
     const unsubscribe = setupAuthListener();
+    void initializeSession();
+
+    void useCatalogStore.getState().loadFromSupabase();
+    void useGroupsStore.getState().loadFromSupabase();
+    void useUserStore.getState().loadFromSupabase();
+    void useRequestStore.getState().loadFromSupabase();
+    void useCommitteeSessionsStore.getState().loadFromSupabase();
     return () => {
       unsubscribe();
     };

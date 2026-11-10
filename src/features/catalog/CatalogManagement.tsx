@@ -5,7 +5,6 @@ import {
   Check,
   AlertCircle,
   Clock,
-  Sparkles,
   RefreshCw,
   Trash2,
   Edit2,
@@ -41,7 +40,6 @@ export function CatalogManagement() {
     addRequirement,
     updateRequirement,
     removeRequirement,
-    resetToStandardCatalog,
     loadFromSupabase,
     syncWithSupabase,
   } = useCatalogStore();
@@ -266,22 +264,6 @@ export function CatalogManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => {
-              resetToStandardCatalog();
-              setSyncFeedback({
-                success: true,
-                message: 'Catálogo inicial estándar precargado (12 tipos y requisitos normativos restaurados).',
-              });
-              setTimeout(() => setSyncFeedback(null), 5000);
-            }}
-            className="px-3 py-1.5 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Restablecer el catálogo precargado estándar de 12 tipos universitarios (T1.8 / RF-37)"
-          >
-            <Sparkles size={13} className="text-[#84CC16]" />
-            <span>Restablecer Catálogo Estándar</span>
-          </button>
-
           <button
             onClick={handleSyncSupabase}
             disabled={isSyncing}

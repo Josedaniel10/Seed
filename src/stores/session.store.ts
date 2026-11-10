@@ -120,7 +120,7 @@ export const useSessionStore = create<SessionState>()(
     (set, get) => ({
       user: null, // Arranca sin sesión (T7.4)
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
       unreadNotificationsCount: 0,
 
       /**
@@ -131,61 +131,18 @@ export const useSessionStore = create<SessionState>()(
         const client = getSupabaseClient();
         if (!client) return () => {};
 
-        const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
-            if (session?.user) {
-              const user = session.user;
-              let roles: AppRole[] = ['researcher'];
-              let fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investigador';
-              let academicProgram = user.user_metadata?.academic_program;
-              let academicLink = user.user_metadata?.academic_link;
-              let researchGroupId = user.user_metadata?.research_group_id;
-              let resolvedId = user.id;
-
-              try {
-                const [profileRes, rolesRes] = await Promise.all([
-                  client.from('profiles').select('*').or(`id.eq.${user.id},email.eq.${user.email}`).maybeSingle(),
-                  client.from('user_roles').select('role').or(`user_id.eq.${user.id}`).eq('is_active', true),
-                ]);
-
-                if (profileRes.data) {
-                  resolvedId = profileRes.data.id || resolvedId;
-                  fullName = profileRes.data.full_name || fullName;
-                  academicProgram = profileRes.data.academic_program || academicProgram;
-                  academicLink = profileRes.data.academic_link || academicLink;
-                  researchGroupId = profileRes.data.research_group_id || researchGroupId;
-                  if (profileRes.data.role) {
-                    roles = [normalizeRole(profileRes.data.role) as AppRole];
-                  }
-                }
-
-                if (rolesRes.data && rolesRes.data.length > 0) {
-                  roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
-                }
-              } catch {
-                // Silencioso
-              }
-
-              const current = get().user;
-              const activeRole = current?.activeRole && roles.includes(current.activeRole)
-                ? current.activeRole
-                : roles[0];
-
-              set({
-                user: {
-                  id: resolvedId,
-                  email: user.email || '',
-                  fullName,
-                  academicProgram,
-                  academicLink,
-                  researchGroupId,
-                  roles,
-                  activeRole,
-                },
-                isAuthenticated: true,
-                isLoading: false,
-              });
-            }
+        const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+          if (event === 'INITIAL_SESSION' && !session?.user) {
+            set({ user: null, isAuthenticated: false, isLoading: false });
+          } else if (
+            event === 'INITIAL_SESSION' ||
+            event === 'SIGNED_IN' ||
+            event === 'USER_UPDATED'
+          ) {
+            set({ isLoading: true });
+            queueMicrotask(() => {
+              void get().initializeSession();
+            });
           } else if (event === 'SIGNED_OUT') {
             set({
               user: null,
@@ -205,10 +162,16 @@ export const useSessionStore = create<SessionState>()(
        */
       initializeSession: async () => {
         const client = getSupabaseClient();
-        if (!client) return;
+        if (!client) {
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return;
+        }
 
+        set({ isLoading: true });
         try {
-          const { data: { session } } = await client.auth.getSession();
+          const { data: { session }, error } = await client.auth.getSession();
+          if (error) throw error;
+
           if (session?.user) {
             const user = session.user;
             let roles: AppRole[] = ['researcher'];
@@ -216,7 +179,6 @@ export const useSessionStore = create<SessionState>()(
             let academicProgram = user.user_metadata?.academic_program;
             let academicLink = user.user_metadata?.academic_link;
             let researchGroupId = user.user_metadata?.research_group_id;
-            let resolvedId = user.id;
 
             try {
               const [profileRes, rolesRes] = await Promise.all([
@@ -225,7 +187,6 @@ export const useSessionStore = create<SessionState>()(
               ]);
 
               if (profileRes.data) {
-                resolvedId = profileRes.data.id || resolvedId;
                 fullName = profileRes.data.full_name || fullName;
                 academicProgram = profileRes.data.academic_program || academicProgram;
                 academicLink = profileRes.data.academic_link || academicLink;
@@ -236,7 +197,10 @@ export const useSessionStore = create<SessionState>()(
               }
 
               if (rolesRes.data && rolesRes.data.length > 0) {
-                roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+                roles = Array.from(new Set([
+                  ...roles,
+                  ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
+                ]));
               }
             } catch {
               // Si falla consulta en Supabase, mantener roles base
@@ -249,7 +213,7 @@ export const useSessionStore = create<SessionState>()(
 
             set({
               user: {
-                id: resolvedId,
+                id: user.id,
                 email: user.email || '',
                 fullName,
                 academicProgram,
@@ -259,10 +223,14 @@ export const useSessionStore = create<SessionState>()(
                 activeRole,
               },
               isAuthenticated: true,
+              isLoading: false,
             });
+          } else {
+            set({ user: null, isAuthenticated: false, isLoading: false });
           }
         } catch (err) {
           console.error('Error al inicializar sesión:', err);
+          set({ user: null, isAuthenticated: false, isLoading: false });
         }
       },
 
@@ -320,7 +288,10 @@ export const useSessionStore = create<SessionState>()(
               }
 
               if (rolesRes.data && rolesRes.data.length > 0) {
-                roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+                roles = Array.from(new Set([
+                  ...roles,
+                  ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
+                ]));
               }
             } catch {
               // Silencioso
@@ -440,68 +411,14 @@ export const useSessionStore = create<SessionState>()(
                 };
               }
 
-              // Caso 2: Si es una cuenta de demostración institucional o admin principal (admin@seed.com)
+              // Las cuentas de demostración no son usuarios autenticados de Supabase.
               const demoMatch = DEMO_ACCOUNTS_BY_EMAIL[cleanEmail];
               if (demoMatch) {
-                // Si es el admin principal y falló en Supabase (ej. aún no existe en Auth de Supabase),
-                // intentamos crearlo de forma transparente en Supabase Auth y base de datos
-                if (cleanEmail === 'admin@seed.com') {
-                  try {
-                    const { data: createdAuth } = await client.auth.signUp({
-                      email: 'admin@seed.com',
-                      password: password || 'admin123',
-                      options: {
-                        data: {
-                          full_name: 'Administrador Principal Seed',
-                          role: 'admin',
-                          academic_program: 'Dirección de Investigaciones y Tecnología',
-                          academic_link: 'Personal administrativo',
-                        },
-                      },
-                    });
-
-                    if (createdAuth?.user) {
-                      await client.from('profiles').upsert([
-                        {
-                          id: createdAuth.user.id,
-                          email: 'admin@seed.com',
-                          full_name: 'Administrador Principal Seed',
-                          role: 'admin',
-                          academic_program: 'Dirección de Investigaciones y Tecnología',
-                          academic_link: 'Personal administrativo',
-                          is_active: true,
-                        },
-                      ]);
-                      await client.from('user_roles').upsert([
-                        {
-                          user_id: createdAuth.user.id,
-                          role: 'admin',
-                          is_active: true,
-                        },
-                      ]);
-                    }
-                  } catch (e) {
-                    console.warn('Auto-registro de admin@seed.com en Supabase Auth:', e);
-                  }
-                }
-
-                const userSession: UserSession = {
-                  id: cleanEmail === 'admin@seed.com' ? '00000000-0000-0000-0000-000000000001' : `usr-${demoMatch.role.slice(0, 3)}-01`,
-                  email: demoMatch.email,
-                  fullName: demoMatch.fullName,
-                  academicProgram: demoMatch.program,
-                  academicLink: demoMatch.link,
-                  researchGroupId: 'grp-ti-02',
-                  roles: ['admin', 'researcher'],
-                  activeRole: 'admin',
+                set({ isLoading: false });
+                return {
+                  success: false,
+                  error: `La cuenta de demostración (${demoMatch.email}) no existe necesariamente en Supabase Auth. Registre esa cuenta en Supabase y use su contraseña real, o quite la configuración de Supabase para usar el modo demostración.`,
                 };
-
-                set({
-                  user: userSession,
-                  isAuthenticated: true,
-                  isLoading: false,
-                });
-                return { success: true };
               }
 
               // Caso 3: Credenciales inválidas estándar
@@ -519,7 +436,6 @@ export const useSessionStore = create<SessionState>()(
               let academicProgram = authUser.user_metadata?.academic_program;
               let academicLink = authUser.user_metadata?.academic_link;
               let researchGroupId = authUser.user_metadata?.research_group_id;
-              let resolvedId = authUser.id;
 
               try {
                 const [profileRes, rolesRes] = await Promise.all([
@@ -528,7 +444,6 @@ export const useSessionStore = create<SessionState>()(
                 ]);
 
                 if (profileRes.data) {
-                  resolvedId = profileRes.data.id || resolvedId;
                   fullName = profileRes.data.full_name || fullName;
                   academicProgram = profileRes.data.academic_program || academicProgram;
                   academicLink = profileRes.data.academic_link || academicLink;
@@ -539,7 +454,10 @@ export const useSessionStore = create<SessionState>()(
                 }
 
                 if (rolesRes.data && rolesRes.data.length > 0) {
-                  roles = Array.from(new Set(rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole)));
+                  roles = Array.from(new Set([
+                    ...roles,
+                    ...rolesRes.data.map((r: { role: string }) => normalizeRole(r.role) as AppRole),
+                  ]));
                 }
               } catch {
                 // Fallback a metadatos de auth
@@ -547,7 +465,7 @@ export const useSessionStore = create<SessionState>()(
 
               const activeRole = roles[0] || 'researcher';
               const userSession: UserSession = {
-                id: resolvedId,
+                id: authUser.id,
                 email: authUser.email || cleanEmail,
                 fullName,
                 academicProgram,
@@ -567,6 +485,13 @@ export const useSessionStore = create<SessionState>()(
             }
           } catch (err: unknown) {
             console.warn('Error durante autenticación con Supabase Auth:', err);
+            set({ isLoading: false });
+            return {
+              success: false,
+              error: err instanceof Error
+                ? `No se pudo completar el inicio de sesión con Supabase: ${err.message}`
+                : 'No se pudo completar el inicio de sesión con Supabase.',
+            };
           }
         }
 
@@ -656,7 +581,7 @@ export const useSessionStore = create<SessionState>()(
                     role: 'researcher',
                     is_active: true,
                   },
-                ]);
+                ], { onConflict: 'user_id,role' });
               } catch (profileErr) {
                 console.warn('Nota en upsert profiles/user_roles tras registro:', profileErr);
               }
@@ -762,6 +687,7 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: 'seed_session_store',
+      partialize: () => ({}),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

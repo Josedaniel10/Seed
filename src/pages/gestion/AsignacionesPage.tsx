@@ -24,7 +24,7 @@ export function AsignacionesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
-    applications,
+    requests,
     assignments,
     assignReviewer,
     checkReviewerConflict,
@@ -43,8 +43,8 @@ export function AsignacionesPage() {
 
   // Solicitudes en estado EN_REVISION (habilitadas para asignación de evaluador, RF-15)
   const applicationsInReview = useMemo(() => {
-    return applications.filter((a) => a.current_status === 'EN_REVISION');
-  }, [applications]);
+    return requests.filter((a) => a.current_status === 'EN_REVISION');
+  }, [requests]);
 
   // Lista de posibles evaluadores (integrantes del comité y docentes calificados)
   const committeeMembers = useMemo(() => {

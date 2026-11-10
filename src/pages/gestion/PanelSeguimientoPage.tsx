@@ -78,7 +78,7 @@ export function PanelSeguimientoPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
-    applications,
+    requests,
     assignments,
     transitionApplicationStatus,
     getDeadlineStatus,
@@ -117,7 +117,7 @@ export function PanelSeguimientoPage() {
 
   // Filtrado multidimensional en tiempo real (RF-11)
   const filteredApplications = useMemo(() => {
-    return applications.filter((app) => {
+    return requests.filter((app) => {
       const typeObj = types.find((t) => t.id === app.application_type_id);
       const applicantObj = users.find((u) => u.id === app.applicant_id);
 
@@ -140,7 +140,7 @@ export function PanelSeguimientoPage() {
 
       return matchesSearch && matchesEstado && matchesTipo;
     });
-  }, [applications, types, users, searchTerm, selectedEstadoFilter, selectedTipoFilter]);
+  }, [requests, types, users, searchTerm, selectedEstadoFilter, selectedTipoFilter]);
 
   // Manejo de Inicio de Arrastre
   const handleDragStart = (e: React.DragEvent, appId: string) => {
@@ -161,7 +161,7 @@ export function PanelSeguimientoPage() {
   const handleDropOnColumn = (targetCol: KanbanColumnDef) => {
     if (!draggingAppId) return;
 
-    const app = applications.find((a) => a.id === draggingAppId);
+    const app = requests.find((a) => a.id === draggingAppId);
     setDraggingAppId(null);
     if (!app) return;
 

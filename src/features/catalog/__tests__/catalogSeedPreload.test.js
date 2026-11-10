@@ -75,16 +75,16 @@ if (!informeFinalReq || informeFinalReq.is_subsanable !== false || !informeFinal
 }
 console.log('5. Criterios de subsanabilidad verificados (RN-11: propuestas sustanciales no subsanables vs requisitos complementarios subsanables).');
 
-// 6. Probar restablecimiento de catálogo estándar desde el store
-const store = useCatalogStore.getState();
-store.resetToStandardCatalog();
-const stateAfterReset = useCatalogStore.getState();
+// 6. Un fallo de conexión no debe rellenar el catálogo con fixtures locales.
+useCatalogStore.setState({ types: [], requirements: [], selectedTypeId: null });
+const syncResult = await useCatalogStore.getState().loadFromSupabase();
+const stateAfterSync = useCatalogStore.getState();
 
-if (stateAfterReset.types.length !== 12 || stateAfterReset.requirements.length !== INITIAL_REQUIREMENTS.length) {
-  console.error('ERROR: resetToStandardCatalog() no restauró los 12 tipos o sus requisitos');
+if (syncResult.success || stateAfterSync.types.length !== 0 || stateAfterSync.requirements.length !== 0) {
+  console.error('ERROR: El catálogo agregó datos locales cuando Supabase no estaba disponible');
   process.exit(1);
 }
-console.log('6. Función de restauración del catálogo estándar ejecutada exitosamente.');
+console.log('6. Un catálogo sin datos de Supabase permanece vacío ante un fallo de conexión.');
 
 // 7. Validar consistencia con el archivo supabase/seed.sql
 const seedSqlPath = resolve(process.cwd(), 'supabase/seed.sql');

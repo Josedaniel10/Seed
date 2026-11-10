@@ -108,7 +108,11 @@ export const useUserStore = create<UserManagementState>()(
         set((state) => {
           const nextUsers = state.users.map((u) => {
             if (u.id === userId) {
-              updatedProfile = { ...u, role: newRole };
+              updatedProfile = {
+                ...u,
+                role: newRole,
+                roles: Array.from(new Set([...(u.roles ?? [u.role]), newRole])),
+              };
               return updatedProfile;
             }
             return u;
@@ -136,8 +140,10 @@ export const useUserStore = create<UserManagementState>()(
                 role: newRole,
                 is_active: true,
               },
-            ])
-            .then(() => {});
+            ], { onConflict: 'user_id,role' })
+            .then(({ error }) => {
+              if (error) console.warn('Supabase user role assignment error:', error.message);
+            });
         }
 
         return {
@@ -216,27 +222,39 @@ export const useUserStore = create<UserManagementState>()(
         }
 
         try {
-          const { data, error } = await client
-            .from('profiles')
-            .select('*')
-            .order('full_name', { ascending: true });
+          const [profilesResult, rolesResult] = await Promise.all([
+            client.from('profiles').select('*').order('full_name', { ascending: true }),
+            client.from('user_roles').select('user_id, role').eq('is_active', true),
+          ]);
 
+          const error = profilesResult.error ?? rolesResult.error;
           if (error) {
             set({ isLoading: false, error: error.message });
             return { success: false, error: error.message };
           }
 
-          if (data && data.length > 0) {
+          if (profilesResult.data && profilesResult.data.length > 0) {
+            const rolesByUserId = new Map<string, UserRole[]>();
+            for (const assignment of rolesResult.data ?? []) {
+              const roles = rolesByUserId.get(assignment.user_id) ?? [];
+              roles.push(assignment.role as UserRole);
+              rolesByUserId.set(assignment.user_id, roles);
+            }
+            const users: Profile[] = (profilesResult.data as Profile[]).map((profile) => ({
+              ...profile,
+              roles: Array.from(new Set([profile.role, ...(rolesByUserId.get(profile.id) ?? [])])),
+            }));
+
             set({
-              users: data as Profile[],
+              users,
               isInitialized: true,
               isLoading: false,
               error: null,
             });
-            return { success: true, count: data.length };
+            return { success: true, count: users.length };
           }
 
-          set({ isInitialized: true, isLoading: false, error: null });
+          set({ users: [], isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Error al cargar perfiles desde Supabase';
@@ -260,6 +278,10 @@ export const useUserStore = create<UserManagementState>()(
         }
         return persistedState;
       },
+      partialize: (state) => ({
+        searchQuery: state.searchQuery,
+        selectedRoleFilter: state.selectedRoleFilter,
+      }),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;

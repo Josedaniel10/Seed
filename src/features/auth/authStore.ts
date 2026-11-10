@@ -354,9 +354,9 @@ export const useAuthStore = create<AuthState>()(
         };
       }),
       partialize: (state) => ({
-        profile: state.profile,
-        token: state.token,
-        isAuthenticated: state.isAuthenticated,
+        profile: null,
+        token: null,
+        isAuthenticated: false,
       }),
     }
   )

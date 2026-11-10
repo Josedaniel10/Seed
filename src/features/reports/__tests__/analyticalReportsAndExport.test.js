@@ -21,7 +21,7 @@ console.log('--- Iniciando prueba automática de generación de reportes analít
 const appStore = useApplicationStore.getState();
 const catalogStore = useCatalogStore.getState();
 
-const applications = appStore.applications;
+const applications = appStore.requests;
 const types = catalogStore.types;
 
 // 1. Calcular métricas cuantitativas consolidadas del periodo

@@ -37,7 +37,7 @@ if (ALLOWED_TRANSITIONS.CERRADA.length !== 0) {
 console.log('1. Matriz de transiciones reglamentarias verificada formalmente.');
 
 // 2. Intentar salto no autorizado: RADICADA directamente a LISTA_COMITE
-const appRadicada = store.applications.find((a) => a.current_status === 'RADICADA');
+const appRadicada = store.requests.find((a) => a.current_status === 'RADICADA');
 if (!appRadicada) {
   console.error('ERROR: No hay solicitud en estado RADICADA para la prueba.');
   process.exit(1);

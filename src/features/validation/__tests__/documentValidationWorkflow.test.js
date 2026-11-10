@@ -15,6 +15,7 @@ globalThis.localStorage = {
 
 const { useApplicationStore } = await import('../../applications/applicationStore.ts');
 const { useCatalogStore } = await import('../../catalog/catalogStore.ts');
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 console.log('--- Iniciando prueba automática de validación documental y transiciones automáticas (T3.1, T3.2, T3.6 / RF-12, RF-13, RF-14, RN-02, RN-11) ---');
 
@@ -177,5 +178,21 @@ if (!finalizeValid.success || finalizeValid.application?.current_status !== 'EN_
   process.exit(1);
 }
 console.log('5. Regla RN-02 comprobada: 100% de requisitos válidos transitó a EN_REVISION.');
+
+const transitionAudit = useApplicationStore.getState().auditHistory.find(
+  (event) => event.application_id === appId3 && event.action === 'TRANSICION_ESTADO_EN_REVISION'
+);
+if (!transitionAudit || !uuidPattern.test(transitionAudit.id)) {
+  console.error('ERROR: La auditoría de la transición debe usar un ID UUID válido.');
+  process.exit(1);
+}
+console.log('5.1. La auditoría de transición usa un UUID válido.');
+
+const repeatFinalizeValid = await store.finalizeAdministrativeValidation(appId3, 'usr-002', 'Admin');
+if (!repeatFinalizeValid.success || repeatFinalizeValid.application?.current_status !== 'EN_REVISION') {
+  console.error('ERROR: Repetir la validación completa en EN_REVISION debe ser idempotente.');
+  process.exit(1);
+}
+console.log('6. Validación documental repetida sobre EN_REVISION es idempotente.');
 
 console.log('--- ¡Todas las pruebas de T3.1, T3.2 y T3.6 (Validación documental y transiciones) pasaron exitosamente! ---');

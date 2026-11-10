@@ -25,7 +25,7 @@ export function RevisionesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
-    applications,
+    requests,
     assignments,
     documents,
     observations,
@@ -41,7 +41,7 @@ export function RevisionesPage() {
   // Solicitudes asignadas al evaluador actual (o todas en revisión si es secretario)
   const isSecretario = user?.activeRole === 'secretario';
   const myAssignedApps = useMemo(() => {
-    return applications.filter((app) => {
+    return requests.filter((app) => {
       if (app.current_status !== 'EN_REVISION') return false;
       if (isSecretario) return true;
       const asg = assignments.find(
@@ -49,7 +49,7 @@ export function RevisionesPage() {
       );
       return !!asg;
     });
-  }, [applications, assignments, currentUserId, isSecretario]);
+  }, [requests, assignments, currentUserId, isSecretario]);
 
   const [expandedAppId, setExpandedAppId] = useState<string | null>(myAssignedApps[0]?.id || null);
 

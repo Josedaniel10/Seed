@@ -27,7 +27,7 @@ export function ValidacionPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
-    applications,
+    requests,
     documents,
     validateRequirementDocument,
     finalizeAdministrativeValidation,
@@ -37,13 +37,13 @@ export function ValidacionPage() {
 
   // Solicitudes en estado Radicada o Pendiente por documentos (sección 4.4 del plan)
   const expedientesPorValidar = useMemo(() => {
-    return applications.filter(
+    return requests.filter(
       (a) => a.current_status === 'RADICADA' || a.current_status === 'PENDIENTE_DOCUMENTOS'
     );
-  }, [applications]);
+  }, [requests]);
 
   const [selectedId, setSelectedId] = useState<string>(
-    expedientesPorValidar[0]?.id || applications[0]?.id || ''
+    expedientesPorValidar[0]?.id || requests[0]?.id || ''
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
@@ -60,11 +60,11 @@ export function ValidacionPage() {
 
   const selectedExp = useMemo(() => {
     return (
-      applications.find((a) => a.id === selectedId) ||
+      requests.find((a) => a.id === selectedId) ||
       expedientesPorValidar[0] ||
-      applications[0]
+      requests[0]
     );
-  }, [applications, selectedId, expedientesPorValidar]);
+  }, [requests, selectedId, expedientesPorValidar]);
 
   const applicant = useMemo(() => {
     return users.find((u) => u.id === selectedExp?.applicant_id);
@@ -171,8 +171,9 @@ export function ValidacionPage() {
 
     if (res.success && res.application) {
       const nuevo = res.application.current_status;
-      const mensaje =
-        nuevo === 'EN_REVISION'
+      const mensaje = selectedExp.current_status === nuevo
+        ? 'La validación ya estaba finalizada. La solicitud conserva su estado actual.'
+        : nuevo === 'EN_REVISION'
           ? '¡Validación aprobada! 100% de requisitos conformes. La solicitud avanzó a "En revisión técnica".'
           : nuevo === 'PENDIENTE_DOCUMENTOS'
           ? 'Validación concluida con requisitos subsanables observados. La solicitud pasó a "Pendiente por documentos".'

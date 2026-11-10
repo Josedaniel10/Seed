@@ -92,7 +92,7 @@ if (invalidAgendaAdd.success) {
 console.log(`2. Regla RN-04 comprobada: Inclusión denegada a solicitud no elegible: "${invalidAgendaAdd.error}".`);
 
 // 3. Probar inclusión de solicitud elegible en LISTA_COMITE (sol-005 de la semilla está en LISTA_COMITE)
-const readyApp = appStore.applications.find((a) => a.current_status === 'LISTA_COMITE');
+const readyApp = appStore.requests.find((a) => a.current_status === 'LISTA_COMITE');
 if (!readyApp) {
   console.error('ERROR: No se encontró solicitud en LISTA_COMITE.');
   process.exit(1);
