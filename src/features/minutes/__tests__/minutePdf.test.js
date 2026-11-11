@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createMinutePdf } from '../minutePdf.ts';
+import { executiveMinute } from './minutePdfFixtures.js';
 
 test('exports paginated PDF minutes with Spanish text and draft status', async () => {
   const minute = {
@@ -17,4 +18,20 @@ test('exports paginated PDF minutes with Spanish text and draft status', async (
   assert.match(content, /Borrador para revisión/);
   assert.match(content, /Fundamento técnico/);
   assert.match(content, /Página 1 de/);
+});
+
+test('downloads structured executive minutes through the existing Blob API', async () => {
+  const minute = executiveMinute();
+  const originalContent = minute.draft_content;
+  const blob = createMinutePdf(minute);
+  const content = Buffer.from(await blob.arrayBuffer()).toString('latin1');
+  assert.equal(blob.type, 'application/pdf');
+  for (const label of ['Acta de sesión', 'Asistentes', 'Orden del día', 'Compromisos y responsables', 'Firmas', 'Nombre y firma']) {
+    assert.ok(content.includes(label), `Missing ${label}`);
+  }
+  assert.match(content, /Acta aprobada/);
+  assert.match(content, /Andrés Muñoz/);
+  assert.match(content, /23\/11\/2026/);
+  assert.match(content, /No deliberada por falta de quórum/);
+  assert.equal(minute.draft_content, originalContent);
 });

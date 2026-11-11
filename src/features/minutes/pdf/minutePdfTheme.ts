@@ -1,0 +1,17 @@
+export const MINUTE_PDF_THEME = {
+  forest: '#14281D',
+  green: '#365F46',
+  lime: '#A3E635',
+  ink: '#26352D',
+  muted: '#627268',
+  border: '#DCE4DE',
+  surface: '#F3F6F2',
+  white: '#FFFFFF',
+  amber: '#805B24',
+  rose: '#923E44',
+  margin: 18,
+  bodyTop: 32,
+  bottom: 24,
+  bodyFontSize: 9.5,
+  lineHeight: 4.7,
+} as const;
