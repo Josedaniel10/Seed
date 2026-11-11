@@ -93,7 +93,7 @@ try {
   console.error('ERROR: No se impidió la mutación de la bitácora de auditoría.');
   process.exit(1);
 } catch (err) {
-  if (!err.message.includes('RNF-03')) {
+  if (!err.message.includes('historial de la solicitud no se puede modificar')) {
     console.error('ERROR: Mensaje de inmutabilidad no contiene RNF-03:', err.message);
     process.exit(1);
   }

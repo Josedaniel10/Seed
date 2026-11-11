@@ -10,8 +10,7 @@ export function NuevaSolicitudPage() {
             Asistente de Radicación Oficial
           </h1>
           <p className="text-xs text-stone-500 mt-0.5">
-            Comité de Investigaciones · Radicación formal en 4 pasos con trazabilidad inmutable y
-            consecutivo ininterrumpido.
+            Complete los datos y adjunte los documentos para enviar su solicitud.
           </p>
         </div>
       </div>

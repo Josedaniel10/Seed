@@ -148,7 +148,7 @@ export function PanelSeguimientoPage() {
       e.preventDefault();
       setToastMessage({
         type: 'error',
-        text: 'Modo solo lectura: Su rol actual no tiene autorización para realizar transiciones por arrastre (RF-21).',
+        text: 'Modo solo lectura: Su rol actual no tiene autorización para realizar transiciones por arrastre.',
       });
       setTimeout(() => setToastMessage(null), 3500);
       return;
@@ -178,39 +178,39 @@ export function PanelSeguimientoPage() {
       if (app.current_status !== 'RADICADA' && app.current_status !== 'PENDIENTE_DOCUMENTOS') {
         setToastMessage({
           type: 'error',
-          text: `RF-21: No es posible pasar a "En revisión" desde el estado "${app.current_status}". Debe provenir de validación documental.`,
+          text: 'Complete la validación documental antes de pasar la solicitud a revisión.',
         });
         setTimeout(() => setToastMessage(null), 3500);
         return;
       }
       targetStatus = 'EN_REVISION';
-      actionTitle = 'Confirmar Pase a Revisión Técnica (RN-02)';
+      actionTitle = 'Confirmar Pase a Revisión Técnica';
       actionDesc =
         'Al transitar a "En revisión", se certifica que el 100% de los requisitos obligatorios están validados.';
     } else if (targetCol.key === 'PENDIENTE_DOCUMENTOS') {
       targetStatus = 'PENDIENTE_DOCUMENTOS';
       actionTitle = 'Pasar a Pendiente por Documentos';
       actionDesc =
-        'Indique la justificación de los requisitos subsanables observados o pendientes para notificar al investigador con plazo reglamentario.';
+        'Indique los documentos que debe corregir el investigador y el plazo para hacerlo.';
       requiresReason = true;
     } else if (targetCol.key === 'LISTA_COMITE') {
       if (app.current_status !== 'EN_REVISION') {
         setToastMessage({
           type: 'error',
-          text: 'RF-21: Solo las solicitudes en "En revisión" con concepto técnico favorable pueden pasar a "Lista para comité" (RN-04).',
+          text: 'Solo las solicitudes en "En revisión" con concepto técnico favorable pueden pasar a "Lista para comité".',
         });
         setTimeout(() => setToastMessage(null), 3500);
         return;
       }
       targetStatus = 'LISTA_COMITE';
-      actionTitle = 'Habilitar para Agenda de Sesión de Comité (RF-20)';
+      actionTitle = 'Habilitar para Agenda de Sesión de Comité';
       actionDesc =
         'Se registrará el concepto técnico favorable y la solicitud quedará disponible para incorporarse en la agenda de la próxima sesión colegiada.';
     } else if (targetCol.key === 'DECIDIDAS') {
       if (app.current_status !== 'LISTA_COMITE') {
         setToastMessage({
           type: 'error',
-          text: 'RN-04: Solo las solicitudes que estén en "Lista para comité" y sean deliberadas pueden recibir decisión formal.',
+          text: 'Solo las solicitudes que estén en "Lista para comité" y sean deliberadas pueden recibir decisión formal.',
         });
         setTimeout(() => setToastMessage(null), 3500);
         return;
@@ -218,12 +218,12 @@ export function PanelSeguimientoPage() {
       targetStatus = 'APROBADA';
       actionTitle = 'Registrar Decisión Formal de Comité';
       actionDesc =
-        'Seleccione el sentido de la decisión y proporcione la justificación reglamentaria obligatoria (RN-05).';
+        'Seleccione la decisión y escriba su justificación.';
       requiresReason = true;
     } else {
       setToastMessage({
         type: 'error',
-        text: 'Transición no permitida por la matriz reglamentaria de estados (RF-21).',
+        text: 'Esta solicitud no puede pasar al estado seleccionado.',
       });
       setTimeout(() => setToastMessage(null), 3500);
       return;
@@ -250,7 +250,7 @@ export function PanelSeguimientoPage() {
     if (actionModal.requiresReason && !modalReason.trim()) {
       setToastMessage({
         type: 'error',
-        text: 'RN-05: Toda decisión o requerimiento exige fundamentación y justificación escrita.',
+        text: 'Toda decisión o requerimiento exige fundamentación y justificación escrita.',
       });
       return;
     }
@@ -292,8 +292,7 @@ export function PanelSeguimientoPage() {
             Panel de Seguimiento y Control Institucional
           </h1>
           <p className="text-xs text-stone-500 mt-0.5">
-            Trazabilidad multidimensional en tiempo real · Tablero Kanban con arrastre controlado y
-            vista de tabla estructurada (RF-11, RF-21, RF-35).
+            Consulte el avance de las solicitudes y gestione sus pendientes.
           </p>
         </div>
 
@@ -475,7 +474,7 @@ export function PanelSeguimientoPage() {
             {actionModal.requiresReason && (
               <div className="space-y-1 pt-1">
                 <label className="block font-bold text-stone-800">
-                  Fundamentación / Justificación Escrita (RN-05) *
+                  Fundamentación / Justificación Escrita *
                 </label>
                 <textarea
                   rows={3}

@@ -154,7 +154,7 @@ export function MisSolicitudesPage() {
       <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-hidden shadow-xs">
         {loadError && (
           <div role="alert" className="m-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-            No fue posible actualizar las solicitudes desde Supabase: {loadError}
+            No fue posible actualizar las solicitudes: {loadError}
           </div>
         )}
         {isLoading ? (

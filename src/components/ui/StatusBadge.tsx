@@ -1,6 +1,12 @@
 import React from 'react';
 import { APPLICATION_STATUS_CONFIG, ApplicationStatus } from '../../types/theme.ts';
 
+const STATUS_ALIASES: Record<string, ApplicationStatus> = {
+  SUBMITTED: 'RADICADA', PENDING_DOCUMENTS: 'PENDIENTE_DOCUMENTOS', UNDER_REVIEW: 'EN_REVISION',
+  COMMITTEE_READY: 'LISTA_COMITE', APPROVED: 'APROBADA', APPROVED_WITH_ADJUSTMENTS: 'APROBADA_CON_AJUSTES',
+  REJECTED: 'RECHAZADA', CLOSED: 'CERRADA',
+};
+
 export interface StatusBadgeProps {
   status: ApplicationStatus | string;
   size?: 'sm' | 'md';
@@ -8,7 +14,7 @@ export interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, size = 'md', className = '' }: StatusBadgeProps) {
-  const normalizedKey = status.toUpperCase() as ApplicationStatus;
+  const normalizedKey = STATUS_ALIASES[status.toUpperCase()] ?? status.toUpperCase();
   const config = APPLICATION_STATUS_CONFIG[normalizedKey] || {
     label: status,
     description: '',

@@ -104,7 +104,7 @@ export function ReportesPage() {
             </h1>
           </div>
           <p className="text-xs text-stone-500 mt-1">
-            Analítica cuantitativa consolidada, efectividad de trámites y exportación oficial (RF-36).
+            Consulte los resultados del periodo y descargue los reportes.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export function ReportesPage() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
         >
           <Download size={14} />
-          <span>Exportar a CSV / Excel (RF-36)</span>
+          <span>Exportar CSV</span>
         </button>
       </div>
 

@@ -104,8 +104,7 @@ export function AsignacionesPage() {
           Asignación y Reasignación de Evaluadores Pares
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
-          Secretaría Técnica · Control de carga de trabajo y bloqueo reglamentario de conflicto de
-          intereses (RF-15, RF-16, RN-03, RN-08, RN-14).
+          Asigne un evaluador a cada solicitud pendiente de revisión.
         </p>
       </div>
 
@@ -125,22 +124,6 @@ export function AsignacionesPage() {
           <span className="font-medium">{feedback.message}</span>
         </div>
       )}
-
-      {/* Tarjeta Informativa de Reglas RN-03 y RN-14 */}
-      <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex items-start gap-3">
-        <ShieldAlert size={18} className="text-amber-700 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <span className="font-bold block">
-            Régimen Institucional de Inhabilidades y Conflicto de Intereses (RN-03, RN-14):
-          </span>
-          <p className="text-[11px] text-amber-900 leading-relaxed">
-            El sistema bloquea automáticamente cualquier asignación donde el evaluador sea el autor
-            solicitante o pertenezca al mismo grupo de investigación adscrito. Si se reasigna un nuevo
-            evaluador, la asignación previa pasa a estado inactivo y se conserva en el historial
-            (RN-08).
-          </p>
-        </div>
-      </div>
 
       {/* Lista de Solicitudes En Revisión */}
       <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">

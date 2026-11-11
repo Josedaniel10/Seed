@@ -89,7 +89,7 @@ export function SesionesPage() {
             </h1>
           </div>
           <p className="text-xs text-stone-500 mt-1">
-            Convocatoria colegiada, conformación de agenda (RF-25), verificación automática de quórum (RN-07) y deliberación.
+            Organice las sesiones y gestione sus solicitudes.
           </p>
         </div>
 
@@ -201,7 +201,7 @@ export function SesionesPage() {
                 </div>
 
                 <div className="bg-[#F7F6F2] p-3.5 rounded-xl border border-[#E5E3DC]">
-                  <span className="text-stone-500 text-[11px] block">Quórum Reglamentario (RN-07)</span>
+                  <span className="text-stone-500 text-[11px] block">Quórum</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span
                       className={`inline-block w-2 h-2 rounded-full ${
@@ -219,7 +219,7 @@ export function SesionesPage() {
                 </div>
 
                 <div className="bg-[#F7F6F2] p-3.5 rounded-xl border border-[#E5E3DC]">
-                  <span className="text-stone-500 text-[11px] block">Regla de Mayoría Requerida</span>
+                  <span className="text-stone-500 text-[11px] block">Asistencia mínima</span>
                   <p className="font-bold text-[#14281D] mt-0.5">
                     Mínimo {ses.quorum_required} integrantes con voto
                   </p>
@@ -236,9 +236,9 @@ export function SesionesPage() {
           <div role="dialog" aria-modal="true" aria-label="Programar sesión de comité" className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 text-xs">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <div>
-                <h3 className="font-bold text-sm text-[#14281D]">Programar Sesión de Comité (RF-24)</h3>
+                <h3 className="font-bold text-sm text-[#14281D]">Programar Sesión de Comité</h3>
                 <p className="text-[11px] text-stone-500 mt-0.5">
-                  Asignación consecutiva automática por año calendario.
+                  Indique la fecha, el lugar y la asistencia mínima.
                 </p>
               </div>
               <button
@@ -272,7 +272,7 @@ export function SesionesPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="session-quorum" className="block font-semibold text-stone-700 mb-1">Quórum Mínimo (RN-07)</label>
+                  <label htmlFor="session-quorum" className="block font-semibold text-stone-700 mb-1">Quórum Mínimo</label>
                   <input id="session-quorum"
                     type="number"
                     min={1}

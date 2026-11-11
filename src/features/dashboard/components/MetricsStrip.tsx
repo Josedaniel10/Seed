@@ -65,7 +65,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs text-stone-600">
         <span className="font-bold text-[#14281D] uppercase tracking-wider text-[11px]">
-          Franja Superior de Métricas Unificada (RF-35)
+          Solicitudes por estado
         </span>
         <span className="text-[11px] text-stone-500 font-medium">
           {applications.length} expedientes registrados · {catalogCount} tipos activos

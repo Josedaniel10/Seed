@@ -1,3 +1,6 @@
+import { getRequestQuorum } from '../../features/sessions/requestQuorum.ts';
+import { RequestQuorumNotice } from '../../features/sessions/RequestQuorumNotice.tsx';
+import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 import { SessionMinutesPanel } from '../../features/minutes/SessionMinutesPanel.tsx';
 import { normalizeRole } from '../../lib/permissions.ts';
 import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
@@ -79,7 +82,7 @@ export function DetalleSesionPage() {
         <AlertTriangle size={36} className="text-amber-500 mx-auto" />
         <h2 className="text-base font-bold text-[#14281D]">Sesión no encontrada</h2>
         <p className="text-xs text-stone-500">
-          El identificador de sesión no corresponde a ningún registro activo en el comité.
+          La sesión que busca no está disponible.
         </p>
         <button
           onClick={() => navigate('/sesiones')}
@@ -95,6 +98,8 @@ export function DetalleSesionPage() {
   const attendances = getAttendanceBySession(session.id);
   const quorum = checkSessionQuorum(session.id);
   const decisions = getDecisionsBySession(session.id);
+  const pendingAgenda = agenda.filter((item) => !decisions.some((decision) =>
+    (decision.application_id ?? decision.request_id) === (item.application_id ?? item.request_id)));
 
   // Candidatos para agregar a la agenda: Solicitudes en estado LISTA_COMITE (RN-04)
   const agendaAppIds = new Set(agenda.map((a) => a.application_id));
@@ -172,7 +177,7 @@ export function DetalleSesionPage() {
     };
 
     if (!itemData.justification.trim()) {
-      setActionError('RN-05: El registro de la decisión colegiada exige una justificación motivada por escrito.');
+      setActionError('Escriba una justificación para la decisión.');
       return;
     }
 
@@ -188,7 +193,7 @@ export function DetalleSesionPage() {
     if (!res.success) {
       setActionError(res.error || 'Error al registrar la decisión.');
     } else {
-      setActionSuccess('Decisión colegiada registrada y trazabilidad de estado actualizada.');
+      setActionSuccess('Decisión registrada. El estado de la solicitud se actualizó.');
       setTimeout(() => setActionSuccess(null), 3500);
     }
   };
@@ -282,6 +287,16 @@ export function DetalleSesionPage() {
           </div>
         </div>
       </div>
+
+      {!session.is_completed && (
+        <section aria-label="Requisitos para finalizar la sesión" className="rounded-xl border border-[#E5E3DC] bg-white p-4 text-xs space-y-2">
+          <h2 className="font-bold">Para finalizar la sesión</h2>
+          <p>{session.is_agenda_closed ? '✓ Agenda cerrada' : 'Pendiente cerrar la agenda'}</p>
+          <p>{quorum.hasQuorum ? '✓ Asistencia mínima completa' : `Faltan ${Math.max(0, quorum.requiredCount - quorum.attendedCount)} asistentes para completar la asistencia mínima`}</p>
+          <p>{pendingAgenda.length === 0 ? '✓ Todas las solicitudes tienen decisión' : `${pendingAgenda.length} solicitudes pendientes de decisión`}</p>
+          <p>Después de finalizar podrá generar el acta.</p>
+        </section>
+      )}
 
       {/* Alertas de Acción */}
       {actionError && (
@@ -386,6 +401,9 @@ export function DetalleSesionPage() {
                   const appId = item.application_id || item.request_id || '';
                   const appData = getApplicationById(appId);
                   const decisionRecorded = decisions.find((d) => (d.application_id || d.request_id) === appId);
+                  const requestQuorum = appData ? getRequestQuorum({
+                    request: appData, attendance: attendances, members: users, requiredCount: session.quorum_required,
+                  }) : null;
 
                   return (
                     <div
@@ -401,11 +419,11 @@ export function DetalleSesionPage() {
                             {appData?.filing_number || appId}
                           </span>
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
-                            {appData?.current_status}
+                            {appData && <StatusBadge status={appData.current_status} size="sm" />}
                           </span>
                           {decisionRecorded && (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              Decisión: {decisionRecorded.decision}
+                              Decisión: {decisionRecorded.decision.toLowerCase().replaceAll('_', ' ')}
                             </span>
                           )}
                         </div>
@@ -452,6 +470,7 @@ export function DetalleSesionPage() {
                       <div className="text-[11px] text-stone-500">
                         {appData?.abstract}
                       </div>
+                      {!decisionRecorded && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
                     </div>
                   );
                 })}
@@ -467,14 +486,14 @@ export function DetalleSesionPage() {
                 <h4 className="font-bold text-xs text-[#14281D]">Expedientes Listos para Comité</h4>
               </div>
               <p className="text-[11px] text-stone-500 mt-1">
-                Conforme a la regla <strong>RN-04</strong>, únicamente los expedientes en estado <strong>LISTA_COMITE</strong> con concepto técnico previo son elegibles.
+                Agregue solicitudes que estén listas para comité.
               </p>
             </div>
 
             {session.is_agenda_closed ? (
               <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-stone-600 text-xs flex items-center gap-2">
                 <Lock size={15} className="shrink-0 text-amber-600" />
-                <span>La agenda está cerrada. No se admiten trámites adicionales (RN-04).</span>
+                <span>La agenda está cerrada. No se admiten trámites adicionales.</span>
               </div>
             ) : candidateApps.length === 0 ? (
               <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-center text-[11px] text-stone-500">
@@ -510,7 +529,7 @@ export function DetalleSesionPage() {
                           {candidate.filing_number}
                         </span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                          {candidate.current_status}
+                          <StatusBadge status={candidate.current_status} size="sm" />
                         </span>
                       </div>
                       <p className="font-semibold text-stone-800 line-clamp-2 text-[11px]">
@@ -521,7 +540,7 @@ export function DetalleSesionPage() {
                         className="w-full py-1.5 rounded-lg bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs"
                       >
                         <Plus size={12} />
-                        <span>Incorporar a la Agenda (RN-04)</span>
+                        <span>Incorporar a la Agenda</span>
                       </button>
                     </div>
                   ))}
@@ -540,11 +559,11 @@ export function DetalleSesionPage() {
               <div className="flex items-center gap-2">
                 <Users size={16} className="text-[#14281D]" />
                 <h3 className="font-bold text-sm text-[#14281D]">
-                  Registro de Asistencia y Quórum Reglamentario (RF-27)
+                  Asistencia y quórum
                 </h3>
               </div>
               <p className="text-stone-500 mt-0.5 text-[11px]">
-                Regla <strong>RN-07</strong>: Se requiere la presencia de al menos la mitad más uno de los integrantes ({quorum.requiredCount} de {quorum.totalMembers}) para deliberar y votar.
+                Se necesitan {quorum.requiredCount} asistentes habilitados para registrar decisiones.
               </p>
             </div>
 
@@ -560,7 +579,7 @@ export function DetalleSesionPage() {
                   {quorum.attendedCount} / {quorum.totalMembers}
                 </span>
                 <span className="text-[10px] font-semibold">
-                  {quorum.hasQuorum ? 'Quórum Reglamentario Válido' : 'Quórum Insuficiente'}
+                  {quorum.hasQuorum ? 'Asistencia mínima completa' : 'Quórum Insuficiente'}
                 </span>
               </div>
               {quorum.hasQuorum ? (
@@ -621,11 +640,11 @@ export function DetalleSesionPage() {
               <div className="flex items-center gap-2">
                 <Scale size={16} className="text-[#14281D]" />
                 <h3 className="font-bold text-sm text-[#14281D]">
-                  Deliberación y Acuerdos por Expediente (RF-28)
+                  Deliberación y Acuerdos por Expediente
                 </h3>
               </div>
               <p className="text-stone-500 text-[11px] mt-0.5">
-                Reglas: <strong>RN-07</strong> (Bloqueo sin quórum), <strong>RN-05</strong> (Justificación obligatoria) y <strong>RN-06</strong> (Aplazamiento preserva estado).
+                Registre la decisión y su justificación para cada solicitud.
               </p>
             </div>
 
@@ -640,7 +659,7 @@ export function DetalleSesionPage() {
             <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-2.5">
               <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-xs">Votación y Decisión Inhabilitadas por Falta de Quórum (RN-07)</p>
+                <p className="font-bold text-xs">Votación y Decisión Inhabilitadas por Falta de Quórum</p>
                 <p className="text-[11px] mt-0.5">
                   El comité cuenta únicamente con {quorum.attendedCount} integrantes de los {quorum.requiredCount} requeridos. Debe verificar la asistencia en la pestaña "Asistencia y Quórum" antes de registrar cualquier acuerdo vinculante.
                 </p>
@@ -658,6 +677,9 @@ export function DetalleSesionPage() {
                 const appId = item.application_id || item.request_id || '';
                 const appData = getApplicationById(appId);
                 const recordedDecision = decisions.find((d) => (d.application_id || d.request_id) === appId);
+                const requestQuorum = appData ? getRequestQuorum({
+                  request: appData, attendance: attendances, members: users, requiredCount: session.quorum_required,
+                }) : null;
                 const currentPayload = decisionPayloads[appId] || {
                   decision: recordedDecision?.decision || ('APROBADA' as SessionDecisionType),
                   justification: recordedDecision?.justification || '',
@@ -683,7 +705,7 @@ export function DetalleSesionPage() {
 
                       {recordedDecision && (
                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
-                          Decisión Asentada: {recordedDecision.decision}
+                          Decisión Asentada: {recordedDecision.decision.toLowerCase().replaceAll('_', ' ')}
                         </span>
                       )}
                     </div>
@@ -691,6 +713,7 @@ export function DetalleSesionPage() {
                     <h4 className="font-bold text-xs text-[#14281D]">{appData?.title}</h4>
                     <p className="text-[11px] text-stone-500">{appData?.abstract}</p>
 
+                    {!recordedDecision && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
                     {/* Formulario de Decisión Colegiada */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
                       <div className="md:col-span-4 space-y-1">
@@ -698,7 +721,7 @@ export function DetalleSesionPage() {
                           Sentido del Acuerdo
                         </label>
                         <select
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
+                          disabled={!requestQuorum?.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           value={currentPayload.decision}
                           onChange={(e) =>
                             setDecisionPayloads({
@@ -714,17 +737,17 @@ export function DetalleSesionPage() {
                           <option value="APROBADA">Aprobada</option>
                           <option value="APROBADA_CON_AJUSTES">Aprobada con ajustes</option>
                           <option value="RECHAZADA">Rechazada</option>
-                          <option value="APLAZADA">Aplazada (Preserva LISTA_COMITE - RN-06)</option>
+                          <option value="APLAZADA">Aplazada</option>
                         </select>
                       </div>
 
                       <div className="md:col-span-6 space-y-1">
                         <label className="block font-semibold text-stone-700 text-[11px]">
-                          Justificación Motivada por Escrito (RN-05)
+                          Justificación Motivada por Escrito
                         </label>
                         <input
                           type="text"
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
+                          disabled={!requestQuorum?.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           value={currentPayload.justification}
                           onChange={(e) =>
                             setDecisionPayloads({
@@ -742,7 +765,7 @@ export function DetalleSesionPage() {
 
                       <div className="md:col-span-2 flex items-end">
                         <button
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
+                          disabled={!requestQuorum?.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           onClick={() => handleRegisterDecision(appId)}
                           className="w-full py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
                         >

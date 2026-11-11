@@ -50,7 +50,7 @@ export function NotificacionesPage() {
             </h1>
           </div>
           <p className="text-xs text-stone-500 mt-1">
-            Trazabilidad en tiempo real de cambios de estado (RF-33), asignaciones de evaluadores y despacho de correo institucional (RF-34).
+            Consulte las novedades y los pendientes de sus solicitudes.
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export function NotificacionesPage() {
           }`}
         >
           <Mail size={12} />
-          <span>Con copia institucional (RF-34)</span>
+          <span>Con copia institucional</span>
         </button>
       </div>
 

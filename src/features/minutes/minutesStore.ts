@@ -221,7 +221,7 @@ Fecha y hora: ${scheduledDate}
 Lugar / Enlace: ${session.location_or_url}
 Convocatoria oficial: ${session.session_number}
 
-1. ASISTENCIA Y QUÓRUM REGLAMENTARIO (RN-07):
+1. ASISTENCIA Y QUÓRUM REGLAMENTARIO:
 Miembros Asistentes (${quorum.attendedCount} de ${quorum.totalMembers}):
 ${attendeesList || '- Ninguno registrado'}
 
@@ -243,7 +243,7 @@ ${agreementsText}
 4. COMPROMISOS Y ACCIONES DE SEGUIMIENTO:
 - Secretaría Técnica notificará a los investigadores solicitantes los acuerdos adoptados en la presente sesión.
 - Las solicitudes en estado 'Aprobada' continuarán a trámite de resolución institucional de aval.
-- Los expedientes con decisión 'Aplazada' serán incorporados en el orden del día de la siguiente sesión ordinaria (RN-06).
+- Los expedientes con decisión 'Aplazada' serán incorporados en el orden del día de la siguiente sesión ordinaria.
 
 Constancia de elaboración por: ${actorName} (${actorId}).`;
 
@@ -281,7 +281,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
         if (minute.is_approved) {
           return {
             success: false,
-            error: 'RNF-03: Operación denegada. El acta ya se encuentra formalmente aprobada y firmada, constituyendo un registro inmutable.',
+            error: 'El acta está aprobada y su contenido no se puede modificar.',
           };
         }
 
@@ -377,7 +377,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
 
       loadFromSupabase: async () => {
         const client = getSupabaseClient();
-        if (!client) return { success: false, error: 'Supabase no está conectado.' };
+        if (!client) return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         set({ isLoading: true, error: null });
         try {
           const { data, error } = await client.from('committee_minutes').select('*').order('created_at', { ascending: false });

@@ -77,7 +77,7 @@ export const UserManagementTable: React.FC = () => {
     setIsSyncing(true);
     try {
       const result = await loadFromSupabase();
-      showFeedback(result.success ? `Perfiles cargados desde Supabase: ${result.count ?? 0}.` : result.error ?? 'No se pudieron cargar los perfiles.');
+      showFeedback(result.success ? `Lista actualizada. ${result.count ?? 0} usuarios.` : result.error ?? 'No se pudieron cargar los perfiles.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al sincronizar';
       showFeedback(`Fallo de sincronización: ${msg}`);
@@ -161,10 +161,10 @@ export const UserManagementTable: React.FC = () => {
             onClick={handleSyncSupabase}
             disabled={isSyncing}
             className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Consultar y sincronizar perfiles existentes desde la tabla 'profiles' de Supabase"
+            title="Actualizar la lista de usuarios"
           >
             <RefreshCw size={13} className={isSyncing ? 'animate-spin text-[#84CC16]' : 'text-stone-500'} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Supabase'}</span>
+            <span>{isSyncing ? 'Sincronizando...' : 'Actualizar usuarios'}</span>
           </button>
 
           <button

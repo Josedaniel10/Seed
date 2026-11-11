@@ -95,7 +95,7 @@ export function ServiceStatusWidget() {
         <div className="flex items-center justify-between pb-2 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <Database size={16} className="text-[#14281D]" />
-            <h3 className="font-bold text-xs text-[#14281D]">Backend & Supabase</h3>
+            <h3 className="font-bold text-xs text-[#14281D]">Conexión</h3>
           </div>
           <Button
             variant="ghost"
@@ -104,7 +104,7 @@ export function ServiceStatusWidget() {
             disabled={isTestingSupabase}
             icon={<RefreshCw size={12} className={isTestingSupabase ? 'animate-spin' : ''} />}
           >
-            {isTestingSupabase ? 'Ping...' : 'Verificar'}
+            {isTestingSupabase ? 'Verificando...' : 'Verificar'}
           </Button>
         </div>
 
@@ -120,19 +120,12 @@ export function ServiceStatusWidget() {
                 }`}
               >
                 <Check size={10} />
-                {supabaseTest.connected ? 'Conectado (En vivo)' : 'Modo Local (Listo)'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-stone-500">Latencia de red:</span>
-              <span className="font-mono font-semibold text-[#14281D]">
-                {supabaseTest.latencyMs} ms
+                {supabaseTest.connected ? 'Conectado' : 'Sin conexión'}
               </span>
             </div>
 
             <p className="text-[11px] text-stone-500 leading-relaxed bg-[#F7F6F2] p-2.5 rounded-lg border border-[#E5E3DC]">
-              {supabaseTest.message}
+              {supabaseTest.connected ? 'El servicio está disponible.' : 'No se pudo conectar. Intente nuevamente.'}
             </p>
           </div>
         )}
@@ -143,7 +136,7 @@ export function ServiceStatusWidget() {
         <div className="flex items-center justify-between pb-2 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-[#14281D]" />
-            <h3 className="font-bold text-xs text-[#14281D]">Servicio Local (/api/files)</h3>
+            <h3 className="font-bold text-xs text-[#14281D]">Documentos</h3>
           </div>
           <Button
             variant="ghost"
@@ -158,11 +151,11 @@ export function ServiceStatusWidget() {
 
         <div className="space-y-2 text-xs">
           <div className="flex items-center justify-between">
-            <span className="text-stone-500">Integridad Criptográfica:</span>
+            <span className="text-stone-500">Comprobación de archivos</span>
             {fileTestResult.status === 'success' && (
               <span className="font-semibold px-2 py-0.5 rounded-full text-[10px] bg-[#A3E635] text-[#14281D] border border-[#84CC16] flex items-center gap-1">
                 <Check size={10} />
-                SHA-256 Coincidente
+                Archivo verificado
               </span>
             )}
             {fileTestResult.status === 'running' && (
@@ -172,11 +165,7 @@ export function ServiceStatusWidget() {
 
           <div className="text-[11px] text-stone-600 bg-[#F7F6F2] p-2.5 rounded-lg border border-[#E5E3DC] space-y-1">
             <div className="flex items-center justify-between">
-              <span>Almacenamiento:</span>
-              <code className="font-mono text-stone-800">file-service/storage/</code>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Regla RNF-04:</span>
+              <span>Formatos y tamaño</span>
               <span className="font-semibold text-emerald-800">PDF / DOCX &lt; 10MB</span>
             </div>
           </div>

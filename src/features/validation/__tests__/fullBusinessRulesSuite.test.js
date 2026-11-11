@@ -151,8 +151,8 @@ try {
   console.error('ERROR: No se bloqueó la mutación de historial de auditoría.');
   process.exit(1);
 } catch (err) {
-  if (!err.message.includes('RNF-03')) {
-    console.error('ERROR: Mensaje no contiene RNF-03:', err.message);
+  if (!err.message.includes('historial de la solicitud no se puede modificar')) {
+    console.error('ERROR: Falta la explicación del bloqueo de edición:', err.message);
     process.exit(1);
   }
 }

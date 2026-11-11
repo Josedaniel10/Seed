@@ -116,16 +116,16 @@ export function RequestSubmissionWizard() {
       if (client) {
         const { data: authData, error: authError } = await client.auth.getSession();
         if (authError) {
-          throw new Error(`No se pudo verificar la sesión de Supabase: ${authError.message}`);
+          throw new Error('No se pudo verificar su sesión. Ingrese nuevamente.');
         }
         if (!authData.session) {
           throw new Error(
-            'No hay una sesión real de Supabase activa. Cierre sesión e ingrese con una cuenta registrada en Supabase Auth; una cuenta de demostración no puede subir archivos.'
+            'Inicie sesión para adjuntar documentos.'
           );
         }
         if (user?.id !== authData.session.user.id) {
           throw new Error(
-            'La cuenta de la aplicación no coincide con la sesión de Supabase. Cierre sesión e ingrese nuevamente con su cuenta real.'
+            'Su sesión ha cambiado. Cierre sesión e ingrese nuevamente.'
           );
         }
 
@@ -137,11 +137,11 @@ export function RequestSubmissionWizard() {
 
         if (uploadError) {
           throw new Error(
-            `Supabase Storage rechazó la carga (${uploadError.statusCode || 'sin código'}): ${uploadError.message}`
+            'No se pudo cargar el archivo. Intente nuevamente.'
           );
         }
         if (!uploadData.path) {
-          throw new Error('Supabase Storage no devolvió la ruta del archivo cargado.');
+          throw new Error('No se pudo confirmar la carga del archivo. Intente nuevamente.');
         }
 
         const { data: publicUrlData } = client.storage.from('documents').getPublicUrl(uploadData.path);
@@ -311,9 +311,7 @@ export function RequestSubmissionWizard() {
             ¡Solicitud Radicada Formalmente!
           </h2>
           <p className="text-xs text-stone-600 max-w-lg mx-auto leading-relaxed">
-            Su solicitud ha ingresado de manera oficial al Sistema del Comité de Investigaciones. Se
-            ha registrado el primer hito en la bitácora inmutable de trazabilidad y ha pasado a
-            estado inicial <strong className="text-[#14281D]">Radicada</strong>.
+            Su solicitud quedó <strong className="text-[#14281D]">Radicada</strong>. Puede consultar su avance en Mis solicitudes.
           </p>
         </div>
 
@@ -353,7 +351,7 @@ export function RequestSubmissionWizard() {
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-left text-xs text-amber-950 flex items-start gap-3">
           <Info size={18} className="text-amber-700 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <span className="font-bold block">Siguiente paso reglamentario:</span>
+            <span className="font-bold block">Próximo paso</span>
             <span>
               El personal administrativo verificará la lista de requisitos y documentos adjuntos en
               la bandeja de validación. Si todos son conformes, pasará a <em>En revisión</em>; si
@@ -433,7 +431,7 @@ export function RequestSubmissionWizard() {
               </h2>
               <p className="text-xs text-stone-500 mt-1">
                 Al seleccionar un tipo de solicitud, se desplegará dinámicamente la lista de
-                requisitos documentales y sus condiciones normativas asociadas (RF-07).
+                documentos requeridos.
               </p>
             </div>
 
@@ -475,7 +473,7 @@ export function RequestSubmissionWizard() {
                     </div>
 
                     <div className="pt-2 border-t border-stone-200 flex items-center justify-between text-[11px] text-stone-500">
-                      <span>{reqCount} requisito(s) normativo(s)</span>
+                      <span>{reqCount} documentos requeridos</span>
                       <span className="font-bold text-[#14281D]">
                         {isSelected ? '✓ Seleccionado' : 'Elegir tipo'}
                       </span>
@@ -534,7 +532,7 @@ export function RequestSubmissionWizard() {
                             ) : (
                               <span
                                 className="text-[10px] font-bold px-2 py-0.2 rounded bg-rose-100 text-rose-900 border border-rose-200"
-                                title="La falta de este documento causa rechazo inmediato en validación (RN-11)"
+                                title="La falta de este documento causa rechazo inmediato en validación"
                               >
                                 No subsanable (Rechazo directo si falta)
                               </span>
@@ -691,7 +689,7 @@ export function RequestSubmissionWizard() {
                 />
                 <label htmlFor="chk-tutor" className="cursor-pointer space-y-0.5">
                   <span className="font-bold text-[#14281D] block">
-                    Declaración de Aval de Docente Tutor (RN-09)
+                    Declaración de Aval de Docente Tutor
                   </span>
                   <span className="text-[11px] text-stone-600 block leading-relaxed">
                     Si la solicitud es presentada por estudiantes de semillero o monitores de
@@ -714,9 +712,7 @@ export function RequestSubmissionWizard() {
                 Carga de Archivos y Requisitos Obligatorios
               </h2>
               <p className="text-xs text-stone-500 mt-1">
-                Adjunte los documentos requeridos. Cada archivo será validado estrictamente en formato
-                (PDF/DOCX) y tamaño máximo de 10 MB (RNF-04), registrando su hash SHA-256 en el
-                servicio local.
+                Adjunte los documentos requeridos en PDF o DOCX. El tamaño máximo por archivo es de 10 MB.
               </p>
             </div>
 
@@ -778,8 +774,7 @@ export function RequestSubmissionWizard() {
                               {uploaded.file_name}
                             </span>
                             <span className="text-[10px] text-stone-500 block font-mono">
-                              {(uploaded.file_size_bytes / (1024 * 1024)).toFixed(2)} MB · SHA-256:{' '}
-                              {uploaded.file_hash_sha256.substring(0, 16)}...
+                              {(uploaded.file_size_bytes / (1024 * 1024)).toFixed(2)} MB
                             </span>
                           </div>
                         </div>
@@ -943,10 +938,7 @@ export function RequestSubmissionWizard() {
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-center gap-3">
               <AlertCircle size={18} className="text-amber-700 shrink-0" />
               <span>
-                Al confirmar el envío, el sistema asignará inmediatamente el{' '}
-                <strong>número de radicado consecutivo oficial</strong>, se creará el registro en estado
-                inicial <strong>Radicada</strong> y se emitirá el primer evento inmutable de la
-                bitácora institucional (RF-08, RF-23).
+                Al enviar recibirá su número de radicado y podrá consultar el avance de la solicitud.
               </span>
             </div>
           </div>

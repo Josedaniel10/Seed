@@ -1,3 +1,4 @@
+import { formatUserMessage } from '../../lib/userMessages.ts';
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
@@ -333,7 +334,7 @@ export function DetalleSolicitudPage() {
 
                 <div className="p-4 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-1">
                   <span className="text-[11px] text-stone-400 font-bold uppercase tracking-wider block">
-                    Aval Docente Tutor (RN-09)
+                    Aval Docente Tutor
                   </span>
                   <span className="font-bold text-stone-800 flex items-center gap-1.5">
                     {application.is_tutor_endorsed ? (
@@ -360,7 +361,7 @@ export function DetalleSolicitudPage() {
                   Documentos y Soportes del Expediente
                 </h3>
                 <span className="text-[11px] text-stone-500">
-                  Validación física en servicio local con hash SHA-256
+                  Documentos adjuntos a la solicitud
                 </span>
               </div>
 
@@ -445,9 +446,6 @@ export function DetalleSolicitudPage() {
 
                         {/* Hash SHA-256 de inmutabilidad */}
                         <div className="text-[10px] text-stone-500 font-mono bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between">
-                          <span className="truncate">
-                            SHA-256: {doc.file_hash_sha256}
-                          </span>
                           <span className="shrink-0 text-stone-400 font-sans font-semibold">
                             Cargado:{' '}
                             {new Date(doc.uploaded_at).toLocaleDateString('es-CO', {
@@ -557,7 +555,7 @@ export function DetalleSolicitudPage() {
             <div className="space-y-6 text-xs">
               <div>
                 <h3 className="font-bold text-[#14281D] text-sm">
-                  Cronología Vertical Inmutable de Actuaciones (RF-23)
+                  Historial de la solicitud
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
                   Registro cronológico auditable con marca temporal, actor responsable y
@@ -623,13 +621,13 @@ export function DetalleSolicitudPage() {
                               {item.previous_status ? (
                                 <>
                                   <span className="font-semibold text-stone-600">
-                                    {item.previous_status}
+                                    <StatusBadge status={item.previous_status} size="sm" />
                                   </span>
                                   <span className="text-stone-400">→</span>
                                 </>
                               ) : null}
                               <span className="font-extrabold text-[#14281D]">
-                                {item.new_status}
+                                <StatusBadge status={item.new_status} size="sm" />
                               </span>
                             </div>
                           )}
@@ -666,13 +664,13 @@ export function DetalleSolicitudPage() {
                               {Boolean(item.details.reason) && (
                                 <div>
                                   <span className="text-rose-600 font-semibold">Motivo:</span>{' '}
-                                  <span>{String(item.details.reason)}</span>
+                                  <span>{formatUserMessage(String(item.details.reason))}</span>
                                 </div>
                               )}
                               {Boolean(item.details.notes) && (
                                 <div>
                                   <span className="text-emerald-700 font-semibold">Nota:</span>{' '}
-                                  <span>{String(item.details.notes)}</span>
+                                  <span>{formatUserMessage(String(item.details.notes))}</span>
                                 </div>
                               )}
                             </div>
@@ -698,7 +696,7 @@ export function DetalleSolicitudPage() {
               <Clock size={16} className="text-amber-600 shrink-0" />
               <span>
                 {application.current_status === 'PENDIENTE_DOCUMENTOS'
-                  ? '5 días hábiles para subsanar requisitos (RN-11)'
+                  ? '5 días hábiles para subsanar requisitos'
                   : application.current_status === 'RADICADA'
                   ? '3 días hábiles para verificación administrativa'
                   : '8 días hábiles para emisión de concepto técnico'}
@@ -726,7 +724,7 @@ export function DetalleSolicitudPage() {
                   </button>
                 ) : (
                   <p className="text-stone-500 text-[11px] leading-relaxed">
-                    Su solicitud está radicada formalmente y en curso reglamentario ante el Comité de
+                    Su solicitud está en espera de revisión por el Comité de
                     Investigación.
                   </p>
                 )}

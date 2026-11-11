@@ -236,12 +236,12 @@ export function CatalogManagement() {
     if (result.success) {
       setSyncFeedback({
         success: true,
-        message: `Sincronización exitosa con Supabase (${result.typesCount} tipos de trámite y ${result.reqsCount} requisitos).`,
+        message: `Catálogo actualizado (${result.typesCount} tipos de trámite y ${result.reqsCount} requisitos).`,
       });
     } else {
       setSyncFeedback({
         success: false,
-        message: result.error || 'No se pudo sincronizar con Supabase.',
+        message: result.error || 'No se pudo actualizar el catálogo.',
       });
     }
     setTimeout(() => setSyncFeedback(null), 6000);
@@ -268,10 +268,10 @@ export function CatalogManagement() {
             onClick={handleSyncSupabase}
             disabled={isSyncing}
             className="px-3 py-1.5 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Sincronizar tablas application_types y requirements con Supabase"
+            title="Actualizar el catálogo"
           >
             <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar con Supabase'}</span>
+            <span>{isSyncing ? 'Sincronizando...' : 'Actualizar catálogo'}</span>
           </button>
 
           <button

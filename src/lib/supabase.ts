@@ -121,14 +121,14 @@ export const supabase = {
   get auth() {
     const client = getSupabaseClient();
     if (!client) {
-      throw new Error('Supabase no está conectado. Configure su URL y Anon Key.');
+      throw new Error('No se pudo conectar con el servicio. Intente nuevamente.');
     }
     return client.auth;
   },
   from(table: string) {
     const client = getSupabaseClient();
     if (!client) {
-      throw new Error('Supabase no está conectado. Configure su URL y Anon Key.');
+      throw new Error('No se pudo conectar con el servicio. Intente nuevamente.');
     }
     return client.from(table);
   },

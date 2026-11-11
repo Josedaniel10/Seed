@@ -152,7 +152,7 @@ export const useAuthStore = create<AuthState>()(
             .overrideTypes<Profile[], { merge: false }>();
           const profile = profiles?.[0];
           if (profileError || !profile) {
-            throw new Error('La cuenta necesita un perfil activo vinculado en Supabase.');
+            throw new Error('Su cuenta necesita un perfil activo para ingresar.');
           }
           set({ profile, token: authData.session.access_token, isAuthenticated: true, isLoading: false, error: null });
           return { success: true, profile, requiresConfirmation: false };
@@ -166,7 +166,7 @@ export const useAuthStore = create<AuthState>()(
       resendConfirmationEmail: async (email: string) => {
         const client = getSupabaseClient();
         if (!client) {
-          return { success: false, error: 'Supabase no está conectado.' };
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         }
 
         try {
@@ -231,7 +231,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (authErr) {
-            set({ isLoading: false, error: `Error de Supabase: ${authErr.message}` });
+            set({ isLoading: false, error: `No se pudo iniciar sesión: ${authErr.message}` });
             return { success: false, error: authErr.message };
           }
 
@@ -243,7 +243,7 @@ export const useAuthStore = create<AuthState>()(
             .overrideTypes<Profile[], { merge: false }>();
           const userProfile = profiles?.[0];
           if (profileError || !userProfile) {
-            const msg = 'La cuenta necesita un perfil activo vinculado en Supabase.';
+            const msg = 'Su cuenta necesita un perfil activo para ingresar.';
             set({ isLoading: false, error: msg, isAuthenticated: false, profile: null, token: null });
             return { success: false, error: msg };
           }
@@ -257,7 +257,7 @@ export const useAuthStore = create<AuthState>()(
 
           return { success: true };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error inesperado al iniciar sesión en Supabase';
+          const msg = err instanceof Error ? err.message : 'No se pudo iniciar sesión. Intente nuevamente.';
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

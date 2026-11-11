@@ -92,7 +92,7 @@ export function RevisionesPage() {
     if (!conceptJustification.trim()) {
       setFeedback({
         type: 'error',
-        message: 'RN-05: La emisión de concepto técnico exige fundamentación y justificación escrita.',
+        message: 'La emisión de concepto técnico exige fundamentación y justificación escrita.',
       });
       return;
     }
@@ -125,7 +125,7 @@ export function RevisionesPage() {
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
           Integrante del Comité de Investigaciones · Evaluación técnica, formulación de observaciones
-          y emisión de concepto reglamentario (RF-17, RF-18, RF-19, RF-20, RF-22).
+          y emisión del concepto técnico.
         </p>
       </div>
 
@@ -292,7 +292,7 @@ export function RevisionesPage() {
                     {/* 1. Formulario de Observaciones Técnicas (RF-17) */}
                     <div className="p-5 rounded-2xl bg-white border border-[#E5E3DC] space-y-3">
                       <h4 className="font-bold text-xs text-[#14281D] uppercase tracking-wider">
-                        Formular Observación Técnica / Solicitud de Ajustes (RF-17, RF-18)
+                        Formular Observación Técnica / Solicitud de Ajustes
                       </h4>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -340,7 +340,7 @@ export function RevisionesPage() {
                     {/* 2. Emisión de Concepto Técnico y Pase a Lista para Comité (RF-19, RF-20) */}
                     <div className="p-5 rounded-2xl bg-white border-2 border-[#14281D] space-y-3 shadow-xs">
                       <h4 className="font-bold text-xs text-[#14281D] uppercase tracking-wider">
-                        Emisión de Concepto Técnico Evaluador (RF-19, RF-20)
+                        Emisión de Concepto Técnico Evaluador
                       </h4>
 
                       <div className="space-y-3">
@@ -367,7 +367,7 @@ export function RevisionesPage() {
 
                         <div>
                           <label className="block text-[11px] font-bold text-stone-700 mb-1">
-                            Justificación Motivada del Concepto (RN-05) *
+                            Justificación Motivada del Concepto *
                           </label>
                           <textarea
                             rows={3}

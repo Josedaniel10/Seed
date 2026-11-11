@@ -314,7 +314,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (session.is_agenda_closed) {
           return {
             success: false,
-            error: 'RN-04: La agenda de la sesión se encuentra cerrada. No es posible incorporar más expedientes.',
+            error: 'La agenda de la sesión se encuentra cerrada. No es posible incorporar más expedientes.',
           };
         }
 
@@ -328,7 +328,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (!['LISTA_COMITE', 'COMMITTEE_READY'].includes(app.current_status)) {
           return {
             success: false,
-            error: `RN-04: Solo los expedientes en estado "LISTA_COMITE" pueden incorporarse en la agenda. Estado actual: "${app.current_status}".`,
+            error: 'Solo puede agregar a la agenda solicitudes listas para comité.',
           };
         }
 
@@ -405,7 +405,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (session.is_agenda_closed) {
           return {
             success: false,
-            error: 'RN-04: No es posible retirar expedientes una vez cerrada la agenda.',
+            error: 'No es posible retirar expedientes una vez cerrada la agenda.',
           };
         }
 
@@ -433,7 +433,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (session?.is_agenda_closed) {
           return {
             success: false,
-            error: 'RN-04: No es posible reordenar los temas de una agenda cerrada.',
+            error: 'No es posible reordenar los temas de una agenda cerrada.',
           };
         }
 
@@ -548,7 +548,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (getSupabaseClient()) {
           return performRemoteSessionMutation('attendance', {
             session_id: sessionId, user_id: userId, attended, notes,
-          }).then((result) => result ?? { success: false, error: 'Supabase no está conectado.' });
+          }).then((result) => result ?? { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' });
         }
         set((state) => ({
           attendances: state.attendances.map((a) => {
@@ -616,7 +616,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (!quorum.hasQuorum) {
           return {
             success: false,
-            error: `RN-07: No hay quórum reglamentario (${quorum.attendedCount} de ${quorum.requiredCount} requeridos). Está prohibido registrar votaciones o adoptar decisiones sin quórum.`,
+            error: `No hay quórum reglamentario (${quorum.attendedCount} de ${quorum.requiredCount} requeridos). Está prohibido registrar votaciones o adoptar decisiones sin quórum.`,
           };
         }
 
@@ -624,7 +624,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (!justification || justification.trim().length === 0) {
           return {
             success: false,
-            error: 'RN-05: El registro de la decisión colegiada exige una justificación motivada por escrito.',
+            error: 'El registro de la decisión colegiada exige una justificación motivada por escrito.',
           };
         }
 
@@ -674,7 +674,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             actor_id: registeredBy,
             action: 'DECISION_COMITE_APLAZADA',
             previous_status: 'LISTA_COMITE' as ApplicationDbStatus,
-            new_status: 'LISTA_COMITE' as ApplicationDbStatus, // Se preserva para la siguiente sesión (RN-06)
+            new_status: 'LISTA_COMITE' as ApplicationDbStatus, // Se preserva para la siguiente sesión
             details: {
               session_id: sessionId,
               session_number: session.session_number,
@@ -737,7 +737,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         if (!quorum.hasQuorum) {
           return {
             success: false,
-            error: `RN-07: No se puede dar por finalizada la deliberación formal sin quórum reglamentario (${quorum.attendedCount} de ${quorum.requiredCount}).`,
+            error: `No se puede dar por finalizada la deliberación formal sin quórum reglamentario (${quorum.attendedCount} de ${quorum.requiredCount}).`,
           };
         }
 
@@ -755,7 +755,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
 
       loadFromSupabase: async () => {
         const client = getSupabaseClient();
-        if (!client) return { success: false, error: 'Supabase no está conectado.' };
+        if (!client) return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         set({ isLoading: true, error: null });
         try {
           const responses = await Promise.all([

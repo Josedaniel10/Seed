@@ -207,8 +207,8 @@ export const useUserStore = create<UserManagementState>()(
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
-          set({ isLoading: false, error: 'Supabase no está conectado.' });
-          return { success: false, error: 'Supabase no está conectado.' };
+          set({ isLoading: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' });
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         }
 
         try {
@@ -247,7 +247,7 @@ export const useUserStore = create<UserManagementState>()(
           set({ users: [], isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al cargar perfiles desde Supabase';
+          const msg = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

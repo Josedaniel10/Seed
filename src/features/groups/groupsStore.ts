@@ -259,8 +259,8 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
-          set({ isLoading: false, error: 'Supabase no está conectado.' });
-          return { success: false, error: 'Supabase no está conectado.' };
+          set({ isLoading: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' });
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         }
 
         try {

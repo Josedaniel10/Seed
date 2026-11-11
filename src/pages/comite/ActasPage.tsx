@@ -114,7 +114,7 @@ export function ActasPage() {
           </h1>
         </div>
         <p className="text-xs text-stone-500 mt-1">
-          Secuencia anual consecutiva (RF-31), consolidación automática de orden del día y acuerdos, aprobación solemne e inmutabilidad (RNF-03).
+          Consulte las actas y las decisiones de cada sesión.
         </p>
       </div>
 
@@ -144,10 +144,10 @@ export function ActasPage() {
         <table className="w-full text-left text-xs">
           <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
             <tr>
-              <th className="py-3 px-4">Número de Acta (RF-31)</th>
+              <th className="py-3 px-4">Número de Acta</th>
               <th className="py-3 px-4">Vigencia Anual</th>
               <th className="py-3 px-4">Sesión Vinculada</th>
-              <th className="py-3 px-4">Estado Legal</th>
+              <th className="py-3 px-4">Estado</th>
               <th className="py-3 px-4 text-right">Acciones</th>
             </tr>
           </thead>
@@ -173,7 +173,7 @@ export function ActasPage() {
                     {acta.is_approved ? (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200 inline-flex items-center gap-1">
                         <Lock size={10} />
-                        <span>Aprobada e Inmutable (RNF-03)</span>
+                        <span>Aprobada</span>
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
@@ -252,7 +252,7 @@ export function ActasPage() {
               {isEditingDraft ? (
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1 text-[11px]">
-                    Editar Texto y Compromisos del Acta (RF-30):
+                    Contenido del acta
                   </label>
                   <textarea
                     rows={16}
@@ -298,7 +298,7 @@ export function ActasPage() {
                     className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <CheckCircle2 size={13} />
-                    <span>Aprobar Acta Formalmente (RNF-03)</span>
+                    <span>Aprobar acta</span>
                   </button>
                 )}
               </div>

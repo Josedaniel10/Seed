@@ -132,7 +132,7 @@ export function ValidacionPage() {
     if (!rejectReason.trim()) {
       setFeedback({
         type: 'error',
-        message: 'RN-05: El motivo del rechazo es obligatorio y debe estar justificado.',
+        message: 'El motivo del rechazo es obligatorio y debe estar justificado.',
       });
       return;
     }
@@ -177,7 +177,7 @@ export function ValidacionPage() {
           ? '¡Validación aprobada! 100% de requisitos conformes. La solicitud avanzó a "En revisión técnica".'
           : nuevo === 'PENDIENTE_DOCUMENTOS'
           ? 'Validación concluida con requisitos subsanables observados. La solicitud pasó a "Pendiente por documentos".'
-          : 'Validación finalizada con rechazo directo por requisito no subsanable (RN-11).';
+          : 'Validación finalizada con rechazo directo por requisito no subsanable.';
 
       setFeedback({ type: 'success', message: mensaje });
       setTimeout(() => setFeedback(null), 4500);
@@ -204,8 +204,7 @@ export function ValidacionPage() {
           Bandeja de Validación Documental
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
-          Verificación reglamentaria de requisitos y documentos para trámites Radicados y Pendientes
-          por documentos (RF-12, RF-13, RF-14).
+          Revise los documentos y registre las correcciones necesarias.
         </p>
       </div>
 
@@ -238,9 +237,7 @@ export function ValidacionPage() {
             </div>
 
             <p className="text-xs text-stone-600 leading-relaxed">
-              Está a punto de rechazar el requisito: <strong>{rejectingDocId.reqName}</strong>. De
-              acuerdo con la norma (RN-05, RF-13), debe justificar de manera explícita la causa
-              técnica o formal del rechazo para que el investigador conozca qué corregir.
+              Indique qué debe corregir el investigador en <strong>{rejectingDocId.reqName}</strong>.
             </p>
 
             <div>
@@ -435,7 +432,7 @@ export function ValidacionPage() {
                               </span>
                             ) : (
                               <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-rose-100 text-rose-900 border border-rose-200">
-                                No subsanable (Rechazo RN-11)
+                                No permite corrección
                               </span>
                             )}
                           </div>
@@ -518,8 +515,7 @@ export function ValidacionPage() {
               {/* Botón de cierre de validación (T3.6 / RF-14, RN-02, RN-11) */}
               <div className="pt-4 border-t border-[#E5E3DC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-[11px] text-stone-500">
-                  Transición reglamentaria automática: 100% válido → <em>En revisión</em>; falla
-                  subsanable → <em>Pendiente por docs</em>; falla no subsanable → <em>Rechazada</em>.
+                  Revise todos los documentos antes de finalizar la validación.
                 </span>
 
                 <button

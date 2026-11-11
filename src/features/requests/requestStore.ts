@@ -1,3 +1,4 @@
+import { formatUserMessage } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
@@ -578,7 +579,7 @@ export const useRequestStore = create<RequestState>()(
             if (!isUuid(typeId) || (payload.research_group_id && !isUuid(payload.research_group_id))) {
               return {
                 success: false,
-                error: 'El tipo de solicitud o el grupo seleccionado no corresponde al catálogo de Supabase. Actualice la página e intente nuevamente.',
+                error: 'El tipo de solicitud o el grupo seleccionado no está disponible. Actualice la página e intente nuevamente.',
               };
             }
 
@@ -602,7 +603,7 @@ export const useRequestStore = create<RequestState>()(
             if (error || !data || typeof data !== 'object' || !('application' in data)) {
               return {
                 success: false,
-                error: `No se pudo confirmar la radicación en Supabase: ${error?.message ?? 'respuesta inválida'}`,
+                error: `No se pudo confirmar el envío de la solicitud: ${formatUserMessage(error?.message, 'respuesta inválida')}`,
               };
             }
 
@@ -846,7 +847,7 @@ export const useRequestStore = create<RequestState>()(
         if ((status === 'RECHAZADO' || status === 'REJECTED') && (!observations || observations.trim().length === 0)) {
           return {
             success: false,
-            error: 'Todo rechazo documental exige justificación motivada por escrito (RN-05, RF-13).',
+            error: 'Todo rechazo documental exige justificación motivada por escrito.',
           };
         }
 
@@ -869,7 +870,7 @@ export const useRequestStore = create<RequestState>()(
             p_observations: observations,
           }).overrideTypes<Pick<FiledApplication, 'audit'> & { document: RequestDocument }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('document' in data)) {
-            return { success: false, error: error?.message ?? 'Supabase no confirmó la validación del documento.' };
+            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la validación del documento.') };
           }
 
           const document = { ...data.document, request_id: requestId };
@@ -960,7 +961,7 @@ export const useRequestStore = create<RequestState>()(
         if (hasRejectedNonSubsanable) {
           targetStatus = 'RECHAZADA';
           transitionReason =
-            'Rechazo directo en validación: Requisito esencial no subsanable insatisfecho o rechazado (RN-11).';
+            'Rechazo directo en validación: Requisito esencial no subsanable insatisfecho o rechazado.';
         } else if (hasRejectedSubsanable || missingMandatoryCount > 0) {
           targetStatus = 'PENDIENTE_DOCUMENTOS';
           transitionReason =
@@ -1007,7 +1008,7 @@ export const useRequestStore = create<RequestState>()(
         if (currentStatus === 'CERRADA' || currentStatus === 'CLOSED') {
           return {
             success: false,
-            error: 'RN-01: El expediente se encuentra en estado CERRADA (estado final inmutable). No se admiten transiciones.',
+            error: 'La solicitud está cerrada y no admite más cambios.',
           };
         }
 
@@ -1015,7 +1016,7 @@ export const useRequestStore = create<RequestState>()(
         if (!allowedNext.includes(newStatus)) {
           return {
             success: false,
-            error: `RF-21: Transición no permitida de "${currentStatus}" hacia "${newStatus}". Estados válidos: [${allowedNext.filter((s) => !s.includes('_')).length > 0 ? allowedNext.join(', ') : allowedNext.join(', ')}].`,
+            error: 'La solicitud no puede pasar al estado seleccionado.',
           };
         }
 
@@ -1025,7 +1026,7 @@ export const useRequestStore = create<RequestState>()(
         ) {
           return {
             success: false,
-            error: `RN-05: La transición al estado "${newStatus}" exige una justificación motivada por escrito.`,
+            error: 'Escriba una justificación para cambiar el estado de la solicitud.',
           };
         }
 
@@ -1044,7 +1045,7 @@ export const useRequestStore = create<RequestState>()(
           if (missingOrInvalid.length > 0) {
             return {
               success: false,
-              error: `RN-02: No es posible transitar a "En revisión" porque faltan requisitos obligatorios válidos: ${missingOrInvalid.map((m) => m.name).join(', ')}.`,
+              error: `No es posible transitar a "En revisión" porque faltan requisitos obligatorios válidos: ${missingOrInvalid.map((m) => m.name).join(', ')}.`,
             };
           }
         }
@@ -1059,7 +1060,7 @@ export const useRequestStore = create<RequestState>()(
             p_details: details ?? {},
           }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'>, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('application' in data)) {
-            return { success: false, error: error?.message ?? 'Supabase no confirmó el cambio de estado.' };
+            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el cambio de estado.') };
           }
 
           const request = { ...data.application, request_type_id: data.application.application_type_id };
@@ -1124,7 +1125,7 @@ export const useRequestStore = create<RequestState>()(
         if (reviewer.id === req.applicant_id) {
           return {
             hasConflict: true,
-            reason: 'RN-03: Conflicto de intereses directo. El evaluador es el autor solicitante del trámite.',
+            reason: 'Conflicto de intereses directo. El evaluador es el autor solicitante del trámite.',
           };
         }
 
@@ -1132,7 +1133,7 @@ export const useRequestStore = create<RequestState>()(
           if (reviewer.research_group_id === req.research_group_id) {
             return {
               hasConflict: true,
-              reason: 'RN-14: Inhabilidad por conflicto de intereses. El evaluador pertenece al mismo grupo de investigación adscrito a la solicitud.',
+              reason: 'Inhabilidad por conflicto de intereses. El evaluador pertenece al mismo grupo de investigación adscrito a la solicitud.',
             };
           }
         }
@@ -1163,7 +1164,7 @@ export const useRequestStore = create<RequestState>()(
             p_deadline: deadlineDate,
           }).overrideTypes<Pick<FiledApplication, 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
-            return { success: false, error: error?.message ?? 'Supabase no confirmó la asignación.' };
+            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la asignación.') };
           }
 
           const assignment = { ...data.assignment, request_id: requestId };
@@ -1359,7 +1360,7 @@ export const useRequestStore = create<RequestState>()(
         if (!justification || justification.trim().length === 0) {
           return {
             success: false,
-            error: 'RN-05: La emisión de concepto técnico exige fundamentación y justificación escrita.',
+            error: 'La emisión de concepto técnico exige fundamentación y justificación escrita.',
           };
         }
 
@@ -1383,7 +1384,7 @@ export const useRequestStore = create<RequestState>()(
             p_justification: justification,
           }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
-            return { success: false, error: error?.message ?? 'Supabase no confirmó el concepto técnico.' };
+            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el concepto técnico.') };
           }
 
           const request = { ...data.application, request_type_id: data.application.application_type_id };
@@ -1520,7 +1521,7 @@ export const useRequestStore = create<RequestState>()(
             daysRemaining: 5,
             isOverdue: false,
             isUrgent: true,
-            description: '5 días hábiles reglamentarios para subsanar requisitos (RN-11)',
+            description: '5 días hábiles reglamentarios para subsanar requisitos',
           };
         }
 
@@ -1545,7 +1546,7 @@ export const useRequestStore = create<RequestState>()(
 
       assertAuditHistoryImmutable: (recordId: string) => {
         throw new Error(
-          `RNF-03: Operación denegada. La bitácora de auditoría e historial (registro ${recordId}) es estrictamente inmutable y append-only.`
+          `El historial de la solicitud no se puede modificar.`
         );
       },
 
@@ -1623,7 +1624,7 @@ export const useRequestStore = create<RequestState>()(
         const client = getSupabaseClient();
         if (!client) {
           set({ isLoading: false });
-          return { success: false, error: 'Supabase no está conectado.' };
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         }
 
         try {
@@ -1737,7 +1738,7 @@ export const useRequestStore = create<RequestState>()(
           });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al sincronizar solicitudes desde Supabase';
+          const msg = err instanceof Error ? err.message : 'No se pudieron actualizar las solicitudes.';
           set({ isLoading: false });
           return { success: false, error: msg };
         }

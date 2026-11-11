@@ -28,7 +28,7 @@ async function loadAuthenticatedSession(client: SupabaseClient, user: User): Pro
   }
   const record = profile.data?.[0];
   if (!record) {
-    throw new Error('La cuenta necesita un perfil activo vinculado en Supabase.');
+    throw new Error('Su cuenta necesita un perfil activo para ingresar.');
   }
   const roles = [...new Set([record.role, ...(assignments.data ?? []).map(({ role }) => role)].map(normalizeRole))]
     .filter((role): role is AppRole => Object.hasOwn(ROLE_HOME_PATHS, role));
@@ -231,7 +231,7 @@ export const useSessionStore = create<SessionState>()(
 
         if (!client) {
           set({ isLoading: false });
-          return { success: false, error: 'Supabase no está conectado.' };
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
         }
 
         try {

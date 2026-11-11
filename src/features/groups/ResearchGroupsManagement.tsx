@@ -86,7 +86,7 @@ export const ResearchGroupsManagement: React.FC = () => {
     setIsSyncing(true);
     const res = await syncWithSupabase();
     if (res.success) {
-      showFeedback(`Sincronizados ${res.count || 0} grupos de investigación desde Supabase.`);
+      showFeedback(`Lista actualizada. ${res.count || 0} grupos de investigación.`);
     } else {
       showFeedback(`Aviso de sincronización: ${res.error}`);
     }
@@ -160,7 +160,7 @@ export const ResearchGroupsManagement: React.FC = () => {
             onClick={handleSync}
             disabled={isSyncing}
             className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Sincronizar grupos con la tabla 'research_groups' de Supabase"
+            title="Actualizar la lista de grupos"
           >
             <RefreshCw size={13} className={isSyncing ? 'animate-spin text-[#84CC16]' : 'text-stone-500'} />
             <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
@@ -185,7 +185,7 @@ export const ResearchGroupsManagement: React.FC = () => {
       )}
       {usersError && (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-          No fue posible cargar los usuarios y sus roles desde Supabase: {usersError}
+          No fue posible cargar los usuarios: {usersError}
         </div>
       )}
 
@@ -409,7 +409,7 @@ export const ResearchGroupsManagement: React.FC = () => {
                 </select>
                 {isLoadingUsers && (
                   <p className="text-[10px] text-stone-500 mt-1">
-                    Cargando usuarios y roles desde Supabase...
+                    Cargando usuarios...
                   </p>
                 )}
                 {!isLoadingUsers && leaders.length === 0 && (
