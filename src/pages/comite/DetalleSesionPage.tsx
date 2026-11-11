@@ -1,3 +1,6 @@
+import { SessionMinutesPanel } from '../../features/minutes/SessionMinutesPanel.tsx';
+import { normalizeRole } from '../../lib/permissions.ts';
+import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -26,12 +29,19 @@ import { useSessionStore } from '../../stores/session.store.ts';
 import { SessionDecisionType } from '../../types/database.ts';
 
 export function DetalleSesionPage() {
+  useCommitteeData();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useSessionStore();
 
   const {
     sessions,
+    isLoading,
+    isSaving,
+    error,
+    agendaItems,
+    reorderAgenda,
+    updateAgendaSpeaker,
     getAgendaBySession,
     addApplicationToAgenda,
     removeApplicationFromAgenda,
@@ -50,7 +60,7 @@ export function DetalleSesionPage() {
   const session = sessions.find((s) => s.id === id);
 
   const [activeTab, setActiveTab] = useState<'agenda' | 'quorum' | 'decisiones' | 'acta'>('agenda');
-  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('usr-003');
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('');
   const [selectedAppId, setSelectedAppId] = useState<string>('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -59,6 +69,9 @@ export function DetalleSesionPage() {
   const [decisionPayloads, setDecisionPayloads] = useState<
     Record<string, { decision: SessionDecisionType; justification: string }>
   >({});
+
+  if (isLoading && !session) return <p role="status">Cargando sesión…</p>;
+  if (error) return <p role="alert" className="text-rose-800">{error}</p>;
 
   if (!session) {
     return (
@@ -86,14 +99,17 @@ export function DetalleSesionPage() {
   // Candidatos para agregar a la agenda: Solicitudes en estado LISTA_COMITE (RN-04)
   const agendaAppIds = new Set(agenda.map((a) => a.application_id));
   const candidateApps = requests.filter(
-    (a) => a.current_status === 'LISTA_COMITE' && !agendaAppIds.has(a.id)
+    (a) => ['LISTA_COMITE', 'COMMITTEE_READY'].includes(a.current_status) && !agendaAppIds.has(a.id)
+      && !agendaItems.some((item) => item.application_id === a.id
+        && sessions.some((other) => other.id === item.session_id && !other.is_completed))
   );
 
   const committeeMembers = users.filter(
-    (u) => u.role === 'integrante_comite' || u.role === 'secretario'
+    (u) => u.is_active && [u.role, ...(u.roles ?? [])].some((role) =>
+      ['committee_member', 'secretary'].includes(normalizeRole(role)))
   );
 
-  const isSecretaryOrAdmin = user?.activeRole === 'secretario' || user?.activeRole === 'admin';
+  const isSecretaryOrAdmin = normalizeRole(user?.activeRole) === 'secretary' || user?.activeRole === 'admin';
 
   // Manejador: Agregar solicitud a la agenda
   const handleAddToAgenda = async (appIdToAdd: string) => {
@@ -142,7 +158,7 @@ export function DetalleSesionPage() {
     if (!res.success) {
       setActionError(res.error || 'Error al cerrar la agenda.');
     } else {
-      setActionSuccess('Agenda formalmente cerrada. Convocatoria y citaciones generadas.');
+      setActionSuccess('Agenda cerrada. La sesión está lista para registrar decisiones.');
       setTimeout(() => setActionSuccess(null), 3500);
     }
   };
@@ -194,7 +210,8 @@ export function DetalleSesionPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <fieldset disabled={isSaving} className="space-y-6 min-w-0">
+      {isSaving && <p role="status">Guardando cambios…</p>}
       {/* Botón Volver y Encabezado */}
       <div className="space-y-2">
         <button
@@ -231,7 +248,7 @@ export function DetalleSesionPage() {
                 )}
               </div>
               <p className="text-xs text-stone-500 mt-1 flex flex-wrap items-center gap-2">
-                <span>{new Date(session.scheduled_at).toLocaleString('es-CO')}</span>
+                <span>{new Date(session.scheduled_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })} (Colombia)</span>
                 <span>·</span>
                 <span>{session.location_or_url}</span>
               </p>
@@ -255,6 +272,7 @@ export function DetalleSesionPage() {
 
             {isSecretaryOrAdmin && !session.is_completed && (
               <button
+                disabled={!session.is_agenda_closed || !quorum.hasQuorum || decisions.length !== agenda.length}
                 onClick={handleFinalizeSession}
                 className="px-3.5 py-1.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
               >
@@ -349,7 +367,7 @@ export function DetalleSesionPage() {
                   className="px-3.5 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <Lock size={12} />
-                  <span>Cerrar Agenda y Convocar (RF-26)</span>
+                  <span>Cerrar agenda</span>
                 </button>
               )}
             </div>
@@ -394,9 +412,27 @@ export function DetalleSesionPage() {
 
                         <div className="flex items-center gap-3">
                           <span className="text-[11px] font-semibold text-stone-600">
-                            Ponente: {item.speaker_name || 'Sin ponente'}
+                            Ponente: {users.find((member) => member.id === item.speaker_id)?.full_name || item.speaker_name || 'Sin ponente'}
                           </span>
                           {isSecretaryOrAdmin && !session.is_agenda_closed && (
+                            <>
+                              <label className="text-xs">Ponente
+                                <select aria-label={`Ponente de ${appData?.filing_number}`} value={item.speaker_id ?? ''}
+                                  onChange={async (event) => {
+                                    const result = await updateAgendaSpeaker(session.id, appId, event.target.value || null);
+                                    if (!result.success) setActionError(result.error ?? 'Error al cambiar ponente.');
+                                  }} className="border rounded-lg p-1 ml-2">
+                                  <option value="">Sin ponente</option>
+                                  {committeeMembers.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}
+                                </select>
+                              </label>
+                              <button aria-label="Subir en agenda" disabled={item.agenda_order === 1} onClick={async () => {
+                                const ids = agenda.map((entry) => entry.id);
+                                const index = ids.indexOf(item.id);
+                                [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
+                                const result = await reorderAgenda(session.id, ids);
+                                if (!result.success) setActionError(result.error ?? 'Error al ordenar agenda.');
+                              }} className="border rounded-lg px-2 py-1 disabled:opacity-40">↑</button>
                             <button
                               onClick={() => handleRemoveFromAgenda(appId)}
                               className="text-stone-400 hover:text-rose-600 cursor-pointer p-1"
@@ -404,6 +440,7 @@ export function DetalleSesionPage() {
                             >
                               <Trash2 size={14} />
                             </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -556,14 +593,16 @@ export function DetalleSesionPage() {
                   <input
                     type="checkbox"
                     checked={att.attended}
-                    onChange={(e) =>
-                      toggleAttendance(
+                    disabled={!isSecretaryOrAdmin || session.is_completed}
+                    onChange={async (e) => {
+                      const result = await toggleAttendance(
                         session.id,
                         att.user_id,
                         e.target.checked,
                         e.target.checked ? 'Presencial' : 'Ausencia sin justificación'
-                      )
-                    }
+                      );
+                      if (result && !result.success) setActionError(result.error ?? 'Error al guardar asistencia.');
+                    }}
                     className="w-4 h-4 text-[#14281D] rounded cursor-pointer accent-[#14281D]"
                   />
                 </label>
@@ -576,6 +615,7 @@ export function DetalleSesionPage() {
       {/* Pestaña 3: Decisiones Colegiadas y Deliberación (RF-28, RN-05, RN-06, RN-07) */}
       {activeTab === 'decisiones' && (
         <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4 text-xs">
+          {!session.is_agenda_closed && <p>Cierre la agenda antes de registrar las decisiones.</p>}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
             <div>
               <div className="flex items-center gap-2">
@@ -637,7 +677,7 @@ export function DetalleSesionPage() {
                           {appData?.filing_number}
                         </span>
                         <span className="text-[11px] text-stone-500">
-                          Ponente: {item.speaker_name || 'Sin ponente'}
+                          Ponente: {users.find((member) => member.id === item.speaker_id)?.full_name || item.speaker_name || 'Sin ponente'}
                         </span>
                       </div>
 
@@ -658,7 +698,7 @@ export function DetalleSesionPage() {
                           Sentido del Acuerdo
                         </label>
                         <select
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           value={currentPayload.decision}
                           onChange={(e) =>
                             setDecisionPayloads({
@@ -684,7 +724,7 @@ export function DetalleSesionPage() {
                         </label>
                         <input
                           type="text"
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           value={currentPayload.justification}
                           onChange={(e) =>
                             setDecisionPayloads({
@@ -702,11 +742,11 @@ export function DetalleSesionPage() {
 
                       <div className="md:col-span-2 flex items-end">
                         <button
-                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin}
+                          disabled={!quorum.hasQuorum || !isSecretaryOrAdmin || !session.is_agenda_closed || session.is_completed || !!recordedDecision}
                           onClick={() => handleRegisterDecision(appId)}
                           className="w-full py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
                         >
-                          {recordedDecision ? 'Actualizar' : 'Asentar'}
+                          {recordedDecision ? 'Registrada' : 'Asentar'}
                         </button>
                       </div>
                     </div>
@@ -718,78 +758,9 @@ export function DetalleSesionPage() {
         </div>
       )}
 
-      {/* Pestaña 4: Borrador del Acta Oficial (RF-29, RF-31) */}
       {activeTab === 'acta' && (
-        <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs space-y-4 text-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
-            <div>
-              <div className="flex items-center gap-2">
-                <FileCheck size={16} className="text-[#14281D]" />
-                <h3 className="font-bold text-sm text-[#14281D]">
-                  Borrador Consolidado de Acta de Sesión (RF-29)
-                </h3>
-              </div>
-              <p className="text-stone-500 text-[11px] mt-0.5">
-                Generado de forma automática a partir del orden del día, lista de asistencia y acuerdos adoptados.
-              </p>
-            </div>
-
-            <button
-              onClick={() => navigate('/actas')}
-              className="px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Download size={13} />
-              <span>Ver en Módulo de Actas</span>
-            </button>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-[#E5E3DC] bg-[#FAF9F6] font-mono text-xs text-stone-700 leading-relaxed space-y-4">
-            <div className="text-center font-bold text-[#14281D] text-sm pb-2 border-b border-stone-200">
-              ACTA OFICIAL DE {session.session_number.toUpperCase()}
-            </div>
-
-            <div>
-              <p><strong>FECHA Y HORA:</strong> {new Date(session.scheduled_at).toLocaleString('es-CO')}</p>
-              <p><strong>LUGAR / MODALIDAD:</strong> {session.location_or_url}</p>
-              <p><strong>TIPO DE SESIÓN:</strong> {session.session_type}</p>
-            </div>
-
-            <div>
-              <p className="font-bold text-[#14281D]">1. VERIFICACIÓN DEL QUÓRUM REGLAMENTARIO (RN-07):</p>
-              <p>
-                Asistentes ({quorum.attendedCount} de {quorum.totalMembers}):{' '}
-                {attendances
-                  .filter((a) => a.attended)
-                  .map((a) => `${a.user_name} (${a.user_role})`)
-                  .join(', ')}
-              </p>
-              <p className="text-emerald-800 font-bold">
-                Dictamen: {quorum.hasQuorum ? 'HAY QUÓRUM REGLAMENTARIO VÁLIDO' : 'SIN QUÓRUM'}
-              </p>
-            </div>
-
-            <div>
-              <p className="font-bold text-[#14281D]">2. ACUERDOS Y DECISIONES ADOPTADAS:</p>
-              {decisions.length === 0 ? (
-                <p className="italic text-stone-500">Pendiente de registro de acuerdos en la deliberación.</p>
-              ) : (
-                <ol className="list-decimal pl-4 space-y-2 mt-1">
-                  {decisions.map((dec) => {
-                    const decApp = getApplicationById(dec.application_id || dec.request_id || '');
-                    return (
-                      <li key={dec.id}>
-                        <strong>{decApp?.filing_number}:</strong> {decApp?.title} ·{' '}
-                        <span className="font-bold text-[#14281D]">[{dec.decision}]</span>. Fundamento:{' '}
-                        {dec.justification}
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </div>
-          </div>
-        </div>
+        <SessionMinutesPanel sessionId={session.id} isCompleted={session.is_completed} canManage={isSecretaryOrAdmin} />
       )}
-    </div>
+    </fieldset>
   );
 }

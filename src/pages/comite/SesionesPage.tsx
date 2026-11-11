@@ -1,3 +1,6 @@
+import { useUserStore } from '../../features/users/userStore.ts';
+import { normalizeRole } from '../../lib/permissions.ts';
+import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -17,32 +20,39 @@ import { useSessionStore } from '../../stores/session.store.ts';
 import { SessionType } from '../../types/database.ts';
 
 export function SesionesPage() {
+  useCommitteeData();
   const navigate = useNavigate();
   const { user } = useSessionStore();
+  const users = useUserStore((state) => state.users);
+  const memberCount = users.filter((member) => member.is_active && [member.role, ...(member.roles ?? [])]
+    .some((role) => ['committee_member', 'secretary'].includes(normalizeRole(role)))).length;
   const {
     sessions,
+    isLoading,
+    error,
     createSession,
     getAgendaBySession,
     checkSessionQuorum,
   } = useCommitteeSessionsStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formDate, setFormDate] = useState('2026-11-26');
+  const [formDate, setFormDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
   const [formTime, setFormTime] = useState('09:00');
   const [formType, setFormType] = useState<SessionType>('ORDINARIA');
-  const [formLocation, setFormLocation] = useState(
-    'Sala de Juntas de Vicerrectoría / Sala Virtual Institucional'
-  );
+  const [formLocation, setFormLocation] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [formQuorum, setFormQuorum] = useState(4);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const canManageSessions = user?.activeRole === 'secretario' || user?.activeRole === 'admin';
+  const canManageSessions = normalizeRole(user?.activeRole) === 'secretary' || user?.activeRole === 'admin';
 
   const handleCrearSesion = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    const scheduledIso = `${formDate}T${formTime}:00Z`;
+    if (!user || isSaving) return;
+    setIsSaving(true);
+    const scheduledIso = new Date(`${formDate}T${formTime}:00-05:00`).toISOString();
 
     const res = await createSession(
       {
@@ -55,12 +65,14 @@ export function SesionesPage() {
       user?.fullName || 'Secretaria Técnica'
     );
 
+    setIsSaving(false);
     if (!res.success) {
       setFormError(res.error || 'Error al programar la sesión.');
       return;
     }
 
     setIsModalOpen(false);
+    if (res.session) navigate(`/sesiones/${res.session.id}`);
   };
 
   return (
@@ -83,7 +95,11 @@ export function SesionesPage() {
 
         {canManageSessions && (
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setFormError(null);
+              setFormQuorum(Math.floor(memberCount / 2) + 1);
+              setIsModalOpen(true);
+            }}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
           >
             <Plus size={15} />
@@ -92,6 +108,9 @@ export function SesionesPage() {
         )}
       </div>
 
+      {isLoading && <p role="status">Cargando sesiones…</p>}
+      {error && <p role="alert" className="text-rose-800">{error}</p>}
+      {!isLoading && !error && sessions.length === 0 && <p>No hay sesiones programadas.</p>}
       {/* Lista de Sesiones */}
       <div className="space-y-4">
         {sessions.map((ses) => {
@@ -99,12 +118,14 @@ export function SesionesPage() {
           const quorum = checkSessionQuorum(ses.id);
           const d = new Date(ses.scheduled_at);
           const dateFormatted = d.toLocaleDateString('es-CO', {
+            timeZone: 'America/Bogota',
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric',
           });
           const timeFormatted = d.toLocaleTimeString('es-CO', {
+            timeZone: 'America/Bogota',
             hour: '2-digit',
             minute: '2-digit',
           });
@@ -212,7 +233,7 @@ export function SesionesPage() {
       {/* Modal Programar Nueva Sesión (RF-24) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 text-xs">
+          <div role="dialog" aria-modal="true" aria-label="Programar sesión de comité" className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 text-xs">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <div>
                 <h3 className="font-bold text-sm text-[#14281D]">Programar Sesión de Comité (RF-24)</h3>
@@ -235,13 +256,14 @@ export function SesionesPage() {
               </div>
             )}
 
-            <form onSubmit={handleCrearSesion} className="space-y-3.5">
+            <form onSubmit={handleCrearSesion}><fieldset disabled={isSaving} className="space-y-3.5">
+              <p className="text-stone-500">{memberCount} integrantes activos disponibles para asistencia y quórum.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Tipo de Sesión</label>
-                  <select
+                  <label htmlFor="session-type" className="block font-semibold text-stone-700 mb-1">Tipo de Sesión</label>
+                  <select id="session-type"
                     value={formType}
-                    onChange={(e) => setFormType(e.target.value as SessionType)}
+                    onChange={(e) => setFormType(e.target.value === 'ORDINARIA' ? 'ORDINARIA' : 'EXTRAORDINARIA')}
                     className="w-full px-3 py-2 rounded-xl border border-[#E5E3DC] outline-none bg-white font-medium"
                   >
                     <option value="ORDINARIA">Ordinaria</option>
@@ -250,11 +272,11 @@ export function SesionesPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Quórum Mínimo (RN-07)</label>
-                  <input
+                  <label htmlFor="session-quorum" className="block font-semibold text-stone-700 mb-1">Quórum Mínimo (RN-07)</label>
+                  <input id="session-quorum"
                     type="number"
-                    min={2}
-                    max={7}
+                    min={1}
+                    max={memberCount || undefined}
                     required
                     value={formQuorum}
                     onChange={(e) => setFormQuorum(parseInt(e.target.value, 10))}
@@ -265,8 +287,8 @@ export function SesionesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Fecha</label>
-                  <input
+                  <label htmlFor="session-date" className="block font-semibold text-stone-700 mb-1">Fecha</label>
+                  <input id="session-date"
                     type="date"
                     required
                     value={formDate}
@@ -276,8 +298,8 @@ export function SesionesPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Hora</label>
-                  <input
+                  <label htmlFor="session-time" className="block font-semibold text-stone-700 mb-1">Hora de Colombia</label>
+                  <input id="session-time"
                     type="time"
                     required
                     value={formTime}
@@ -288,8 +310,8 @@ export function SesionesPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-stone-700 mb-1">Lugar o Enlace Virtual</label>
-                <input
+                <label htmlFor="session-location" className="block font-semibold text-stone-700 mb-1">Lugar o Enlace Virtual</label>
+                <input id="session-location"
                   type="text"
                   required
                   value={formLocation}
@@ -311,10 +333,10 @@ export function SesionesPage() {
                   type="submit"
                   className="px-4 py-2 bg-[#14281D] text-white rounded-xl font-bold hover:bg-[#1E3A2B] cursor-pointer"
                 >
-                  Programar Convocatoria
+                  {isSaving ? 'Guardando…' : 'Crear sesión'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}

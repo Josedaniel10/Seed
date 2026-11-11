@@ -661,6 +661,8 @@ export function DetalleSolicitudPage() {
                                   </span>
                                 </div>
                               )}
+                              {typeof item.details.session_number === 'string' && <p>Sesión {item.details.session_number}</p>}
+                              {typeof item.details.justification === 'string' && <p>Fundamento {item.details.justification}</p>}
                               {Boolean(item.details.reason) && (
                                 <div>
                                   <span className="text-rose-600 font-semibold">Motivo:</span>{' '}

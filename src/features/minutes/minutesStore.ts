@@ -3,10 +3,16 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { CommitteeMinutes } from '../../types/database.ts';
 import { useCommitteeSessionsStore } from '../sessions/committeeSessionsStore.ts';
 import { useRequestStore } from '../requests/requestStore.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
+import { minuteSchema, mutateMinutes } from '../sessions/committeeApi.ts';
+import type { MinutesAction } from '../sessions/committeeApi.ts';
 
 export interface MinutesState {
   minutes: CommitteeMinutes[];
   isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+  loadFromSupabase: () => Promise<{ success: boolean; error?: string }>;
 
   // Acciones T5.1: Consecutivo Anual Sin Saltos ni Duplicidades
   generateNextMinuteNumber: (year?: number) => Promise<string>;
@@ -118,8 +124,10 @@ let minuteSeqLock: Promise<void> = Promise.resolve();
 export const useMinutesStore = create<MinutesState>()(
   persist(
     (set, get) => ({
-      minutes: INITIAL_MINUTES,
+      minutes: getSupabaseCredentials().isConfigured ? [] : INITIAL_MINUTES,
       isLoading: false,
+      isSaving: false,
+      error: null,
 
       // =========================================================
       // T5.1: GENERACIÓN DE CONSECUTIVO ANUAL SIN SALTOS (RF-31)
@@ -156,6 +164,8 @@ export const useMinutesStore = create<MinutesState>()(
       // T5.2: GENERACIÓN DE BORRADOR CONSOLIDADO (RF-29)
       // =========================================================
       generateDraftFromSession: async (sessionId, actorId, actorName) => {
+        const remote = await performRemoteMinutesMutation('generate', { session_id: sessionId });
+        if (remote) return remote;
         const sessionsStore = useCommitteeSessionsStore.getState();
         const session = sessionsStore.getSessionById(sessionId);
 
@@ -260,6 +270,8 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
       // T5.3: EDICIÓN Y APROBACIÓN FORMAL INMUTABLE (RF-30, RNF-03)
       // =========================================================
       updateDraftContent: async (minuteId, draftContent, actorId, actorName) => {
+        const remote = await performRemoteMinutesMutation('update', { minute_id: minuteId, draft_content: draftContent });
+        if (remote) return remote;
         const minute = get().minutes.find((m) => m.id === minuteId);
         if (!minute) {
           return { success: false, error: 'Acta no encontrada.' };
@@ -286,6 +298,8 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
       },
 
       approveMinutes: async (minuteId, approvedBy, approvedByName) => {
+        const remote = await performRemoteMinutesMutation('approve', { minute_id: minuteId });
+        if (remote) return remote;
         const minute = get().minutes.find((m) => m.id === minuteId);
         if (!minute) {
           return { success: false, error: 'Acta no encontrada.' };
@@ -325,18 +339,17 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
           return { success: false, error: 'Acta no encontrada.' };
         }
 
-        const safeSlug = minute.minute_number.toLowerCase().replace(/\s+/g, '_');
-        const fileName = `${safeSlug}_oficial.txt`;
-
-        // Generar Blob estructurado local con codificación UTF-8
-        const blob = new Blob([minute.draft_content], { type: 'text/plain;charset=utf-8' });
-        const pdfUrl = URL.createObjectURL(blob);
-
-        return {
-          success: true,
-          pdfUrl,
-          fileName,
-        };
+        try {
+          const { createMinutePdf } = await import('./minutePdf.ts');
+          const blob = createMinutePdf(minute);
+          return {
+            success: true,
+            pdfUrl: URL.createObjectURL(blob),
+            fileName: `${minute.minute_number.replace(/\s+/g, '_')}${minute.is_approved ? '' : '_borrador'}.pdf`,
+          };
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Error al generar PDF.' };
+        }
       },
 
       // =========================================================
@@ -362,6 +375,22 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
         );
       },
 
+      loadFromSupabase: async () => {
+        const client = getSupabaseClient();
+        if (!client) return { success: false, error: 'Supabase no está conectado.' };
+        set({ isLoading: true, error: null });
+        try {
+          const { data, error } = await client.from('committee_minutes').select('*').order('created_at', { ascending: false });
+          if (error) throw new Error(error.message);
+          set({ minutes: minuteSchema.array().parse(data), isLoading: false });
+          return { success: true };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error al cargar actas.';
+          set({ isLoading: false, error: message });
+          return { success: false, error: message };
+        }
+      },
+
       resetToInitialSeed: () => {
         set({
           minutes: INITIAL_MINUTES,
@@ -371,6 +400,8 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
     }),
     {
       name: 'seed_minutes_store',
+      partialize: () => ({}),
+      merge: (_persisted, current) => current,
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;
@@ -384,3 +415,23 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
     }
   )
 );
+
+async function performRemoteMinutesMutation(action: MinutesAction, payload: Record<string, unknown>) {
+  if (!getSupabaseClient()) return null;
+  if (useMinutesStore.getState().isSaving) {
+    return { success: false as const, error: 'Espere a que termine la operación en curso.' };
+  }
+  useMinutesStore.setState({ isSaving: true });
+  try {
+    const result = await mutateMinutes(action, payload);
+    if (!result || !result.success) return result;
+    useMinutesStore.setState((state) => ({
+      minutes: [result.minute, ...state.minutes.filter((minute) => minute.id !== result.minute.id)],
+    }));
+    return result;
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Error al guardar el acta.' };
+  } finally {
+    useMinutesStore.setState({ isSaving: false });
+  }
+}

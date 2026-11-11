@@ -13,7 +13,9 @@ import {
 } from '../../types/database.ts';
 import { useRequestStore } from '../requests/requestStore.ts';
 import { useUserStore } from '../users/userStore.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
+import { agendaSchema, attendanceSchema, decisionSchema, sessionSchema, mutateSession } from './committeeApi.ts';
+import type { SessionAction } from './committeeApi.ts';
 
 export interface CreateSessionPayload {
   session_type: SessionType;
@@ -28,6 +30,8 @@ export interface CommitteeSessionsState {
   attendances: SessionAttendance[];
   decisions: SessionDecision[];
   isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
   loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
 
   // Acciones T4.1: Programación y Gestión de Sesiones
@@ -67,12 +71,13 @@ export interface CommitteeSessionsState {
 
   // Acciones T4.4: Asistencia y Verificación Automática de Quórum
   initializeSessionAttendance: (sessionId: string) => void;
+  updateAgendaSpeaker: (sessionId: string, applicationId: string, speakerId: string | null) => Promise<{ success: boolean; error?: string }>;
   toggleAttendance: (
     sessionId: string,
     userId: string,
     attended: boolean,
     notes?: string
-  ) => void;
+  ) => void | Promise<{ success: boolean; error?: string }>;
   checkSessionQuorum: (sessionId: string) => {
     hasQuorum: boolean;
     attendedCount: number;
@@ -231,16 +236,20 @@ export const INITIAL_DECISIONS: SessionDecision[] = [
 export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
   persist(
     (set, get) => ({
-      sessions: INITIAL_SESSIONS,
-      agendaItems: INITIAL_AGENDA_ITEMS,
-      attendances: INITIAL_ATTENDANCES,
-      decisions: INITIAL_DECISIONS,
+      sessions: getSupabaseCredentials().isConfigured ? [] : INITIAL_SESSIONS,
+      agendaItems: getSupabaseCredentials().isConfigured ? [] : INITIAL_AGENDA_ITEMS,
+      attendances: getSupabaseCredentials().isConfigured ? [] : INITIAL_ATTENDANCES,
+      decisions: getSupabaseCredentials().isConfigured ? [] : INITIAL_DECISIONS,
       isLoading: false,
+      isSaving: false,
+      error: null,
 
       // =========================================================
       // T4.1: CREACIÓN Y PROGRAMACIÓN DE SESIONES (RF-24)
       // =========================================================
       createSession: async (payload, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('create', { ...payload });
+        if (remote) return remote;
         try {
           const sessions = get().sessions;
           const year = new Date(payload.scheduled_at).getFullYear() || 2026;
@@ -276,26 +285,6 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             sessions: [newSession, ...state.sessions],
           }));
 
-          // Sincronización en Supabase
-          const client = getSupabaseClient();
-          if (client) {
-            client
-              .from('committee_sessions')
-              .insert({
-                id: newSession.id,
-                session_number: newSession.session_number,
-                session_type: newSession.session_type,
-                scheduled_at: newSession.scheduled_at,
-                location_or_url: newSession.location_or_url,
-                quorum_required: newSession.quorum_required,
-                is_agenda_closed: newSession.is_agenda_closed,
-                is_completed: newSession.is_completed,
-              })
-              .then(({ error }) => {
-                if (error) console.warn('Supabase session insert error:', error.message);
-              });
-          }
-
           // Inicializar automáticamente lista de asistencia con miembros del comité
           get().initializeSessionAttendance(newSessionId);
 
@@ -314,6 +303,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       // T4.2: CONFORMACIÓN DE AGENDA CON SOLICITUDES LISTAS (RF-25, RN-04)
       // =========================================================
       addApplicationToAgenda: async (sessionId, applicationId, speakerId, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('add', { session_id: sessionId, application_id: applicationId, speaker_id: speakerId });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) {
           return { success: false, error: 'Sesión no encontrada.' };
@@ -334,7 +325,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           return { success: false, error: 'Solicitud no encontrada.' };
         }
 
-        if (app.current_status !== 'LISTA_COMITE') {
+        if (!['LISTA_COMITE', 'COMMITTEE_READY'].includes(app.current_status)) {
           return {
             success: false,
             error: `RN-04: Solo los expedientes en estado "LISTA_COMITE" pueden incorporarse en la agenda. Estado actual: "${app.current_status}".`,
@@ -404,6 +395,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       },
 
       removeApplicationFromAgenda: async (sessionId, applicationId, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('remove', { session_id: sessionId, application_id: applicationId });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) {
           return { success: false, error: 'Sesión no encontrada.' };
@@ -434,6 +427,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       },
 
       reorderAgenda: async (sessionId, orderedAgendaIds) => {
+        const remote = await performRemoteSessionMutation('reorder', { session_id: sessionId, ordered_ids: orderedAgendaIds });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (session?.is_agenda_closed) {
           return {
@@ -468,6 +463,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       // T4.3: CIERRE DE AGENDA Y CONVOCATORIA FORMAL (RF-26)
       // =========================================================
       closeAgendaAndSummon: async (sessionId, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('close', { session_id: sessionId });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) {
           return { success: false, error: 'Sesión no encontrada.' };
@@ -531,7 +528,28 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         }));
       },
 
+      updateAgendaSpeaker: async (sessionId, applicationId, speakerId) => {
+        const remote = await performRemoteSessionMutation('speaker', {
+          session_id: sessionId, application_id: applicationId, speaker_id: speakerId,
+        });
+        if (remote) return remote;
+        if (get().getSessionById(sessionId)?.is_agenda_closed) {
+          return { success: false, error: 'La agenda ya está cerrada.' };
+        }
+        const speaker = useUserStore.getState().users.find((user) => user.id === speakerId);
+        set((state) => ({ agendaItems: state.agendaItems.map((item) =>
+          item.session_id === sessionId && item.application_id === applicationId
+            ? { ...item, speaker_id: speakerId, speaker_name: speaker?.full_name ?? null } : item),
+        }));
+        return { success: true };
+      },
+
       toggleAttendance: (sessionId, userId, attended, notes) => {
+        if (getSupabaseClient()) {
+          return performRemoteSessionMutation('attendance', {
+            session_id: sessionId, user_id: userId, attended, notes,
+          }).then((result) => result ?? { success: false, error: 'Supabase no está conectado.' });
+        }
         set((state) => ({
           attendances: state.attendances.map((a) => {
             if (a.session_id === sessionId && a.user_id === userId) {
@@ -550,9 +568,15 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       checkSessionQuorum: (sessionId) => {
         const session = get().sessions.find((s) => s.id === sessionId);
         const sessionAttendances = get().attendances.filter((a) => a.session_id === sessionId);
-        const attendedCount = sessionAttendances.filter((a) => a.attended).length;
+        const activeMemberIds = new Set(useUserStore.getState().users.filter((member) =>
+          member.is_active && [member.role, ...(member.roles ?? [])].some((role) =>
+            ['committee_member', 'integrante_comite', 'secretary', 'secretario'].includes(role)))
+          .map((member) => member.id));
+        const isConnected = getSupabaseCredentials().isConfigured;
+        const attendedCount = sessionAttendances.filter((attendance) => attendance.attended
+          && (!isConnected || activeMemberIds.has(attendance.user_id))).length;
         const requiredCount = session ? session.quorum_required : 4;
-        const totalMembers = sessionAttendances.length || 7;
+        const totalMembers = sessionAttendances.length;
 
         // RN-07: El quórum reglamentario exige al menos la mitad más uno de los miembros
         const hasQuorum = attendedCount >= requiredCount;
@@ -580,6 +604,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         registeredBy,
         registeredByName
       ) => {
+        const remote = await performRemoteSessionMutation('decision', { session_id: sessionId, application_id: applicationId, decision, justification });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) {
           return { success: false, error: 'Sesión no encontrada.' };
@@ -700,6 +726,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
 
       // Finalizar sesión colegiada
       finalizeSession: async (sessionId, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('finalize', { session_id: sessionId });
+        if (remote) return remote;
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) {
           return { success: false, error: 'Sesión no encontrada.' };
@@ -726,34 +754,29 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       },
 
       loadFromSupabase: async () => {
-        set({ isLoading: true });
         const client = getSupabaseClient();
-        if (!client) {
-          set({ isLoading: false });
-          return { success: false, error: 'Supabase no está conectado.' };
-        }
-
+        if (!client) return { success: false, error: 'Supabase no está conectado.' };
+        set({ isLoading: true, error: null });
         try {
-          const [sessRes, decRes] = await Promise.all([
+          const responses = await Promise.all([
             client.from('committee_sessions').select('*').order('scheduled_at', { ascending: false }),
+            client.from('session_agenda').select('*').order('agenda_order'),
+            client.from('session_attendance').select('*').order('user_name'),
             client.from('session_decisions').select('*'),
           ]);
-
-          if (sessRes.data && sessRes.data.length > 0) {
-            set({
-              sessions: sessRes.data as CommitteeSession[],
-              decisions: (decRes.data || []) as SessionDecision[],
-              isLoading: false,
-            });
-            return { success: true, count: sessRes.data.length };
+          for (const response of responses) {
+            if (response.error) throw new Error(response.error.message);
           }
-
-          set({ isLoading: false });
-          return { success: true, count: 0 };
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al cargar sesiones desde Supabase';
-          set({ isLoading: false });
-          return { success: false, error: msg };
+          const sessions = sessionSchema.array().parse(responses[0].data);
+          const agendaItems = agendaSchema.array().parse(responses[1].data);
+          const attendances = attendanceSchema.array().parse(responses[2].data);
+          const decisions = decisionSchema.array().parse(responses[3].data);
+          set({ sessions, agendaItems, attendances, decisions, isLoading: false });
+          return { success: true, count: sessions.length };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error al cargar sesiones.';
+          set({ isLoading: false, error: message });
+          return { success: false, error: message };
         }
       },
 
@@ -770,6 +793,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
     {
       name: 'seed_committee_sessions_store',
       partialize: () => ({}),
+      merge: (_persisted, current) => current,
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
           return window.localStorage;
@@ -783,3 +807,24 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
     }
   )
 );
+
+async function performRemoteSessionMutation(action: SessionAction, payload: Record<string, unknown>) {
+  if (!getSupabaseClient()) return null;
+  if (useCommitteeSessionsStore.getState().isSaving) {
+    return { success: false as const, error: 'Espere a que termine la operación en curso.' };
+  }
+  useCommitteeSessionsStore.setState({ isSaving: true });
+  try {
+    const result = await mutateSession(action, payload);
+    if (!result || !result.success) return result;
+    await useCommitteeSessionsStore.getState().loadFromSupabase();
+    if (['add', 'decision', 'remove'].includes(action)) {
+      await useRequestStore.getState().loadFromSupabase();
+    }
+    return { ...result, agendaItem: result.agendaItem ?? undefined };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'Error al guardar la sesión.' };
+  } finally {
+    useCommitteeSessionsStore.setState({ isSaving: false });
+  }
+}

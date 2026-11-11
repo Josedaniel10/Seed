@@ -1,3 +1,5 @@
+import { normalizeRole } from '../../lib/permissions.ts';
+import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
 import React, { useState } from 'react';
 import {
   FileCheck,
@@ -19,8 +21,9 @@ import { useSessionStore } from '../../stores/session.store.ts';
 import { CommitteeMinutes } from '../../types/database.ts';
 
 export function ActasPage() {
+  useCommitteeData();
   const { user } = useSessionStore();
-  const { minutes, searchMinutes, approveMinutes, updateDraftContent, exportMinutePdf } =
+  const { minutes, isLoading, isSaving, error, searchMinutes, approveMinutes, updateDraftContent, exportMinutePdf } =
     useMinutesStore();
   const { sessions } = useCommitteeSessionsStore();
 
@@ -32,7 +35,7 @@ export function ActasPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const filteredMinutes = search ? searchMinutes(search) : minutes;
-  const isSecretaryOrAdmin = user?.activeRole === 'secretario' || user?.activeRole === 'admin';
+  const isSecretaryOrAdmin = normalizeRole(user?.activeRole) === 'secretary' || user?.activeRole === 'admin';
 
   const handleOpenDetail = (min: CommitteeMinutes) => {
     setSelectedMinute(min);
@@ -65,6 +68,7 @@ export function ActasPage() {
 
   const handleApproveMinutes = async () => {
     if (!selectedMinute) return;
+    if (!window.confirm('¿Aprobar el acta? Su contenido quedará bloqueado para edición.')) return;
     setActionError(null);
 
     const res = await approveMinutes(
@@ -77,17 +81,18 @@ export function ActasPage() {
       setActionError(res.error || 'Error al aprobar el acta.');
     } else {
       setSelectedMinute(res.minute || null);
-      setActionSuccess('Acta formalmente aprobada y firmada. Ha pasado a estado inmutable (RNF-03).');
+      setActionSuccess('Acta aprobada. Su contenido ha quedado bloqueado para edición.');
       setTimeout(() => setActionSuccess(null), 3500);
     }
   };
 
   const handleDownload = async (minute: CommitteeMinutes) => {
     const res = await exportMinutePdf(minute.id);
+    if (!res.success) { setActionError(res.error ?? 'Error al descargar el PDF.'); return; }
     if (res.success && res.pdfUrl) {
       const a = document.createElement('a');
       a.href = res.pdfUrl;
-      a.download = res.fileName || `${minute.minute_number}.txt`;
+      a.download = res.fileName || `${minute.minute_number}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -96,7 +101,8 @@ export function ActasPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <fieldset disabled={isSaving} className="space-y-6 min-w-0">
+      {isSaving && <p role="status">Guardando acta…</p>}
       {/* Encabezado */}
       <div>
         <div className="flex items-center gap-2">
@@ -129,6 +135,10 @@ export function ActasPage() {
         </div>
       </div>
 
+      {isLoading && <p role="status">Cargando actas…</p>}
+      {error && <p role="alert" className="text-rose-800">{error}</p>}
+      {actionError && !selectedMinute && <p role="alert" className="text-rose-800">{actionError}</p>}
+      {!isLoading && !error && filteredMinutes.length === 0 && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
       {/* Tabla de Actas */}
       <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-hidden shadow-xs">
         <table className="w-full text-left text-xs">
@@ -283,6 +293,7 @@ export function ActasPage() {
 
                 {!selectedMinute.is_approved && isSecretaryOrAdmin && (
                   <button
+                    disabled={isEditingDraft}
                     onClick={handleApproveMinutes}
                     className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
@@ -294,6 +305,7 @@ export function ActasPage() {
 
               <div className="flex items-center gap-2">
                 <button
+                  disabled={isEditingDraft}
                   onClick={() => handleDownload(selectedMinute)}
                   className="px-3.5 py-2 border border-[#E5E3DC] hover:bg-stone-50 rounded-xl font-bold text-[#14281D] flex items-center gap-1.5 cursor-pointer"
                 >
@@ -311,6 +323,6 @@ export function ActasPage() {
           </div>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }
