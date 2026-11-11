@@ -1,3 +1,4 @@
+import { getRequestQuorum } from './requestQuorum.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
@@ -9,12 +10,13 @@ import {
   SessionAttendance,
   SessionDecision,
   SessionDecisionType,
+  SessionNonDeliberation,
   SessionType,
 } from '../../types/database.ts';
 import { useRequestStore } from '../requests/requestStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
-import { agendaSchema, attendanceSchema, decisionSchema, sessionSchema, mutateSession } from './committeeApi.ts';
+import { agendaSchema, attendanceSchema, decisionSchema, sessionSchema, nonDeliberationSchema, mutateSession } from './committeeApi.ts';
 import type { SessionAction } from './committeeApi.ts';
 
 export interface CreateSessionPayload {
@@ -29,6 +31,10 @@ export interface CommitteeSessionsState {
   agendaItems: SessionAgendaItem[];
   attendances: SessionAttendance[];
   decisions: SessionDecision[];
+  nonDeliberations: SessionNonDeliberation[];
+  recordNonDeliberation: (
+    sessionId: string, applicationId: string, reason: string, actorId: string, actorName: string,
+  ) => Promise<{ success: boolean; nonDeliberation?: SessionNonDeliberation; error?: string }>;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -240,6 +246,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       agendaItems: getSupabaseCredentials().isConfigured ? [] : INITIAL_AGENDA_ITEMS,
       attendances: getSupabaseCredentials().isConfigured ? [] : INITIAL_ATTENDANCES,
       decisions: getSupabaseCredentials().isConfigured ? [] : INITIAL_DECISIONS,
+      nonDeliberations: [],
       isLoading: false,
       isSaving: false,
       error: null,
@@ -611,6 +618,10 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           return { success: false, error: 'Sesión no encontrada.' };
         }
 
+        if (get().nonDeliberations.some((record) => record.session_id === sessionId && record.application_id === applicationId)) {
+          return { success: false, error: 'La solicitud ya tiene una constancia de que no pudo deliberarse en esta sesión.' };
+        }
+
         // RN-07: Bloqueo estricto si no hay quórum reglamentario
         const quorum = get().checkSessionQuorum(sessionId);
         if (!quorum.hasQuorum) {
@@ -724,6 +735,54 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
         return get().decisions.filter((d) => d.session_id === sessionId);
       },
 
+      recordNonDeliberation: async (sessionId, applicationId, reason, actorId, actorName) => {
+        const remote = await performRemoteSessionMutation('not_deliberated', {
+          session_id: sessionId, application_id: applicationId, reason,
+        });
+        if (remote) return remote;
+        const session = get().getSessionById(sessionId);
+        if (!session || session.is_completed || !session.is_agenda_closed) {
+          return { success: false, error: 'La sesión debe tener su agenda cerrada y estar pendiente de finalizar.' };
+        }
+        if (!get().getAgendaBySession(sessionId).some((item) => item.application_id === applicationId)) {
+          return { success: false, error: 'La solicitud no está en la agenda.' };
+        }
+        if (get().getDecisionsBySession(sessionId).some((item) => item.application_id === applicationId)) {
+          return { success: false, error: 'La solicitud ya tiene una decisión registrada.' };
+        }
+        const existing = get().nonDeliberations.find((item) => item.session_id === sessionId && item.application_id === applicationId);
+        if (existing) return { success: true, nonDeliberation: existing };
+        const request = useRequestStore.getState().getApplicationById(applicationId);
+        if (!request || !['LISTA_COMITE', 'COMMITTEE_READY'].includes(request.current_status)) {
+          return { success: false, error: 'La solicitud debe estar lista para comité.' };
+        }
+        if (!reason.trim()) return { success: false, error: 'Escriba el motivo por el que no se pudo deliberar.' };
+        const attendance = get().getAttendanceBySession(sessionId);
+        const quorum = getRequestQuorum({
+          request, attendance, members: useUserStore.getState().users, requiredCount: session.quorum_required,
+        });
+        if (quorum.hasQuorum) {
+          return { success: false, error: 'Esta solicitud cuenta con suficientes asistentes habilitados. Registre una decisión.' };
+        }
+        const record: SessionNonDeliberation = {
+          id: crypto.randomUUID(), session_id: sessionId, application_id: applicationId,
+          reason: reason.trim(), eligible_count: quorum.eligibleCount, required_count: quorum.requiredCount,
+          attendance_snapshot: attendance.map((participant) => ({
+            user_id: participant.user_id, name: participant.user_name, attended: participant.attended,
+            exclusion_reason: quorum.excludedParticipants.find((excluded) => excluded.id === participant.user_id)?.reason ?? '',
+          })),
+          registered_by: actorId, created_at: new Date().toISOString(),
+        };
+        set((state) => ({ nonDeliberations: [...state.nonDeliberations, record] }));
+        useRequestStore.setState((state) => ({ auditHistory: [...state.auditHistory, {
+          id: crypto.randomUUID(), application_id: applicationId, actor_id: actorId,
+          action: 'SOLICITUD_NO_DELIBERADA', previous_status: request.current_status, new_status: request.current_status,
+          details: { reason: record.reason, session_number: session.session_number, actor_name: actorName,
+            eligible_count: record.eligible_count, required_count: record.required_count }, created_at: record.created_at,
+        }] }));
+        return { success: true, nonDeliberation: record };
+      },
+
       // Finalizar sesión colegiada
       finalizeSession: async (sessionId, actorId, actorName) => {
         const remote = await performRemoteSessionMutation('finalize', { session_id: sessionId });
@@ -733,12 +792,14 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           return { success: false, error: 'Sesión no encontrada.' };
         }
 
-        const quorum = get().checkSessionQuorum(sessionId);
-        if (!quorum.hasQuorum) {
-          return {
-            success: false,
-            error: `No se puede dar por finalizada la deliberación formal sin quórum reglamentario (${quorum.attendedCount} de ${quorum.requiredCount}).`,
-          };
+        if (!session.is_agenda_closed || session.is_completed) {
+          return { success: false, error: 'La sesión debe tener su agenda cerrada y estar pendiente de finalizar.' };
+        }
+        const unresolved = get().getAgendaBySession(sessionId).some((item) =>
+          !get().decisions.some((decision) => decision.session_id === sessionId && decision.application_id === item.application_id)
+          && !get().nonDeliberations.some((record) => record.session_id === sessionId && record.application_id === item.application_id));
+        if (unresolved) {
+          return { success: false, error: 'Registre una decisión o una constancia para todas las solicitudes antes de finalizar.' };
         }
 
         const updatedSession: CommitteeSession = {
@@ -763,6 +824,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             client.from('session_agenda').select('*').order('agenda_order'),
             client.from('session_attendance').select('*').order('user_name'),
             client.from('session_decisions').select('*'),
+            client.from('session_non_deliberations').select('*'),
           ]);
           for (const response of responses) {
             if (response.error) throw new Error(response.error.message);
@@ -771,7 +833,8 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           const agendaItems = agendaSchema.array().parse(responses[1].data);
           const attendances = attendanceSchema.array().parse(responses[2].data);
           const decisions = decisionSchema.array().parse(responses[3].data);
-          set({ sessions, agendaItems, attendances, decisions, isLoading: false });
+          const nonDeliberations = nonDeliberationSchema.array().parse(responses[4].data);
+          set({ sessions, agendaItems, attendances, decisions, nonDeliberations, isLoading: false });
           return { success: true, count: sessions.length };
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Error al cargar sesiones.';
@@ -786,6 +849,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           agendaItems: INITIAL_AGENDA_ITEMS,
           attendances: INITIAL_ATTENDANCES,
           decisions: INITIAL_DECISIONS,
+          nonDeliberations: [],
           isLoading: false,
         });
       },
@@ -818,7 +882,7 @@ async function performRemoteSessionMutation(action: SessionAction, payload: Reco
     const result = await mutateSession(action, payload);
     if (!result || !result.success) return result;
     await useCommitteeSessionsStore.getState().loadFromSupabase();
-    if (['add', 'decision', 'remove'].includes(action)) {
+    if (['add', 'decision', 'remove', 'not_deliberated'].includes(action)) {
       await useRequestStore.getState().loadFromSupabase();
     }
     return { ...result, agendaItem: result.agendaItem ?? undefined };

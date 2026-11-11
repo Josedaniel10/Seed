@@ -58,6 +58,7 @@ useCommitteeSessionsStore.setState({
   agendaItems: [],
   attendances: [],
   decisions: [],
+  nonDeliberations: [],
 });
 useSessionStore.setState({ user: null, isAuthenticated: false });
 useUserStore.setState({ users: [], isInitialized: false, error: null });

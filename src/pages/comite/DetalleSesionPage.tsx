@@ -1,3 +1,4 @@
+import { NonDeliberationPanel } from '../../features/sessions/NonDeliberationPanel.tsx';
 import { getRequestQuorum } from '../../features/sessions/requestQuorum.ts';
 import { RequestQuorumNotice } from '../../features/sessions/RequestQuorumNotice.tsx';
 import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
@@ -39,6 +40,7 @@ export function DetalleSesionPage() {
 
   const {
     sessions,
+    nonDeliberations,
     isLoading,
     isSaving,
     error,
@@ -98,8 +100,11 @@ export function DetalleSesionPage() {
   const attendances = getAttendanceBySession(session.id);
   const quorum = checkSessionQuorum(session.id);
   const decisions = getDecisionsBySession(session.id);
+  const sessionNonDeliberations = nonDeliberations.filter((record) => record.session_id === session.id);
   const pendingAgenda = agenda.filter((item) => !decisions.some((decision) =>
-    (decision.application_id ?? decision.request_id) === (item.application_id ?? item.request_id)));
+    (decision.application_id ?? decision.request_id) === (item.application_id ?? item.request_id))
+    && !sessionNonDeliberations.some((record) => record.application_id === (item.application_id ?? item.request_id)));
+  const resolvedCount = agenda.length - pendingAgenda.length;
 
   // Candidatos para agregar a la agenda: Solicitudes en estado LISTA_COMITE (RN-04)
   const agendaAppIds = new Set(agenda.map((a) => a.application_id));
@@ -209,7 +214,7 @@ export function DetalleSesionPage() {
     if (!res.success) {
       setActionError(res.error || 'Error al finalizar sesión.');
     } else {
-      setActionSuccess('Sesión concluida formalmente con acuerdos adoptados.');
+      setActionSuccess('Sesión finalizada. Puede generar el acta con las decisiones y constancias registradas.');
       setTimeout(() => setActionSuccess(null), 3500);
     }
   };
@@ -277,7 +282,7 @@ export function DetalleSesionPage() {
 
             {isSecretaryOrAdmin && !session.is_completed && (
               <button
-                disabled={!session.is_agenda_closed || !quorum.hasQuorum || decisions.length !== agenda.length}
+                disabled={!session.is_agenda_closed || pendingAgenda.length > 0}
                 onClick={handleFinalizeSession}
                 className="px-3.5 py-1.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
               >
@@ -292,8 +297,8 @@ export function DetalleSesionPage() {
         <section aria-label="Requisitos para finalizar la sesión" className="rounded-xl border border-[#E5E3DC] bg-white p-4 text-xs space-y-2">
           <h2 className="font-bold">Para finalizar la sesión</h2>
           <p>{session.is_agenda_closed ? '✓ Agenda cerrada' : 'Pendiente cerrar la agenda'}</p>
-          <p>{quorum.hasQuorum ? '✓ Asistencia mínima completa' : `Faltan ${Math.max(0, quorum.requiredCount - quorum.attendedCount)} asistentes para completar la asistencia mínima`}</p>
-          <p>{pendingAgenda.length === 0 ? '✓ Todas las solicitudes tienen decisión' : `${pendingAgenda.length} solicitudes pendientes de decisión`}</p>
+          <p>Asistencia registrada. {quorum.attendedCount} participantes presentes.</p>
+          <p>{pendingAgenda.length === 0 ? '✓ Todos los puntos tienen una decisión o una constancia' : `${pendingAgenda.length} puntos pendientes de decisión o constancia`}</p>
           <p>Después de finalizar podrá generar el acta.</p>
         </section>
       )}
@@ -348,7 +353,7 @@ export function DetalleSesionPage() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Decisiones y Deliberación ({decisions.length}/{agenda.length})
+          Resultados de la sesión ({resolvedCount}/{agenda.length})
         </button>
         <button
           onClick={() => setActiveTab('acta')}
@@ -401,6 +406,7 @@ export function DetalleSesionPage() {
                   const appId = item.application_id || item.request_id || '';
                   const appData = getApplicationById(appId);
                   const decisionRecorded = decisions.find((d) => (d.application_id || d.request_id) === appId);
+                  const nonDeliberation = sessionNonDeliberations.find((record) => record.application_id === appId);
                   const requestQuorum = appData ? getRequestQuorum({
                     request: appData, attendance: attendances, members: users, requiredCount: session.quorum_required,
                   }) : null;
@@ -421,6 +427,7 @@ export function DetalleSesionPage() {
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
                             {appData && <StatusBadge status={appData.current_status} size="sm" />}
                           </span>
+                          {nonDeliberation && <span className="text-xs font-semibold text-amber-900">No deliberada por falta de quórum</span>}
                           {decisionRecorded && (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
                               Decisión: {decisionRecorded.decision.toLowerCase().replaceAll('_', ' ')}
@@ -470,7 +477,7 @@ export function DetalleSesionPage() {
                       <div className="text-[11px] text-stone-500">
                         {appData?.abstract}
                       </div>
-                      {!decisionRecorded && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
+                      {!decisionRecorded && !nonDeliberation && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
                     </div>
                   );
                 })}
@@ -644,13 +651,13 @@ export function DetalleSesionPage() {
                 </h3>
               </div>
               <p className="text-stone-500 text-[11px] mt-0.5">
-                Registre la decisión y su justificación para cada solicitud.
+                Registre una decisión o deje constancia de los puntos que no pudieron deliberarse.
               </p>
             </div>
 
             <div className="text-right">
               <span className="font-bold text-xs text-[#14281D]">
-                {decisions.length} de {agenda.length} decididos
+                {resolvedCount} de {agenda.length} puntos atendidos
               </span>
             </div>
           </div>
@@ -677,6 +684,7 @@ export function DetalleSesionPage() {
                 const appId = item.application_id || item.request_id || '';
                 const appData = getApplicationById(appId);
                 const recordedDecision = decisions.find((d) => (d.application_id || d.request_id) === appId);
+                const nonDeliberation = sessionNonDeliberations.find((record) => record.application_id === appId);
                 const requestQuorum = appData ? getRequestQuorum({
                   request: appData, attendance: attendances, members: users, requiredCount: session.quorum_required,
                 }) : null;
@@ -713,9 +721,18 @@ export function DetalleSesionPage() {
                     <h4 className="font-bold text-xs text-[#14281D]">{appData?.title}</h4>
                     <p className="text-[11px] text-stone-500">{appData?.abstract}</p>
 
-                    {!recordedDecision && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
+                    {!recordedDecision && !nonDeliberation && requestQuorum && <RequestQuorumNotice quorum={requestQuorum} />}
+                    {!recordedDecision && <NonDeliberationPanel
+                      sessionId={session.id} applicationId={appId} record={nonDeliberation}
+                      canRecord={isSecretaryOrAdmin && session.is_agenda_closed && !session.is_completed
+                        && !!requestQuorum && !requestQuorum.hasQuorum}
+                      onRecorded={() => {
+                        setActionError(null);
+                        setActionSuccess('Constancia registrada. La solicitud queda lista para otra sesión.');
+                      }}
+                    />}
                     {/* Formulario de Decisión Colegiada */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
+                    {!nonDeliberation && <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
                       <div className="md:col-span-4 space-y-1">
                         <label className="block font-semibold text-stone-700 text-[11px]">
                           Sentido del Acuerdo
@@ -772,7 +789,7 @@ export function DetalleSesionPage() {
                           {recordedDecision ? 'Registrada' : 'Asentar'}
                         </button>
                       </div>
-                    </div>
+                    </div>}
                   </div>
                 );
               })}

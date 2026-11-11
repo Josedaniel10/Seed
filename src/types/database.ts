@@ -237,6 +237,25 @@ export interface SessionDecision {
   created_at: string;
 }
 
+export interface NonDeliberationParticipant {
+  user_id: string;
+  name: string;
+  attended: boolean;
+  exclusion_reason: string;
+}
+
+export interface SessionNonDeliberation {
+  id: string;
+  session_id: string;
+  application_id: string;
+  reason: string;
+  eligible_count: number;
+  required_count: number;
+  attendance_snapshot: NonDeliberationParticipant[];
+  registered_by: string;
+  created_at: string;
+}
+
 export interface CommitteeMinutes {
   id: string;
   minute_number: string;

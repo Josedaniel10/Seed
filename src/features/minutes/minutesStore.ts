@@ -215,6 +215,14 @@ export const useMinutesStore = create<MinutesState>()(
             .join('\n\n');
         }
 
+        const constanciesText = sessionsStore.nonDeliberations.filter((record) => record.session_id === sessionId)
+          .map((record) => {
+            const request = appStore.getApplicationById(record.application_id);
+            const participants = record.attendance_snapshot.map((participant) =>
+              `${participant.name} - ${participant.attended ? 'Presente' : 'Ausente'} ${participant.exclusion_reason}`).join('\n');
+            return `${request?.filing_number ?? record.application_id} - ${request?.title ?? 'Solicitud'}\nNo deliberada por falta de quórum\n${record.reason}\nParticipación habilitada ${record.eligible_count} de ${record.required_count}.\n${participants}`;
+          }).join('\n\n');
+
         const draftContent = `${nextNumber.toUpperCase()} DE SESIÓN ${session.session_type} DEL COMITÉ DE INVESTIGACIONES
 
 Fecha y hora: ${scheduledDate}
@@ -239,6 +247,9 @@ ${agenda.map((a) => {
 
 3. ACUERDOS Y DECISIONES ADOPTADAS:
 ${agreementsText}
+
+CONSTANCIAS DE PUNTOS NO DELIBERADOS
+${constanciesText || 'Sin constancias.'}
 
 4. COMPROMISOS Y ACCIONES DE SEGUIMIENTO:
 - Secretaría Técnica notificará a los investigadores solicitantes los acuerdos adoptados en la presente sesión.

@@ -601,6 +601,8 @@ export function DetalleSolicitudPage() {
                                 ? 'Subsanación y Recarga de Documento'
                                 : isValidation
                                 ? 'Actuación de Validación Documental'
+                                : item.action === 'SOLICITUD_NO_DELIBERADA'
+                                ? 'Solicitud no deliberada'
                                 : item.action.replace(/_/g, ' ')}
                             </span>
                             <span className="text-[10px] text-stone-500 font-mono">

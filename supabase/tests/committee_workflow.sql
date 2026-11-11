@@ -103,7 +103,7 @@ BEGIN
     ('add', jsonb_build_object('session_id', v_session, 'application_id', '60fbc100-0000-4000-8000-000000000025'), 'cerrada'),
     ('decision', jsonb_build_object('session_id', v_session, 'application_id', '60fbc100-0000-4000-8000-000000000024', 'decision', 'APROBADA', 'justification', 'Prueba'), 'conflicto de interés'),
     ('decision', jsonb_build_object('session_id', v_session, 'application_id', '60fbc100-0000-4000-8000-000000000020', 'decision', 'RECHAZADA', 'justification', '  '), 'justificación'),
-    ('finalize', jsonb_build_object('session_id', v_session), 'todos los expedientes')
+    ('finalize', jsonb_build_object('session_id', v_session), 'todas las solicitudes')
   ) AS checks(action, payload, message) LOOP
     v_blocked := false;
     BEGIN PERFORM public.manage_committee_session(v_test.action, v_test.payload);

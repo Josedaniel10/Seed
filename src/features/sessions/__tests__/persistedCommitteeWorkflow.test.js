@@ -20,6 +20,7 @@ let responseError = null;
 let rpcResult = {};
 let sessions = [];
 let minutes = [];
+let nonDeliberations = [];
 let lastPayload;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, options) => {
@@ -36,6 +37,7 @@ globalThis.fetch = async (input, options) => {
   if (isRpc) data = rpcResult;
   if (url.pathname.endsWith('/committee_sessions')) data = sessions;
   if (url.pathname.endsWith('/committee_minutes')) data = minutes;
+  if (url.pathname.endsWith('/session_non_deliberations')) data = nonDeliberations;
   return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
 };
 const { useCommitteeSessionsStore } = await import('../committeeSessionsStore.ts');
@@ -69,6 +71,24 @@ test('persists committee operations through RPC and preserves state on rejected 
     assert.equal(lastPayload.p_action, 'create');
     assert.equal(lastPayload.p_payload.actor_id, undefined);
     assert.equal(useCommitteeSessionsStore.getState().sessions[0].id, session.id);
+
+    const record = {
+      id: 'non-deliberation', session_id: session.id, application_id: 'request',
+      reason: 'Faltan participantes habilitados.', eligible_count: 1, required_count: 2,
+      attendance_snapshot: [{ user_id: 'member', name: 'Integrante', attended: true, exclusion_reason: 'Mismo grupo.' }],
+      registered_by: 'secretary', created_at: session.created_at,
+    };
+    rpcResult = { nonDeliberation: record };
+    nonDeliberations = [record];
+    const constancy = await store.recordNonDeliberation(session.id, 'request', record.reason, 'untrusted-actor', 'Untrusted');
+    assert.equal(constancy.success, true);
+    assert.equal(lastPayload.p_action, 'not_deliberated');
+    assert.equal(lastPayload.p_payload.reason, record.reason);
+    assert.equal(lastPayload.p_payload.actor_id, undefined);
+    assert.deepEqual(useCommitteeSessionsStore.getState().nonDeliberations, [record]);
+    nonDeliberations = [];
+    await store.loadFromSupabase();
+    assert.deepEqual(useCommitteeSessionsStore.getState().nonDeliberations, []);
 
     responseError = 'No hay quórum reglamentario.';
     const decision = await store.registerSessionDecision(session.id, 'request', 'APROBADA', 'Fundamento', 'actor', 'Actor');

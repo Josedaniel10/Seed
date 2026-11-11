@@ -21,6 +21,19 @@ export const decisionSchema = z.object({
     'APPROVED', 'APPROVED_WITH_ADJUSTMENTS', 'REJECTED', 'POSTPONED']),
   justification: z.string(), registered_by: z.string(), created_at: z.string(),
 });
+export const nonDeliberationSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  application_id: z.string(),
+  reason: z.string(),
+  eligible_count: z.number(),
+  required_count: z.number(),
+  attendance_snapshot: z.array(z.object({
+    user_id: z.string(), name: z.string(), attended: z.boolean(), exclusion_reason: z.string(),
+  })),
+  registered_by: z.string(),
+  created_at: z.string(),
+});
 export const minuteSchema = z.object({
   id: z.string(), minute_number: z.string(), year: z.number(), session_id: z.string(),
   draft_content: z.string(), is_approved: z.boolean(), approved_at: z.string().nullable(),
@@ -29,10 +42,11 @@ export const minuteSchema = z.object({
 const sessionResultSchema = z.object({
   session: sessionSchema.optional(), agendaItem: agendaSchema.nullable().optional(),
   attendance: attendanceSchema.optional(), decision: decisionSchema.optional(),
+  nonDeliberation: nonDeliberationSchema.optional(),
 });
 
 export type SessionAction = 'create' | 'add' | 'remove' | 'reorder' | 'speaker'
-  | 'close' | 'attendance' | 'decision' | 'finalize';
+  | 'close' | 'attendance' | 'decision' | 'not_deliberated' | 'finalize';
 export type MinutesAction = 'generate' | 'update' | 'approve';
 type MutationResult<T> = ({ success: true } & T) | { success: false; error: string } | null;
 
@@ -50,7 +64,7 @@ export async function mutateSession(
   if (!result.success) return { success: false as const, error: 'La respuesta de la sesión es inválida.' };
   const expectedFields = {
     create: 'session', add: 'agendaItem', remove: null, reorder: null, speaker: 'agendaItem',
-    close: 'session', attendance: 'attendance', decision: 'decision', finalize: 'session',
+    close: 'session', attendance: 'attendance', decision: 'decision', not_deliberated: 'nonDeliberation', finalize: 'session',
   } as const;
   const expectedField = expectedFields[action];
   if (expectedField && !result.data[expectedField]) {

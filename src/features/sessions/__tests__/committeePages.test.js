@@ -9,6 +9,7 @@ import { SessionMinutesPanel } from '../../minutes/SessionMinutesPanel.tsx';
 import { useSessionStore } from '../../../stores/session.store.ts';
 import { useCommitteeSessionsStore } from '../committeeSessionsStore.ts';
 import { useMinutesStore } from '../../minutes/minutesStore.ts';
+import { NonDeliberationPanel } from '../NonDeliberationPanel.tsx';
 
 // Server rendering reads Zustand's initial snapshot. Set both snapshots for these fixtures.
 function setUser(user) {
@@ -44,4 +45,33 @@ test('session detail renders the persisted agenda and minutes generation require
   assert.doesNotMatch(completed, /<button disabled=""/);
   const readonly = renderToStaticMarkup(createElement(SessionMinutesPanel, { sessionId: session.id, isCompleted: true, canManage: false }));
   assert.doesNotMatch(readonly, /<button/);
+});
+
+test('a constancy resolves its agenda item and retains the recorded conflict for readers', () => {
+  const store = useCommitteeSessionsStore;
+  const session = store.getState().sessions[0];
+  const item = store.getState().getAgendaBySession(session.id)[0];
+  const record = {
+    id: 'constancy', session_id: session.id, application_id: item.application_id,
+    reason: 'Faltan asistentes habilitados.', eligible_count: 1, required_count: 2,
+    attendance_snapshot: [{ user_id: 'reviewer', name: 'Integrante excluido', attended: true,
+      exclusion_reason: 'Pertenece al mismo grupo de investigación de la solicitud.' }],
+    registered_by: 'secretary', created_at: '2028-01-01T12:00:00Z',
+  };
+  const sessions = store.getState().sessions.map((entry) => entry.id === session.id
+    ? { ...entry, is_agenda_closed: true } : entry);
+  store.setState({ sessions, nonDeliberations: [record] });
+  Object.assign(store.getInitialState(), { sessions, nonDeliberations: [record] });
+  const detail = renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [`/sesiones/${session.id}`] },
+    createElement(Routes, null, createElement(Route, { path: '/sesiones/:id', element: createElement(DetalleSesionPage) }))));
+  assert.match(detail, /Todos los puntos tienen una decisión o una constancia/);
+  assert.match(detail, /No deliberada por falta de quórum/);
+  assert.doesNotMatch(detail, /<button disabled=""[^>]*>Finalizar Sesión/);
+  const panel = renderToStaticMarkup(createElement(NonDeliberationPanel, {
+    sessionId: session.id, applicationId: item.application_id, record, canRecord: false, onRecorded() {},
+  }));
+  assert.match(panel, /Integrante excluido/);
+  assert.match(panel, /mismo grupo/);
+  assert.match(panel, /permanece lista para comité/);
+  assert.doesNotMatch(panel, /<button/);
 });
