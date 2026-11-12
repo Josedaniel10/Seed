@@ -1,328 +1,84 @@
+import { useState } from 'react';
+import { Download, Eye, FileCheck, Lock, Search, X } from 'lucide-react';
 import { normalizeRole } from '../../lib/permissions.ts';
 import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
-import React, { useState } from 'react';
-import {
-  FileCheck,
-  Search,
-  Filter,
-  Download,
-  Calendar,
-  FileText,
-  Eye,
-  CheckCircle2,
-  Lock,
-  X,
-  FileCode,
-  Building,
-} from 'lucide-react';
 import { useMinutesStore } from '../../features/minutes/minutesStore.ts';
+import { MinuteWorkspace } from '../../features/minutes/MinuteWorkspace.tsx';
 import { useCommitteeSessionsStore } from '../../features/sessions/committeeSessionsStore.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
-import { CommitteeMinutes } from '../../types/database.ts';
+import type { CommitteeMinutes } from '../../types/database.ts';
 
 export function ActasPage() {
   useCommitteeData();
-  const { user } = useSessionStore();
-  const { minutes, isLoading, isSaving, error, searchMinutes, approveMinutes, updateDraftContent, exportMinutePdf } =
-    useMinutesStore();
-  const { sessions } = useCommitteeSessionsStore();
-
+  const user = useSessionStore((state) => state.user);
+  const { minutes, isLoading, isSaving, error, searchMinutes, exportMinutePdf } = useMinutesStore();
+  const sessions = useCommitteeSessionsStore((state) => state.sessions);
   const [search, setSearch] = useState('');
-  const [selectedMinute, setSelectedMinute] = useState<CommitteeMinutes | null>(null);
-  const [isEditingDraft, setIsEditingDraft] = useState(false);
-  const [editedDraftContent, setEditedDraftContent] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const selectedMinute = minutes.find((minute) => minute.id === selectedId);
   const filteredMinutes = search ? searchMinutes(search) : minutes;
-  const isSecretaryOrAdmin = normalizeRole(user?.activeRole) === 'secretary' || user?.activeRole === 'admin';
-
-  const handleOpenDetail = (min: CommitteeMinutes) => {
-    setSelectedMinute(min);
-    setEditedDraftContent(min.draft_content);
-    setIsEditingDraft(false);
-    setActionError(null);
-    setActionSuccess(null);
-  };
-
-  const handleSaveDraft = async () => {
-    if (!selectedMinute) return;
-    setActionError(null);
-
-    const res = await updateDraftContent(
-      selectedMinute.id,
-      editedDraftContent,
-      user?.id || 'usr-sec-04',
-      user?.fullName || 'Secretaria Técnica'
-    );
-
-    if (!res.success) {
-      setActionError(res.error || 'Error al guardar borrador.');
-    } else {
-      setSelectedMinute(res.minute || null);
-      setIsEditingDraft(false);
-      setActionSuccess('Borrador de acta actualizado con éxito.');
-      setTimeout(() => setActionSuccess(null), 3000);
-    }
-  };
-
-  const handleApproveMinutes = async () => {
-    if (!selectedMinute) return;
-    if (!window.confirm('¿Aprobar el acta? Su contenido quedará bloqueado para edición.')) return;
-    setActionError(null);
-
-    const res = await approveMinutes(
-      selectedMinute.id,
-      user?.id || 'usr-sec-04',
-      user?.fullName || 'Secretaria Técnica'
-    );
-
-    if (!res.success) {
-      setActionError(res.error || 'Error al aprobar el acta.');
-    } else {
-      setSelectedMinute(res.minute || null);
-      setActionSuccess('Acta aprobada. Su contenido ha quedado bloqueado para edición.');
-      setTimeout(() => setActionSuccess(null), 3500);
-    }
-  };
+  const role = normalizeRole(user?.activeRole);
+  const canManage = role === 'secretary' || role === 'admin';
 
   const handleDownload = async (minute: CommitteeMinutes) => {
-    const res = await exportMinutePdf(minute.id);
-    if (!res.success) { setActionError(res.error ?? 'Error al descargar el PDF.'); return; }
-    if (res.success && res.pdfUrl) {
-      const a = document.createElement('a');
-      a.href = res.pdfUrl;
-      a.download = res.fileName || `${minute.minute_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(res.pdfUrl);
-    }
+    setActionError(null);
+    const result = await exportMinutePdf(minute.id);
+    if (!result.success || !result.pdfUrl) { setActionError(result.error || 'No se pudo descargar el PDF.'); return; }
+    const anchor = document.createElement('a');
+    anchor.href = result.pdfUrl;
+    anchor.download = result.fileName || 'acta.pdf';
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(result.pdfUrl ?? ''), 1000);
   };
 
-  return (
-    <fieldset disabled={isSaving} className="space-y-6 min-w-0">
-      {isSaving && <p role="status">Guardando acta…</p>}
-      {/* Encabezado */}
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="p-2 rounded-xl bg-[#14281D] text-[#A3E635]">
-            <FileCheck size={18} />
-          </span>
-          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
-            Actas Oficiales y Acuerdos de Comité
-          </h1>
-        </div>
-        <p className="text-xs text-stone-500 mt-1">
-          Consulte las actas y las decisiones de cada sesión.
-        </p>
+  return <div className="space-y-6 min-w-0">
+    <div>
+      <div className="flex items-center gap-2 text-[#14281D]">
+        <FileCheck size={24} />
+        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Actas Oficiales y Acuerdos de Comité</h1>
       </div>
-
-      {/* Buscador Histórico (RF-32) */}
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-stone-400" size={15} />
-          <input
-            type="text"
-            placeholder="Buscar por número de acta (ej. Acta 001 de 2026), radicado o acuerdo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none text-xs"
-          />
+      <p className="text-xs text-stone-500 mt-1">Consulte las actas y las decisiones de cada sesión.</p>
+    </div>
+    <div className="bg-white rounded-2xl border border-[#E5E3DC] p-4 flex flex-wrap items-center gap-3 text-xs">
+      <label className="relative flex-1 min-w-48">
+        <span className="sr-only">Buscar actas</span><Search className="absolute left-3 top-2.5 text-stone-400" size={15} />
+        <input type="search" placeholder="Buscar por número de acta, radicado o acuerdo..." value={search} onChange={(event) => setSearch(event.target.value)}
+          className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E5E3DC]" />
+      </label>
+      <span className="text-stone-500">Mostrando {filteredMinutes.length} actas institucionales</span>
+    </div>
+    {isLoading && <p role="status">Cargando actas…</p>}
+    {(error || actionError) && <p role="alert" className="text-rose-800">{error || actionError}</p>}
+    {!isLoading && !error && !filteredMinutes.length && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
+    <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead className="bg-[#F7F6F2] text-stone-600"><tr>
+          <th className="p-4">Número de acta</th><th className="p-4">Vigencia anual</th><th className="p-4">Sesión vinculada</th><th className="p-4">Estado</th><th className="p-4 text-right">Acciones</th>
+        </tr></thead>
+        <tbody className="divide-y divide-[#E5E3DC]">{filteredMinutes.map((minute) => <tr key={minute.id} className="hover:bg-stone-50">
+          <td className="p-4 font-bold text-[#14281D]">{minute.minute_number}</td>
+          <td className="p-4">{minute.year}</td>
+          <td className="p-4">{sessions.find((session) => session.id === minute.session_id)?.session_number || minute.session_id}</td>
+          <td className="p-4">{minute.is_approved ? <span className="inline-flex items-center gap-1 text-emerald-900"><Lock size={12} /> Aprobada</span> : <span className="text-amber-900">Borrador en revisión</span>}</td>
+          <td className="p-4"><div className="flex justify-end gap-2">
+            <button onClick={() => setSelectedId(minute.id)} className="inline-flex gap-1 items-center rounded-xl border px-3 py-2"><Eye size={13} />Ver acta</button>
+            <button disabled={isSaving} onClick={() => void handleDownload(minute)} className="inline-flex gap-1 items-center rounded-xl bg-[#14281D] text-white px-3 py-2"><Download size={13} />Descargar</button>
+          </div></td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+    {selectedMinute && <div role="dialog" aria-modal="true" aria-labelledby="minute-dialog-title" className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-stone-100 pb-3 shrink-0">
+          <h2 id="minute-dialog-title" className="font-bold text-[#14281D]">{selectedMinute.minute_number}</h2>
+          <button type="button" aria-label="Cerrar acta" disabled={isSaving} onClick={() => {
+            if (!hasUnsavedChanges || window.confirm('Hay cambios sin guardar. ¿Cerrar el acta y descartarlos?')) setSelectedId(null);
+          }} className="rounded-xl p-2 hover:bg-stone-100"><X size={18} /></button>
         </div>
-        <div className="text-[11px] text-stone-500 shrink-0 font-medium self-center">
-          Mostrando {filteredMinutes.length} actas institucionales
-        </div>
+        <div className="overflow-y-auto pr-1"><MinuteWorkspace minuteId={selectedMinute.id} canManage={canManage} onDirtyChange={setHasUnsavedChanges} /></div>
       </div>
-
-      {isLoading && <p role="status">Cargando actas…</p>}
-      {error && <p role="alert" className="text-rose-800">{error}</p>}
-      {actionError && !selectedMinute && <p role="alert" className="text-rose-800">{actionError}</p>}
-      {!isLoading && !error && filteredMinutes.length === 0 && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
-      {/* Tabla de Actas */}
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-hidden shadow-xs">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
-            <tr>
-              <th className="py-3 px-4">Número de Acta</th>
-              <th className="py-3 px-4">Vigencia Anual</th>
-              <th className="py-3 px-4">Sesión Vinculada</th>
-              <th className="py-3 px-4">Estado</th>
-              <th className="py-3 px-4 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E5E3DC]">
-            {filteredMinutes.map((acta) => {
-              const ses = sessions.find((s) => s.id === acta.session_id);
-
-              return (
-                <tr key={acta.id} className="hover:bg-[#FAF9F6] transition-colors">
-                  <td className="py-3.5 px-4 font-bold text-[#14281D]">
-                    <div className="flex items-center gap-2">
-                      <FileText size={15} className="text-stone-400" />
-                      <span>{acta.minute_number}</span>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 text-stone-600 font-mono">
-                    {acta.year}
-                  </td>
-                  <td className="py-3.5 px-4 text-stone-600">
-                    {ses?.session_number || acta.session_id}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    {acta.is_approved ? (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200 inline-flex items-center gap-1">
-                        <Lock size={10} />
-                        <span>Aprobada</span>
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                        Borrador en Revisión
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-right space-x-2">
-                    <button
-                      onClick={() => handleOpenDetail(acta)}
-                      className="px-2.5 py-1.5 border border-[#E5E3DC] rounded-lg hover:bg-stone-50 font-semibold text-xs inline-flex items-center gap-1 cursor-pointer text-[#14281D]"
-                    >
-                      <Eye size={12} />
-                      <span>Ver Acta</span>
-                    </button>
-                    <button
-                      onClick={() => handleDownload(acta)}
-                      className="px-2.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-lg font-semibold text-xs inline-flex items-center gap-1 cursor-pointer shadow-xs"
-                    >
-                      <Download size={12} />
-                      <span>Descargar</span>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal de Lectura, Edición y Aprobación de Acta */}
-      {selectedMinute && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-xl space-y-4 text-xs max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-[#14281D] text-white">
-                  <FileCheck size={16} />
-                </span>
-                <div>
-                  <h3 className="font-bold text-sm text-[#14281D]">
-                    {selectedMinute.minute_number}
-                  </h3>
-                  <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2">
-                    <span>Vigencia {selectedMinute.year}</span>
-                    <span>·</span>
-                    <span>
-                      {selectedMinute.is_approved
-                        ? `Aprobada el ${new Date(selectedMinute.approved_at || '').toLocaleDateString('es-CO')}`
-                        : 'Estado: Borrador en trámite'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedMinute(null)}
-                className="text-stone-400 hover:text-stone-700 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {actionError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 shrink-0">
-                {actionError}
-              </div>
-            )}
-
-            {actionSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 shrink-0">
-                {actionSuccess}
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {isEditingDraft ? (
-                <div>
-                  <label className="block font-semibold text-stone-700 mb-1 text-[11px]">
-                    Contenido del acta
-                  </label>
-                  <textarea
-                    rows={16}
-                    value={editedDraftContent}
-                    onChange={(e) => setEditedDraftContent(e.target.value)}
-                    className="w-full p-4 rounded-xl border border-[#E5E3DC] font-mono text-xs leading-relaxed outline-none focus:border-[#14281D]"
-                  />
-                </div>
-              ) : (
-                <div className="p-5 rounded-xl border border-[#E5E3DC] bg-[#FAF9F6] font-mono text-xs text-stone-700 leading-relaxed whitespace-pre-wrap">
-                  {selectedMinute.draft_content}
-                </div>
-              )}
-            </div>
-
-            {/* Acciones de Pie del Modal */}
-            <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                {!selectedMinute.is_approved && isSecretaryOrAdmin && (
-                  <>
-                    {isEditingDraft ? (
-                      <button
-                        onClick={handleSaveDraft}
-                        className="px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white rounded-xl font-bold cursor-pointer"
-                      >
-                        Guardar Ajustes
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setIsEditingDraft(true)}
-                        className="px-3.5 py-2 border border-[#E5E3DC] hover:bg-stone-50 rounded-xl font-bold text-[#14281D] cursor-pointer"
-                      >
-                        Editar Compromisos
-                      </button>
-                    )}
-                  </>
-                )}
-
-                {!selectedMinute.is_approved && isSecretaryOrAdmin && (
-                  <button
-                    disabled={isEditingDraft}
-                    onClick={handleApproveMinutes}
-                    className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <CheckCircle2 size={13} />
-                    <span>Aprobar acta</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={isEditingDraft}
-                  onClick={() => handleDownload(selectedMinute)}
-                  className="px-3.5 py-2 border border-[#E5E3DC] hover:bg-stone-50 rounded-xl font-bold text-[#14281D] flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Download size={13} />
-                  <span>Descargar Documento</span>
-                </button>
-                <button
-                  onClick={() => setSelectedMinute(null)}
-                  className="px-3.5 py-2 border border-stone-200 text-stone-600 rounded-xl font-semibold hover:bg-stone-50 cursor-pointer"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </fieldset>
-  );
+    </div>}
+  </div>;
 }

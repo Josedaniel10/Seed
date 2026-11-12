@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createMinutePdf } from '../minutePdf.ts';
 import { executiveMinute } from './minutePdfFixtures.js';
+import { createMinuteContent, serializeMinuteContent } from '../minuteContent.ts';
 
 test('exports paginated PDF minutes with Spanish text and draft status', async () => {
   const minute = {
@@ -18,6 +19,22 @@ test('exports paginated PDF minutes with Spanish text and draft status', async (
   assert.match(content, /Borrador para revisión/);
   assert.match(content, /Fundamento técnico/);
   assert.match(content, /Página 1 de/);
+});
+
+test('renders controlled narrative, closing time, deadlines and named signature cards', async () => {
+  const minute = { ...executiveMinute(), is_approved: false, approved_at: null };
+  const content = createMinuteContent(minute);
+  const editorial = { ...content.editorial, closingTime: '11:30', observations: 'Observaciones del formulario',
+    signatories: [{ name: 'Ana María Peña', role: 'Presidenta del comité' }, { name: 'Patricia Salamanca', role: 'Secretaria técnica' }, { name: 'José Ramírez', role: 'Revisor invitado' }],
+    commitments: [{ action: 'Revisar anexos', responsible: 'Secretaría técnica', responsibleUserId: '', deadlineType: 'next_session', deadline: '' }],
+  };
+  editorial.topicNotes[0].text = 'Desarrollo complementario revisado por el comité.';
+  const blob = createMinutePdf({ ...minute, draft_content: serializeMinuteContent(content, editorial) });
+  const pdf = Buffer.from(await blob.arrayBuffer()).toString('latin1');
+  for (const label of ['Cierre 11:30', 'Observaciones del formulario', 'Desarrollo complementario', 'Ana María Peña', 'Revisor invitado', 'Próxima sesión']) {
+    assert.ok(pdf.includes(label), `Missing ${label}`);
+  }
+  assert.ok(!pdf.includes('seed.committee-minute'));
 });
 
 test('downloads structured executive minutes through the existing Blob API', async () => {

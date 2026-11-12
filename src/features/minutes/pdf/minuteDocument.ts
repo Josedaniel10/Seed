@@ -29,6 +29,7 @@ export interface MinuteDocument {
   commitments: Array<{ action: string; responsible: string; deadline: string }>;
   additionalSections: Array<{ title: string; paragraphs: string[] }>;
   signatureNotes: string[];
+  signatories?: Array<{ name: string; role: string }>;
 }
 
 function normalized(value: string): string {
@@ -51,7 +52,18 @@ function paragraphs(lines: string[]): string[] {
 }
 
 function readMetadata(lines: string[], model: MinuteDocument): void {
+  let followsActaHeading = false;
   for (const line of lines.filter(Boolean)) {
+    if (/^ACTA\s+(?:N[º°]?\s*)?\d+\s+DE\s+\d{4}\s*$/i.test(line)) {
+      followsActaHeading = true;
+      continue;
+    }
+    if (followsActaHeading && !model.session && !/^(Fecha|Hora|Lugar)\b/i.test(line)) {
+      model.session = line;
+      followsActaHeading = false;
+      continue;
+    }
+    followsActaHeading = false;
     const date = line.match(/^Fecha(?: y hora)?\s*:?\s+(.+)$/i);
     const time = line.match(/^Hora\s*:?\s+(.+)$/i);
     const location = line.match(/^Lugar(?:\s*\/\s*(?:Enlace|Modalidad))?\s*:?\s+(.+)$/i);

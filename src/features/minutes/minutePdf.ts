@@ -1,13 +1,13 @@
 import { jsPDF } from 'jspdf';
 import type { CommitteeMinutes } from '../../types/database.ts';
-import { parseMinuteDocument } from './pdf/minuteDocument.ts';
+import { minuteDocument } from './minuteContent.ts';
 import { MinutePdfLayout } from './pdf/minutePdfLayout.ts';
 import { MINUTE_PDF_THEME as theme } from './pdf/minutePdfTheme.ts';
 
 export function createMinutePdf(minute: CommitteeMinutes): Blob {
   const document = new jsPDF({ format: 'a4', unit: 'mm' });
   document.setProperties({ title: minute.minute_number, author: 'Seed - Comité de Investigación' });
-  const model = parseMinuteDocument(minute);
+  const model = minuteDocument(minute);
   const layout = new MinutePdfLayout(document, minute);
   layout.cover(model);
 
@@ -50,7 +50,7 @@ export function createMinutePdf(minute: CommitteeMinutes): Blob {
       ? model.commitments.map((commitment) => [commitment.action, commitment.responsible || 'Sin especificar', commitment.deadline || 'Sin especificar'])
       : [['Sin compromisos registrados en el acta.', '-', '-']],
     [100, 44, 30]);
-  layout.signatures(model.signatureNotes);
+  layout.signatures(model.signatureNotes, model.signatories);
   layout.finish();
   return document.output('blob');
 }

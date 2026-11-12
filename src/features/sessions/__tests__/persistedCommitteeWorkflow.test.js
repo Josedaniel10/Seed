@@ -42,6 +42,7 @@ globalThis.fetch = async (input, options) => {
 };
 const { useCommitteeSessionsStore } = await import('../committeeSessionsStore.ts');
 const { useMinutesStore } = await import('../../minutes/minutesStore.ts');
+const { createMinuteContent, serializeMinuteContent, readMinuteContent } = await import('../../minutes/minuteContent.ts');
 const store = useCommitteeSessionsStore.getState();
 const minutesStore = useMinutesStore.getState();
 
@@ -110,6 +111,22 @@ test('persists committee operations through RPC and preserves state on rejected 
     assert.equal(edited.success, false);
     assert.equal(useMinutesStore.getState().minutes[0].draft_content, minute.draft_content);
 
+    responseError = null;
+    const content = createMinuteContent(minute);
+    const editorial = { ...content.editorial, observations: 'Acuerdo revisado con ñ y á',
+      signatories: [{ name: 'Ana', role: 'Presidencia' }, { name: 'José', role: 'Secretaría' }] };
+    rpcResult = { ...minute, draft_content: serializeMinuteContent(content, editorial) };
+    const structured = await minutesStore.updateStructuredDraft(minute.id, editorial, 'actor', 'Actor');
+    assert.equal(structured.success, true);
+    assert.equal(lastPayload.p_action, 'update');
+    assert.deepEqual(readMinuteContent(lastPayload.p_payload.draft_content).editorial, editorial);
+    minutes = [rpcResult];
+    await minutesStore.loadFromSupabase();
+    assert.equal(readMinuteContent(useMinutesStore.getState().minutes[0].draft_content).editorial.observations, editorial.observations);
+    responseError = 'La cuenta no tiene permiso para gestionar actas.';
+    const rejectedStructured = await minutesStore.updateStructuredDraft(minute.id, { ...editorial, observations: 'Cambio rechazado' }, 'actor', 'Actor');
+    assert.equal(rejectedStructured.success, false);
+    assert.equal(readMinuteContent(useMinutesStore.getState().minutes[0].draft_content).editorial.observations, editorial.observations);
     responseError = null;
     minutes = [];
     await minutesStore.loadFromSupabase();

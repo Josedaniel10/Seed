@@ -6,6 +6,7 @@ import { useRequestStore } from '../requests/requestStore.ts';
 import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
 import { minuteSchema, mutateMinutes } from '../sessions/committeeApi.ts';
 import type { MinutesAction } from '../sessions/committeeApi.ts';
+import { createMinuteContent, minuteApprovalErrors, readMinuteContent, serializeMinuteContent, type MinuteEditorial } from './minuteContent.ts';
 
 export interface MinutesState {
   minutes: CommitteeMinutes[];
@@ -30,6 +31,9 @@ export interface MinutesState {
     draftContent: string,
     actorId: string,
     actorName: string
+  ) => Promise<{ success: boolean; minute?: CommitteeMinutes; error?: string }>;
+  updateStructuredDraft: (
+    minuteId: string, editorial: MinuteEditorial, actorId: string, actorName: string
   ) => Promise<{ success: boolean; minute?: CommitteeMinutes; error?: string }>;
   approveMinutes: (
     minuteId: string,
@@ -280,7 +284,31 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
       // =========================================================
       // T5.3: EDICIÓN Y APROBACIÓN FORMAL INMUTABLE (RF-30, RNF-03)
       // =========================================================
+      updateStructuredDraft: async (minuteId, editorial, actorId, actorName) => {
+        const minute = get().minutes.find((item) => item.id === minuteId);
+        if (!minute) return { success: false, error: 'Acta no encontrada.' };
+        try {
+          const sessions = useCommitteeSessionsStore.getState();
+          const draftContent = serializeMinuteContent(createMinuteContent(minute, {
+            session: sessions.sessions.find((session) => session.id === minute.session_id), attendance: sessions.attendances,
+          }), editorial);
+          return await get().updateDraftContent(minuteId, draftContent, actorId, actorName);
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Revise los campos del acta.' };
+        }
+      },
+
       updateDraftContent: async (minuteId, draftContent, actorId, actorName) => {
+        const current = get().minutes.find((item) => item.id === minuteId);
+        try {
+          const existing = current && readMinuteContent(current.draft_content);
+          const next = readMinuteContent(draftContent);
+          if (existing && (!next || next.sourceText !== existing.sourceText || JSON.stringify(next.snapshot) !== JSON.stringify(existing.snapshot))) {
+            return { success: false, error: 'Los datos de la sesión se conservan sin cambios. Edite las observaciones, compromisos o firmantes.' };
+          }
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'No se pudo leer el acta.' };
+        }
         const remote = await performRemoteMinutesMutation('update', { minute_id: minuteId, draft_content: draftContent });
         if (remote) return remote;
         const minute = get().minutes.find((m) => m.id === minuteId);
@@ -309,6 +337,14 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
       },
 
       approveMinutes: async (minuteId, approvedBy, approvedByName) => {
+        const saved = get().minutes.find((item) => item.id === minuteId);
+        try {
+          const content = saved && readMinuteContent(saved.draft_content);
+          const errors = content ? minuteApprovalErrors(content.editorial) : [];
+          if (errors.length) return { success: false, error: errors.join(' ') };
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'No se pudo leer el acta.' };
+        }
         const remote = await performRemoteMinutesMutation('approve', { minute_id: minuteId });
         if (remote) return remote;
         const minute = get().minutes.find((m) => m.id === minuteId);

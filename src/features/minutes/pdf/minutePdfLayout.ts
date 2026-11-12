@@ -191,26 +191,34 @@ export class MinutePdfLayout {
     }
   }
 
-  signatures(notes: string[]): void {
+  signatures(notes: string[], signatories?: Array<{ name: string; role: string }>): void {
     this.setText();
     const noteHeight = notes.reduce((height, note) => height + this.lines(note).length * theme.lineHeight + 2, 0);
     this.section('Firmas', Math.min(45 + noteHeight, 150));
     for (const note of notes) this.paragraph(note);
-    this.keepTogether(45);
     const gap = 12;
     const width = (this.contentWidth - gap) / 2;
-    const roles = ['Presidencia del comité', 'Secretaría técnica'];
-    roles.forEach((role, index) => {
-      const x = theme.margin + index * (width + gap);
-      this.document.setDrawColor(theme.border);
-      this.document.roundedRect(x, this.y, width, 40, 2, 2, 'S');
-      this.document.line(x + 6, this.y + 22, x + width - 6, this.y + 22);
-      this.setText(9, 'bold', theme.forest);
-      this.document.text(role, x + 6, this.y + 28);
-      this.setText(8, 'normal', theme.muted);
-      this.document.text('Nombre y firma', x + 6, this.y + 34);
-    });
-    this.y += 45;
+    const people = signatories ?? [{ name: '', role: 'Presidencia del comité' }, { name: '', role: 'Secretaría técnica' }];
+    for (let start = 0; start < people.length; start += 2) {
+      this.setText(9, 'bold');
+      const row = people.slice(start, start + 2).map((person) => ({
+        name: this.lines(person.name || 'Nombre y firma', width - 12),
+        role: this.lines(person.role || 'Cargo por definir', width - 12),
+      }));
+      const height = Math.max(...row.map((person) => 32 + (person.name.length + person.role.length) * theme.lineHeight));
+      this.keepTogether(height + 5);
+      row.forEach((person, index) => {
+        const x = theme.margin + index * (width + gap);
+        this.document.setDrawColor(theme.border);
+        this.document.roundedRect(x, this.y, width, height, 2, 2, 'S');
+        this.document.line(x + 6, this.y + 22, x + width - 6, this.y + 22);
+        this.setText(9, 'bold', theme.forest);
+        this.document.text(person.name, x + 6, this.y + 28);
+        this.setText(8, 'normal', theme.muted);
+        this.document.text(person.role, x + 6, this.y + 29 + person.name.length * theme.lineHeight);
+      });
+      this.y += height + 5;
+    }
   }
 
   finish(): void {
