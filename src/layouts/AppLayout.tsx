@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { SeedLogo } from '../components/SeedLogo.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
-import { useNotificationsStore } from '../features/notifications/notificationsStore.ts';
+import { useNotifications } from '../features/notifications/useNotifications.ts';
 import {
   ROLE_LABELS,
   ROLE_MENU_ITEMS,
@@ -49,7 +49,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, setActiveRole, logout } = useSessionStore();
-  const { getUnreadCountByUser } = useNotificationsStore();
+  const { data: notifications = [] } = useNotifications();
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -58,7 +58,7 @@ export function AppLayout() {
 
   const activeRole = user.activeRole;
   const menuItems = ROLE_MENU_ITEMS[activeRole] || [];
-  const unreadCount = getUnreadCountByUser(user.id);
+  const unreadCount = notifications.filter((notification) => !notification.is_read).length;
 
   const handleRoleChange = (newRole: AppRole) => {
     setActiveRole(newRole);

@@ -5,7 +5,6 @@ import { useAuthStore } from './features/auth/authStore.ts';
 import { useCatalogStore } from './features/catalog/catalogStore.ts';
 import { useGroupsStore } from './features/groups/groupsStore.ts';
 import { useMinutesStore } from './features/minutes/minutesStore.ts';
-import { useNotificationsStore } from './features/notifications/notificationsStore.ts';
 import { useRequestStore } from './features/requests/requestStore.ts';
 import { useCommitteeSessionsStore } from './features/sessions/committeeSessionsStore.ts';
 import { useSessionStore } from './stores/session.store.ts';
@@ -44,7 +43,6 @@ useCatalogStore.setState({
 });
 useGroupsStore.setState({ groups: [], isInitialized: false, error: null });
 useMinutesStore.setState({ minutes: [] });
-useNotificationsStore.setState({ notifications: [] });
 useRequestStore.setState({
   requests: [],
   documents: [],

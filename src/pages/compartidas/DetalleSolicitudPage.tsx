@@ -1,6 +1,6 @@
 import { formatUserMessage } from '../../lib/userMessages.ts';
-import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useApplicationStore, UploadedFilePayload } from '../../features/applications/applicationStore.ts';
 import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
@@ -33,20 +33,32 @@ export function DetalleSolicitudPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useSessionStore();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
   const {
     requests,
     documents,
     auditHistory,
+    observations,
     subsanarDocument,
     computeQueFalta,
+    isLoading,
   } = useApplicationStore();
   const { types, requirements } = useCatalogStore();
   const { groups } = useGroupsStore();
   const { users } = useUserStore();
 
   const [activeTab, setActiveTab] = useState<'resumen' | 'documentos' | 'observaciones' | 'historial'>(
-    'resumen'
+    requestedTab === 'documentos' || requestedTab === 'observaciones' || requestedTab === 'historial' ? requestedTab : 'resumen'
   );
+  useEffect(() => {
+    if (requestedTab === 'resumen' || requestedTab === 'documentos' || requestedTab === 'observaciones' || requestedTab === 'historial') {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab, id]);
+  useEffect(() => {
+    if (user?.id) void useApplicationStore.getState().loadFromSupabase();
+  }, [user?.id, id]);
 
   // Estados para subsanación interactiva
   const [subsanandoReqId, setSubsanandoReqId] = useState<string | null>(null);
@@ -88,7 +100,10 @@ export function DetalleSolicitudPage() {
   }, [requirements, applicationType]);
 
   const activeRole = user?.activeRole || 'investigador';
+  const appObservations = observations.filter((observation) =>
+    (observation.application_id ?? observation.request_id) === application?.id);
 
+  if (isLoading && !application) return <p role="status">Cargando solicitud…</p>;
   if (!application) {
     return (
       <div className="max-w-xl mx-auto bg-white rounded-3xl border border-[#E5E3DC] p-10 text-center space-y-4 shadow-sm">
@@ -380,7 +395,7 @@ export function DetalleSolicitudPage() {
                 <div className="space-y-3">
                   {appDocuments.map((doc, idx) => {
                     const reqObj = requirements.find((r) => r.id === doc.requirement_id);
-                    const isRejected = doc.validation_status === 'RECHAZADO';
+                    const isRejected = doc.validation_status === 'RECHAZADO' || doc.validation_status === 'REJECTED';
                     const isSubsanandoThis = subsanandoReqId === doc.requirement_id;
 
                     return (
@@ -527,24 +542,22 @@ export function DetalleSolicitudPage() {
                 </h3>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#14281D]">
-                    Dr. Alejandro Restrepo (Revisor Par)
-                  </span>
-                  <span className="text-[10px] text-stone-400">03 Feb 2026</span>
-                </div>
-                <p className="text-stone-700 leading-relaxed">
-                  Se recomienda explicitar en la metodología el protocolo de bioseguridad para el
-                  manejo de las cepas de patógenos en el laboratorio de fitopatología.
-                </p>
-                <div className="pt-2 flex items-center justify-between">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    Aclaración Metodológica
-                  </span>
-                  <span className="text-[10px] text-stone-500">Atendida en versión 1</span>
-                </div>
-              </div>
+              {appObservations.length === 0 && <p className="text-stone-500">No hay observaciones registradas.</p>}
+              {appObservations.map((observation) => (
+                <article key={observation.id} className="p-4 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-[#14281D]">
+                      {users.find((profile) => profile.id === observation.author_id)?.full_name ?? 'Evaluador'}
+                    </span>
+                    <time dateTime={observation.created_at} className="text-stone-500">
+                      {new Date(observation.created_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}
+                    </time>
+                  </div>
+                  <p className="text-stone-700 whitespace-pre-wrap">{observation.content}</p>
+                  <p className="text-stone-500">{observation.is_resolved ? 'Atendida' : 'Pendiente de respuesta'}</p>
+                  {observation.applicant_response && <p>Respuesta: {observation.applicant_response}</p>}
+                </article>
+              ))}
             </div>
           )}
 

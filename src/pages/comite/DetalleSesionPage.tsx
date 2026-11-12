@@ -5,8 +5,8 @@ import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 import { SessionMinutesPanel } from '../../features/minutes/SessionMinutesPanel.tsx';
 import { normalizeRole } from '../../lib/permissions.ts';
 import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar,
   Users,
@@ -37,6 +37,8 @@ export function DetalleSesionPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useSessionStore();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
 
   const {
     sessions,
@@ -64,7 +66,14 @@ export function DetalleSesionPage() {
 
   const session = sessions.find((s) => s.id === id);
 
-  const [activeTab, setActiveTab] = useState<'agenda' | 'quorum' | 'decisiones' | 'acta'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'quorum' | 'decisiones' | 'acta'>(
+    requestedTab === 'quorum' || requestedTab === 'decisiones' || requestedTab === 'acta' ? requestedTab : 'agenda'
+  );
+  useEffect(() => {
+    if (requestedTab === 'agenda' || requestedTab === 'quorum' || requestedTab === 'decisiones' || requestedTab === 'acta') {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab, id]);
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('');
   const [selectedAppId, setSelectedAppId] = useState<string>('');
   const [actionError, setActionError] = useState<string | null>(null);

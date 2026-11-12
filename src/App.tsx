@@ -1,4 +1,6 @@
 import React, { useEffect } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NotificationsSync } from './features/notifications/useNotifications.ts';
 import { BrowserRouter } from 'react-router-dom';
 import { AppRoutes } from './routes/AppRoutes.tsx';
 import { useSessionStore } from './stores/session.store.ts';
@@ -7,6 +9,8 @@ import { useGroupsStore } from './features/groups/groupsStore.ts';
 import { useUserStore } from './features/users/userStore.ts';
 import { useRequestStore } from './features/requests/requestStore.ts';
 import { useCommitteeSessionsStore } from './features/sessions/committeeSessionsStore.ts';
+
+const queryClient = new QueryClient();
 
 export default function App() {
   const initializeSession = useSessionStore((s) => s.initializeSession);
@@ -28,8 +32,11 @@ export default function App() {
   }, [initializeSession, setupAuthListener]);
 
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <NotificationsSync />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

@@ -129,7 +129,7 @@ export function AppRoutes() {
         <Route
           path="/sesiones"
           element={
-            <RutaProtegida rolesPermitidos={['secretary', 'committee_member']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'committee_member', 'admin']}>
               <SesionesPage />
             </RutaProtegida>
           }
@@ -137,7 +137,7 @@ export function AppRoutes() {
         <Route
           path="/sesiones/:id"
           element={
-            <RutaProtegida rolesPermitidos={['secretary', 'committee_member']}>
+            <RutaProtegida rolesPermitidos={['secretary', 'committee_member', 'admin']}>
               <DetalleSesionPage />
             </RutaProtegida>
           }
