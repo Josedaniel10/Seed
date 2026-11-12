@@ -1,3 +1,5 @@
+import { useListFilter } from '../../hooks/useListFilter.ts';
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -43,7 +45,7 @@ export function ValidacionPage() {
     && !expedientesPorValidar.some((pending) => pending.id === request.id)).length;
   const saving = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useListFilter('search', '');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
   );
@@ -214,7 +216,7 @@ export function ValidacionPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       <div>
-        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+        <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Bandeja de Validación Documental
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
@@ -242,8 +244,8 @@ export function ValidacionPage() {
       )}
 
       {/* Modal / Diálogo de Rechazo Documental con Justificación (RN-05, RF-13) */}
-      {rejectingDocId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <ResponsiveOverlay isOpen={Boolean(rejectingDocId)} onClose={() => setRejectingDocId(null)} label="Rechazar documento">
+        {rejectingDocId && (<>
           <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 max-w-lg w-full space-y-4 shadow-xl">
             <div className="flex items-center gap-2 text-rose-800">
               <ShieldAlert size={20} />
@@ -293,8 +295,8 @@ export function ValidacionPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
 
       {isLoading && <p role="status" className="text-xs text-stone-600">Actualizando cola de validación…</p>}
       {waitingCount > 0 && <p className="text-xs text-stone-600">En espera de correcciones del investigador: {waitingCount}.</p>}
@@ -392,7 +394,7 @@ export function ValidacionPage() {
                     <StatusBadge status={selectedExp.current_status} size="sm" />
                   </div>
                   <button
-                    onClick={() => navigate(`/solicitudes/${selectedExp.id}`)}
+                    onClick={() => navigate(`/solicitudes/${selectedExp.id}`, { state: { fromList: '/validacion' } })}
                     className="text-xs text-stone-600 hover:text-[#14281D] font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <span>Ver expediente</span>

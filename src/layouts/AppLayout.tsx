@@ -17,9 +17,9 @@ import {
   Users,
   Layers,
   BookOpen,
-  Menu,
-  X,
 } from 'lucide-react';
+import { useRouteScrollRestoration } from '../hooks/useRouteScrollRestoration.ts';
+import { MobileNavigation } from './MobileNavigation.tsx';
 import { SeedLogo } from '../components/SeedLogo.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
 import { useNotifications } from '../features/notifications/useNotifications.ts';
@@ -46,13 +46,13 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export function AppLayout() {
+  useRouteScrollRestoration();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, setActiveRole, logout } = useSessionStore();
   const { data: notifications = [] } = useNotifications();
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (!user) return null;
 
@@ -63,7 +63,6 @@ export function AppLayout() {
   const handleRoleChange = (newRole: AppRole) => {
     setActiveRole(newRole);
     setIsRoleMenuOpen(false);
-    setIsMobileMenuOpen(false);
     navigate(ROLE_HOME_PATHS[newRole]);
   };
 
@@ -75,19 +74,12 @@ export function AppLayout() {
     }`;
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-[#14281D] flex flex-col">
+    <div className="min-h-dvh bg-[#F7F6F2] text-[#14281D] flex flex-col">
+      <MobileNavigation unreadCount={unreadCount} />
       {/* 1. Cabecera Unificada (Sección 6.2) */}
-      <header className="h-14 bg-white border-b border-[#E5E3DC] px-4 md:px-6 flex items-center justify-between sticky top-0 z-40">
+      <header className="h-14 bg-white border-b border-[#E5E3DC] px-4 md:px-6 hidden md:flex items-center justify-between sticky top-0 z-40">
         {/* Logo de Seed (limpio, sin subtítulos técnicos) */}
         <div className="flex items-center gap-3 sm:gap-6">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 rounded-lg text-stone-600 hover:bg-stone-100 md:hidden cursor-pointer"
-            aria-label="Abrir menú"
-          >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-
           <NavLink to={ROLE_HOME_PATHS[activeRole]} className="flex items-center">
             <SeedLogo size={30} />
           </NavLink>
@@ -196,26 +188,6 @@ export function AppLayout() {
         </div>
       </header>
 
-      {/* Menú Móvil Desplegable */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-[#E5E3DC] p-3 space-y-1 shadow-md">
-          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
-            Opciones ({ROLE_LABELS[activeRole]})
-          </div>
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={navLinkClass}
-            >
-              {ICON_MAP[item.iconName] || <FileText size={16} />}
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      )}
-
       {/* 2. Cuerpo: Barra Lateral con Opciones del Rol + Contenido */}
       <div className="flex-1 flex min-w-0">
         {/* Barra lateral por rol activo (Sección 3 / Menú lateral por rol) */}
@@ -232,7 +204,7 @@ export function AppLayout() {
         </aside>
 
         {/* Zona de contenido de la página */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
+        <main className="app-content min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
           <Outlet />
         </main>
       </div>

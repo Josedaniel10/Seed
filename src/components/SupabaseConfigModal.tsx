@@ -1,3 +1,4 @@
+import { ResponsiveOverlay } from './ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import {
   saveSupabaseCredentials,
@@ -25,7 +26,6 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
 
-  if (!isOpen) return null;
 
   const handleSaveAndTest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +78,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+    <ResponsiveOverlay isOpen={isOpen} onClose={onClose} label="Configurar Supabase">
       <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 max-w-lg w-full shadow-xl space-y-5 animate-scale-up">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -95,7 +95,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar panel"
             onClick={onClose}
             className="text-stone-400 hover:text-stone-700 p-1 rounded-lg transition-colors cursor-pointer"
           >
@@ -208,6 +208,6 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ResponsiveOverlay>
   );
 };

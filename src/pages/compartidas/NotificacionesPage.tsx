@@ -1,3 +1,4 @@
+import { useListFilter } from '../../hooks/useListFilter.ts';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, ArrowRight, RefreshCw } from 'lucide-react';
@@ -12,7 +13,9 @@ export function NotificacionesPage() {
   const user = useSessionStore((state) => state.user);
   const { data: notifications = [], isPending, error, refetch } = useNotifications();
   const markRead = useMarkNotificationsRead();
-  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [unreadFilter, setUnreadFilter] = useListFilter('unread', 'false');
+  const onlyUnread = unreadFilter === 'true';
+  const setOnlyUnread = (value: boolean) => setUnreadFilter(String(value));
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
   const filtered = onlyUnread ? notifications.filter((notification) => !notification.is_read) : notifications;
@@ -32,7 +35,7 @@ export function NotificacionesPage() {
     }
     try {
       if (!notification.is_read) await markRead.mutateAsync(notification.id);
-      if (useSessionStore.getState().user?.id === user.id) navigate(target);
+      if (useSessionStore.getState().user?.id === user.id) navigate(target, { state: { fromList: '/notificaciones' } });
     } catch {
       // The mutation exposes the persisted-write error below; keep the notification unread.
     }
@@ -42,7 +45,7 @@ export function NotificacionesPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-extrabold text-[#14281D] flex items-center gap-2">
+          <h1 className="mobile-section-title text-xl font-extrabold text-[#14281D] flex items-center gap-2">
             <Bell size={22} /> Centro de notificaciones
           </h1>
           <p className="text-xs text-stone-500 mt-1">Novedades de sus solicitudes, asignaciones y sesiones.</p>

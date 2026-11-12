@@ -1,3 +1,6 @@
+import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
+import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import { useUserStore } from './userStore.ts';
 import { UserRole } from '../../types/database.ts';
@@ -148,7 +151,7 @@ export const UserManagementTable: React.FC = () => {
             <Users size={16} className="text-[#84CC16]" />
             <span>Gestión de Usuarios</span>
           </div>
-          <h2 className="text-xl font-extrabold text-[#14281D] mt-0.5">
+          <h2 className="mobile-section-title text-xl font-extrabold text-[#14281D] mt-0.5">
             Usuarios y Asignación de Roles
           </h2>
           <p className="text-xs text-stone-600">
@@ -169,7 +172,7 @@ export const UserManagementTable: React.FC = () => {
 
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="mobile-page-action px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <UserPlus size={14} />
             <span>Nuevo Usuario</span>
@@ -186,8 +189,8 @@ export const UserManagementTable: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="relative flex-1 max-w-md">
+      <div className="filter-toolbar flex flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="relative min-w-0 flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
             <Search size={14} />
           </span>
@@ -200,29 +203,31 @@ export const UserManagementTable: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-stone-500 font-medium flex items-center gap-1">
-            <Filter size={13} />
-            <span>Filtrar por Rol:</span>
-          </span>
-          <select
-            value={selectedRoleFilter}
-            onChange={(e) => setSelectedRoleFilter(e.target.value as UserRole | 'ALL')}
-            className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#14281D] font-medium"
-          >
-            <option value="ALL">Todos los roles ({users.length})</option>
-            {ALL_ROLES.map((r) => (
-              <option key={r.role} value={r.role}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ResponsiveFilters activeCount={Number(selectedRoleFilter !== 'ALL')} onReset={() => setSelectedRoleFilter('ALL')}>
+          <div className="flex items-center gap-2">
+            <span className="text-stone-500 font-medium flex items-center gap-1">
+              <Filter size={13} />
+              <span>Filtrar por Rol:</span>
+            </span>
+            <ResponsiveSelect sheetTitle="Filtrar por rol"
+              value={selectedRoleFilter}
+              onChange={(e) => setSelectedRoleFilter(e.target.value as UserRole | 'ALL')}
+              className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#14281D] font-medium"
+            >
+              <option value="ALL">Todos los roles ({users.length})</option>
+              {ALL_ROLES.map((r) => (
+                <option key={r.role} value={r.role}>
+                  {r.label}
+                </option>
+              ))}
+            </ResponsiveSelect>
+          </div>
+        </ResponsiveFilters>
       </div>
 
       {/* Users Table */}
       <div className="overflow-x-auto rounded-xl border border-[#E5E3DC]">
-        <table className="w-full text-left text-xs border-collapse">
+        <table className="mobile-data-table w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
               <th className="py-3 px-4">Usuario / Nombre</th>
@@ -250,7 +255,7 @@ export const UserManagementTable: React.FC = () => {
                     }`}
                   >
                     {/* User Details */}
-                    <td className="py-3.5 px-4">
+                    <td data-label="Usuario" className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-[#14281D] text-white font-bold text-xs flex items-center justify-center shrink-0">
                           {u.full_name
@@ -267,7 +272,7 @@ export const UserManagementTable: React.FC = () => {
                     </td>
 
                     {/* Academic info */}
-                    <td className="py-3.5 px-4">
+                    <td data-label="Programa y vínculo" className="py-3.5 px-4">
                       <div className="space-y-0.5">
                         <div className="font-medium text-stone-800 flex items-center gap-1.5">
                           <GraduationCap size={13} className="text-stone-400" />
@@ -280,9 +285,9 @@ export const UserManagementTable: React.FC = () => {
                     </td>
 
                     {/* Role Selector (Changes immediately, RF-03) */}
-                    <td className="py-3.5 px-4">
+                    <td data-label="Rol asignado" className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
-                        <select
+                        <ResponsiveSelect sheetTitle="Rol del usuario"
                           value={u.role}
                           onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole, u.full_name)}
                           className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#14281D] transition-colors ${roleBadge.badgeClass}`}
@@ -292,7 +297,7 @@ export const UserManagementTable: React.FC = () => {
                               {r.label}
                             </option>
                           ))}
-                        </select>
+                        </ResponsiveSelect>
                         <span className="text-[10px] text-stone-400 font-mono hidden md:inline">
                           (Reactivo)
                         </span>
@@ -300,7 +305,7 @@ export const UserManagementTable: React.FC = () => {
                     </td>
 
                     {/* Active toggle */}
-                    <td className="py-3.5 px-4 text-center">
+                    <td data-label="Estado" className="py-3.5 px-4 text-center">
                       <button
                         onClick={() => handleToggleActive(u.id, u.is_active, u.full_name)}
                         className="inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-colors"
@@ -328,15 +333,15 @@ export const UserManagementTable: React.FC = () => {
       </div>
 
       {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+      <ResponsiveOverlay isOpen={Boolean(showAddModal)} onClose={() => setShowAddModal(false)} label="Registrar miembro">
+        {showAddModal && (<>
           <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 max-w-md w-full shadow-lg space-y-4 animate-scale-up">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100">
               <h3 className="text-base font-bold text-[#14281D] flex items-center gap-2">
                 <UserPlus size={18} className="text-[#84CC16]" />
                 Registrar Miembro Universitario
               </h3>
-              <button
+              <button aria-label="Cerrar panel"
                 onClick={() => setShowAddModal(false)}
                 className="text-stone-400 hover:text-stone-600 text-lg cursor-pointer"
               >
@@ -430,8 +435,8 @@ export const UserManagementTable: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
     </div>
   );
 };

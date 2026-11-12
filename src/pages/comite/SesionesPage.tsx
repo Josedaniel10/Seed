@@ -1,3 +1,4 @@
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import { useUserStore } from '../../features/users/userStore.ts';
 import { normalizeRole } from '../../lib/permissions.ts';
 import { useCommitteeData } from '../../features/sessions/useCommitteeData.ts';
@@ -72,7 +73,7 @@ export function SesionesPage() {
     }
 
     setIsModalOpen(false);
-    if (res.session) navigate(`/sesiones/${res.session.id}`);
+    if (res.session) navigate(`/sesiones/${res.session.id}`, { state: { fromList: '/sesiones' } });
   };
 
   return (
@@ -84,7 +85,7 @@ export function SesionesPage() {
             <span className="p-2 rounded-xl bg-[#14281D] text-[#A3E635]">
               <Calendar size={18} />
             </span>
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+            <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
               Sesiones del Comité de Investigación
             </h1>
           </div>
@@ -100,7 +101,7 @@ export function SesionesPage() {
               setFormQuorum(Math.floor(memberCount / 2) + 1);
               setIsModalOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
+            className="mobile-page-action inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
           >
             <Plus size={15} />
             <span>Programar Nueva Sesión</span>
@@ -133,10 +134,10 @@ export function SesionesPage() {
           return (
             <div
               key={ses.id}
-              onClick={() => navigate(`/sesiones/${ses.id}`)}
-              className="bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs hover:border-[#14281D] cursor-pointer transition-all space-y-4 group"
+              onClick={() => navigate(`/sesiones/${ses.id}`, { state: { fromList: '/sesiones' } })}
+              className="session-summary bg-white rounded-2xl border border-[#E5E3DC] p-6 shadow-xs hover:border-[#14281D] cursor-pointer transition-all space-y-4 group"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-100">
                 <div className="flex items-center gap-3">
                   <span className="p-2.5 rounded-xl bg-[#F7F6F2] border border-[#E5E3DC] text-[#14281D] group-hover:bg-[#14281D] group-hover:text-white transition-colors">
                     <Calendar size={20} />
@@ -163,7 +164,7 @@ export function SesionesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="order-first md:order-none flex flex-wrap items-center gap-2 self-start md:self-auto">
                   {/* Estado de Agenda */}
                   {ses.is_agenda_closed ? (
                     <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
@@ -191,8 +192,11 @@ export function SesionesPage() {
                 </div>
               </div>
 
+              <div className="md:hidden flex items-center justify-between gap-3 text-sm font-semibold">
+                <span>{ses.is_completed ? 'Consultar decisiones y acta' : 'Revisar agenda de la sesión'}</span><ChevronRight size={18} />
+              </div>
               {/* Indicadores Clave de Sesión */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="hidden md:grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div className="bg-[#F7F6F2] p-3.5 rounded-xl border border-[#E5E3DC]">
                   <span className="text-stone-500 text-[11px] block">Expedientes en Agenda</span>
                   <p className="font-bold text-[#14281D] mt-0.5">
@@ -231,9 +235,9 @@ export function SesionesPage() {
       </div>
 
       {/* Modal Programar Nueva Sesión (RF-24) */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div role="dialog" aria-modal="true" aria-label="Programar sesión de comité" className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 text-xs">
+      <ResponsiveOverlay isOpen={Boolean(isModalOpen)} onClose={() => setIsModalOpen(false)} label="Programar sesión de comité">
+        {isModalOpen && (<>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 text-xs">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <div>
                 <h3 className="font-bold text-sm text-[#14281D]">Programar Sesión de Comité</h3>
@@ -241,7 +245,7 @@ export function SesionesPage() {
                   Indique la fecha, el lugar y la asistencia mínima.
                 </p>
               </div>
-              <button
+              <button aria-label="Cerrar panel"
                 onClick={() => setIsModalOpen(false)}
                 className="text-stone-400 hover:text-stone-700 cursor-pointer"
               >
@@ -338,8 +342,8 @@ export function SesionesPage() {
               </div>
             </fieldset></form>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
     </div>
   );
 }

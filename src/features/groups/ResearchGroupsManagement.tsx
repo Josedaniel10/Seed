@@ -1,3 +1,6 @@
+import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
+import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useMemo, useState } from 'react';
 import { isGroupLeaderRole, useGroupsStore } from './groupsStore.ts';
 import { useUserStore } from '../users/userStore.ts';
@@ -147,7 +150,7 @@ export const ResearchGroupsManagement: React.FC = () => {
             <Building2 size={16} className="text-[#84CC16]" />
             <span>Grupos de Investigación</span>
           </div>
-          <h2 className="text-xl font-extrabold text-[#14281D] mt-0.5">
+          <h2 className="mobile-section-title text-xl font-extrabold text-[#14281D] mt-0.5">
             Gestión de Grupos de Investigación y Líderes
           </h2>
           <p className="text-xs text-stone-600">
@@ -168,7 +171,7 @@ export const ResearchGroupsManagement: React.FC = () => {
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="mobile-page-action px-3.5 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Plus size={14} />
             <span>Nuevo Grupo</span>
@@ -190,8 +193,8 @@ export const ResearchGroupsManagement: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="relative flex-1 max-w-md">
+      <div className="filter-toolbar flex flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="relative min-w-0 flex-1 max-w-md">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
             <Search size={14} />
           </span>
@@ -204,29 +207,31 @@ export const ResearchGroupsManagement: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-stone-500 font-medium flex items-center gap-1">
-            <Filter size={13} />
-            <span>Facultad:</span>
-          </span>
-          <select
-            value={selectedFacultyFilter}
-            onChange={(e) => setSelectedFacultyFilter(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#14281D] font-medium"
-          >
-            <option value="ALL">Todas las facultades ({groups.length})</option>
-            {faculties.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ResponsiveFilters activeCount={Number(selectedFacultyFilter !== 'ALL')} onReset={() => setSelectedFacultyFilter('ALL')}>
+          <div className="flex items-center gap-2">
+            <span className="text-stone-500 font-medium flex items-center gap-1">
+              <Filter size={13} />
+              <span>Facultad:</span>
+            </span>
+            <ResponsiveSelect sheetTitle="Filtrar por facultad"
+              value={selectedFacultyFilter}
+              onChange={(e) => setSelectedFacultyFilter(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DC] bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#14281D] font-medium"
+            >
+              <option value="ALL">Todas las facultades ({groups.length})</option>
+              {faculties.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </ResponsiveSelect>
+          </div>
+        </ResponsiveFilters>
       </div>
 
       {/* Groups Table */}
       <div className="overflow-x-auto rounded-xl border border-[#E5E3DC]">
-        <table className="w-full text-left text-xs border-collapse">
+        <table className="mobile-data-table w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
               <th className="py-3 px-4">Código / Identificador</th>
@@ -254,14 +259,14 @@ export const ResearchGroupsManagement: React.FC = () => {
                     }`}
                   >
                     {/* Code */}
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#14281D]">
+                    <td data-label="Código" className="py-3.5 px-4 font-mono font-bold text-[#14281D]">
                       <span className="bg-stone-100 text-stone-800 px-2 py-0.5 rounded border border-stone-200">
                         {group.code}
                       </span>
                     </td>
 
                     {/* Group info */}
-                    <td className="py-3.5 px-4">
+                    <td data-label="Grupo y facultad" className="py-3.5 px-4">
                       <div className="space-y-0.5">
                         <div className="font-bold text-[#14281D]">{group.name}</div>
                         <div className="text-[11px] text-stone-500 flex items-center gap-1">
@@ -272,10 +277,10 @@ export const ResearchGroupsManagement: React.FC = () => {
                     </td>
 
                     {/* Leader Selector (Changes immediately and verifiable) */}
-                    <td className="py-3.5 px-4">
+                    <td data-label="Líder asignado" className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
                         <UserCheck size={14} className="text-[#84CC16] shrink-0" />
-                        <select
+                        <ResponsiveSelect sheetTitle="Líder del grupo"
                           value={leaders.some((user) => user.id === group.leader_id) ? group.leader_id || '' : ''}
                           onChange={(e) => handleLeaderChange(group.id, e.target.value, group.name)}
                           disabled={isLoadingUsers || leaders.length === 0}
@@ -289,7 +294,7 @@ export const ResearchGroupsManagement: React.FC = () => {
                               {u.full_name} ({u.role.replace('_', ' ')})
                             </option>
                           ))}
-                        </select>
+                        </ResponsiveSelect>
                       </div>
                       {currentLeader && (
                         <div className="text-[10px] text-stone-500 font-mono mt-0.5 pl-5">
@@ -301,7 +306,7 @@ export const ResearchGroupsManagement: React.FC = () => {
                     </td>
 
                     {/* Active toggle */}
-                    <td className="py-3.5 px-4 text-center">
+                    <td data-label="Estado" className="py-3.5 px-4 text-center">
                       <button
                         onClick={() => handleToggleActive(group.id, Boolean(group.is_active), group.name)}
                         className="inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-colors"
@@ -329,15 +334,15 @@ export const ResearchGroupsManagement: React.FC = () => {
       </div>
 
       {/* Create Group Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+      <ResponsiveOverlay isOpen={Boolean(showCreateModal)} onClose={() => setShowCreateModal(false)} label="Registrar grupo">
+        {showCreateModal && (<>
           <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 max-w-md w-full shadow-lg space-y-4 animate-scale-up">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100">
               <h3 className="text-base font-bold text-[#14281D] flex items-center gap-2">
                 <Building2 size={18} className="text-[#84CC16]" />
                 Registrar Nuevo Grupo de Investigación
               </h3>
-              <button
+              <button aria-label="Cerrar panel"
                 onClick={() => setShowCreateModal(false)}
                 className="text-stone-400 hover:text-stone-600 text-lg cursor-pointer"
               >
@@ -439,8 +444,8 @@ export const ResearchGroupsManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
     </div>
   );
 };

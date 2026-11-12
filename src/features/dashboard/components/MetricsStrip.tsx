@@ -63,7 +63,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs text-stone-600">
+      <div className="flex flex-wrap gap-2 items-center justify-between text-xs text-stone-600">
         <span className="font-bold text-[#14281D] uppercase tracking-wider text-[11px]">
           Solicitudes por estado
         </span>
@@ -72,17 +72,20 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="mobile-carousel metrics-carousel grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {metrics.map(({ status, count }) => {
           const conf = APPLICATION_STATUS_CONFIG[status];
           const Icon = conf.icon;
           const isSelected = selectedStatus === status;
 
           return (
-            <div
+            <button
+              type="button"
               key={status}
+              aria-pressed={isSelected}
+              disabled={!onSelectStatus}
               onClick={() => onSelectStatus?.(isSelected ? 'TODOS' : status)}
-              className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all bg-white cursor-pointer shadow-xs ${
+              className={`text-left p-3.5 rounded-2xl border flex flex-col justify-between transition-all bg-white cursor-pointer shadow-xs ${
                 isSelected
                   ? 'border-[#14281D] ring-2 ring-[#14281D] shadow-sm'
                   : 'border-[#E5E3DC] hover:border-stone-400'
@@ -106,7 +109,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
                   ? 'Concluidas'
                   : 'En trámite activo'}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

@@ -13,7 +13,7 @@ export function PerfilPage() {
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+        <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Mi Perfil Institucional
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">

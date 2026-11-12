@@ -186,7 +186,7 @@ export function DetalleSolicitudPage() {
       {/* Botón Volver */}
       <button
         onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-[#14281D] cursor-pointer"
+        className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-[#14281D] cursor-pointer"
       >
         <ArrowLeft size={14} />
         <span>Volver a la bandeja</span>

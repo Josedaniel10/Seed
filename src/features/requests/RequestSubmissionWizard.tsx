@@ -945,7 +945,7 @@ export function RequestSubmissionWizard() {
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-2">
+      <div className="mobile-wizard-actions flex items-center justify-between gap-2 pt-2">
         <button
           type="button"
           onClick={handlePrevStep}

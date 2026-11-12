@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { ResponsiveOverlay } from './ResponsiveOverlay.tsx';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -20,18 +21,6 @@ export function Modal({
   children,
   maxWidth = 'lg',
 }: ModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   const maxWidthStyles = {
     sm: 'max-w-sm',
     md: 'max-w-md',
@@ -41,9 +30,9 @@ export function Modal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4">
+    <ResponsiveOverlay isOpen={isOpen} onClose={onClose} label={title}>
       <div
-        className={`bg-white rounded-2xl w-full ${maxWidthStyles[maxWidth]} border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150`}
+        className={`bg-white rounded-2xl w-full ${maxWidthStyles[maxWidth]} border border-[#E5E3DC] shadow-xl overflow-hidden`}
       >
         <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -63,6 +52,6 @@ export function Modal({
         </div>
         <div className="p-6 text-xs">{children}</div>
       </div>
-    </div>
+    </ResponsiveOverlay>
   );
 }

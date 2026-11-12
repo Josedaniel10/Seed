@@ -1,3 +1,4 @@
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import {
   FileText,
@@ -613,8 +614,8 @@ export function CatalogManagement() {
       </div>
 
       {/* Modal: Crear / Editar Tipo de Trámite */}
-      {(isCreateTypeOpen || editingType) && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <ResponsiveOverlay isOpen={Boolean((isCreateTypeOpen || editingType))} onClose={() => { setIsCreateTypeOpen(false); setEditingType(null); }} label="Tipo de trámite">
+        {(isCreateTypeOpen || editingType) && (<>
           <div className="bg-white rounded-2xl max-w-lg w-full border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -623,7 +624,7 @@ export function CatalogManagement() {
                   {editingType ? 'Editar Tipo de Trámite' : 'Registrar Nuevo Tipo de Trámite'}
                 </h3>
               </div>
-              <button
+              <button aria-label="Cerrar panel"
                 onClick={() => {
                   setIsCreateTypeOpen(false);
                   setEditingType(null);
@@ -727,12 +728,12 @@ export function CatalogManagement() {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
 
       {/* Modal: Agregar / Editar Requisito */}
-      {(isAddReqOpen || editingReq) && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <ResponsiveOverlay isOpen={Boolean((isAddReqOpen || editingReq))} onClose={() => { setIsAddReqOpen(false); setEditingReq(null); }} label="Requisito documental">
+        {(isAddReqOpen || editingReq) && (<>
           <div className="bg-white rounded-2xl max-w-lg w-full border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -741,7 +742,7 @@ export function CatalogManagement() {
                   {editingReq ? 'Editar Requisito' : `Nuevo Requisito para [${selectedType?.code}]`}
                 </h3>
               </div>
-              <button
+              <button aria-label="Cerrar panel"
                 onClick={() => {
                   setIsAddReqOpen(false);
                   setEditingReq(null);
@@ -881,8 +882,8 @@ export function CatalogManagement() {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
     </div>
   );
 }

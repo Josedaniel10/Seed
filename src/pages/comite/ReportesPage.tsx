@@ -1,3 +1,6 @@
+import { useListFilter } from '../../hooks/useListFilter.ts';
+import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
+import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
 import React, { useState } from 'react';
 import {
   BarChart3,
@@ -21,8 +24,8 @@ export function ReportesPage() {
   const { types } = useCatalogStore();
   const { sessions, decisions } = useCommitteeSessionsStore();
 
-  const [periodo, setPeriodo] = useState('2026-I');
-  const [tipoReporte, setTipoReporte] = useState('solicitudes_por_tipo');
+  const [periodo, setPeriodo] = useListFilter('period', '2026-I');
+  const [tipoReporte, setTipoReporte] = useListFilter('report', 'solicitudes_por_tipo');
 
   // Cálculos analíticos basados en la base de datos real (RF-36)
   const totalApplications = requests.length;
@@ -99,7 +102,7 @@ export function ReportesPage() {
             <span className="p-2 rounded-xl bg-[#14281D] text-[#A3E635]">
               <BarChart3 size={18} />
             </span>
-            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+            <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
               Reportes e Indicadores de Gestión
             </h1>
           </div>
@@ -118,36 +121,38 @@ export function ReportesPage() {
       </div>
 
       {/* Selectores de Periodo y Tipología */}
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-4 shadow-xs flex flex-col sm:flex-row items-center gap-3 text-xs">
-        <div className="w-full sm:w-auto">
-          <label className="block text-stone-500 text-[10px] uppercase font-bold mb-1">
-            Tipo de Reporte
-          </label>
-          <select
-            value={tipoReporte}
-            onChange={(e) => setTipoReporte(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none w-full sm:w-64 font-medium"
-          >
-            <option value="solicitudes_por_tipo">Solicitudes por Tipo de Trámite</option>
-            <option value="sesiones_comite">Efectividad de Sesiones de Comité</option>
-          </select>
-        </div>
+      <ResponsiveFilters activeCount={Number(tipoReporte !== 'solicitudes_por_tipo') + Number(periodo !== '2026-I')} onReset={() => { setTipoReporte('solicitudes_por_tipo'); setPeriodo('2026-I'); }}>
+        <div className="bg-white rounded-2xl border border-[#E5E3DC] p-4 shadow-xs flex flex-col sm:flex-row items-center gap-3 text-xs">
+          <div className="w-full sm:w-auto">
+            <label className="block text-stone-500 text-[10px] uppercase font-bold mb-1">
+              Tipo de Reporte
+            </label>
+            <ResponsiveSelect sheetTitle="Tipo de reporte"
+              value={tipoReporte}
+              onChange={(e) => setTipoReporte(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none w-full sm:w-64 font-medium"
+            >
+              <option value="solicitudes_por_tipo">Solicitudes por Tipo de Trámite</option>
+              <option value="sesiones_comite">Efectividad de Sesiones de Comité</option>
+            </ResponsiveSelect>
+          </div>
 
-        <div className="w-full sm:w-auto">
-          <label className="block text-stone-500 text-[10px] uppercase font-bold mb-1">
-            Periodo Académico
-          </label>
-          <select
-            value={periodo}
-            onChange={(e) => setPeriodo(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none w-full sm:w-44 font-medium"
-          >
-            <option value="2026-I">Vigencia 2026 - I</option>
-            <option value="2025-II">Vigencia 2025 - II</option>
-            <option value="2025-I">Vigencia 2025 - I</option>
-          </select>
+          <div className="w-full sm:w-auto">
+            <label className="block text-stone-500 text-[10px] uppercase font-bold mb-1">
+              Periodo Académico
+            </label>
+            <ResponsiveSelect sheetTitle="Periodo académico"
+              value={periodo}
+              onChange={(e) => setPeriodo(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-[#E5E3DC] bg-white outline-none w-full sm:w-44 font-medium"
+            >
+              <option value="2026-I">Vigencia 2026 - I</option>
+              <option value="2025-II">Vigencia 2025 - II</option>
+              <option value="2025-I">Vigencia 2025 - I</option>
+            </ResponsiveSelect>
+          </div>
         </div>
-      </div>
+      </ResponsiveFilters>
 
       {/* Franja de Indicadores Cuantitativos Consolidados */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">

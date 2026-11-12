@@ -1,3 +1,5 @@
+import { useListFilter } from '../../hooks/useListFilter.ts';
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import { useState } from 'react';
 import { Download, Eye, FileCheck, Lock, Search, X } from 'lucide-react';
 import { normalizeRole } from '../../lib/permissions.ts';
@@ -13,7 +15,7 @@ export function ActasPage() {
   const user = useSessionStore((state) => state.user);
   const { minutes, isLoading, isSaving, error, searchMinutes, exportMinutePdf } = useMinutesStore();
   const sessions = useCommitteeSessionsStore((state) => state.sessions);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useListFilter('search', '');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -37,7 +39,7 @@ export function ActasPage() {
     <div>
       <div className="flex items-center gap-2 text-[#14281D]">
         <FileCheck size={24} />
-        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">Actas Oficiales y Acuerdos de Comité</h1>
+        <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight">Actas Oficiales y Acuerdos de Comité</h1>
       </div>
       <p className="text-xs text-stone-500 mt-1">Consulte las actas y las decisiones de cada sesión.</p>
     </div>
@@ -53,23 +55,24 @@ export function ActasPage() {
     {(error || actionError) && <p role="alert" className="text-rose-800">{error || actionError}</p>}
     {!isLoading && !error && !filteredMinutes.length && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
     <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-x-auto">
-      <table className="w-full text-left text-xs">
+      <table className="mobile-data-table w-full text-left text-xs">
         <thead className="bg-[#F7F6F2] text-stone-600"><tr>
           <th className="p-4">Número de acta</th><th className="p-4">Vigencia anual</th><th className="p-4">Sesión vinculada</th><th className="p-4">Estado</th><th className="p-4 text-right">Acciones</th>
         </tr></thead>
         <tbody className="divide-y divide-[#E5E3DC]">{filteredMinutes.map((minute) => <tr key={minute.id} className="hover:bg-stone-50">
-          <td className="p-4 font-bold text-[#14281D]">{minute.minute_number}</td>
-          <td className="p-4">{minute.year}</td>
-          <td className="p-4">{sessions.find((session) => session.id === minute.session_id)?.session_number || minute.session_id}</td>
-          <td className="p-4">{minute.is_approved ? <span className="inline-flex items-center gap-1 text-emerald-900"><Lock size={12} /> Aprobada</span> : <span className="text-amber-900">Borrador en revisión</span>}</td>
-          <td className="p-4"><div className="flex justify-end gap-2">
+          <td data-label="Número de acta" className="p-4 font-bold text-[#14281D]">{minute.minute_number}</td>
+          <td data-label="Vigencia anual" className="p-4">{minute.year}</td>
+          <td data-label="Sesión vinculada" className="p-4">{sessions.find((session) => session.id === minute.session_id)?.session_number || minute.session_id}</td>
+          <td data-label="Estado" className="p-4">{minute.is_approved ? <span className="inline-flex items-center gap-1 text-emerald-900"><Lock size={12} /> Aprobada</span> : <span className="text-amber-900">Borrador en revisión</span>}</td>
+          <td data-label="Acciones" className="p-4"><div className="flex justify-end gap-2">
             <button onClick={() => setSelectedId(minute.id)} className="inline-flex gap-1 items-center rounded-xl border px-3 py-2"><Eye size={13} />Ver acta</button>
             <button disabled={isSaving} onClick={() => void handleDownload(minute)} className="inline-flex gap-1 items-center rounded-xl bg-[#14281D] text-white px-3 py-2"><Download size={13} />Descargar</button>
           </div></td>
         </tr>)}</tbody>
       </table>
     </div>
-    {selectedMinute && <div role="dialog" aria-modal="true" aria-labelledby="minute-dialog-title" className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <ResponsiveOverlay isOpen={Boolean(selectedMinute)} onClose={() => { if (!isSaving && (!hasUnsavedChanges || window.confirm('Hay cambios sin guardar. ¿Cerrar el acta y descartarlos?'))) setSelectedId(null); }} label="Acta de comité">
+      {selectedMinute && (<>
       <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-stone-100 pb-3 shrink-0">
           <h2 id="minute-dialog-title" className="font-bold text-[#14281D]">{selectedMinute.minute_number}</h2>
@@ -79,6 +82,7 @@ export function ActasPage() {
         </div>
         <div className="overflow-y-auto pr-1"><MinuteWorkspace minuteId={selectedMinute.id} canManage={canManage} onDirtyChange={setHasUnsavedChanges} /></div>
       </div>
-    </div>}
+    </>)}
+    </ResponsiveOverlay>
   </div>;
 }

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsSync } from './features/notifications/useNotifications.ts';
 import { BrowserRouter } from 'react-router-dom';
+import { useMobileViewport } from './hooks/useMobileViewport.ts';
 import { AppRoutes } from './routes/AppRoutes.tsx';
 import { useSessionStore } from './stores/session.store.ts';
 import { useCatalogStore } from './features/catalog/catalogStore.ts';
@@ -13,6 +14,7 @@ import { useCommitteeSessionsStore } from './features/sessions/committeeSessions
 const queryClient = new QueryClient();
 
 export default function App() {
+  useMobileViewport();
   const initializeSession = useSessionStore((s) => s.initializeSession);
   const setupAuthListener = useSessionStore((s) => s.setupAuthListener);
 

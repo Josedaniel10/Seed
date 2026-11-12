@@ -100,7 +100,7 @@ export function AsignacionesPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
       <div className="border-b border-[#E5E3DC] pb-4">
-        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+        <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Asignación y Reasignación de Evaluadores Pares
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">

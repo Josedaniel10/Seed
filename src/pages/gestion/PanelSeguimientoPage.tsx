@@ -1,3 +1,7 @@
+import { useListFilter } from '../../hooks/useListFilter.ts';
+import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
+import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
+import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -82,14 +86,16 @@ export function PanelSeguimientoPage() {
     assignments,
     transitionApplicationStatus,
     getDeadlineStatus,
+    computeQueFalta,
   } = useApplicationStore();
   const { types } = useCatalogStore();
   const { users } = useUserStore();
 
-  const [viewMode, setViewMode] = useState<'KANBAN' | 'TABLE'>('KANBAN');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEstadoFilter, setSelectedEstadoFilter] = useState<string>('TODOS');
-  const [selectedTipoFilter, setSelectedTipoFilter] = useState<string>('TODOS');
+  const [savedViewMode, setViewMode] = useListFilter('view', 'KANBAN');
+  const viewMode = savedViewMode === 'TABLE' ? 'TABLE' : 'KANBAN';
+  const [searchTerm, setSearchTerm] = useListFilter('search', '');
+  const [selectedEstadoFilter, setSelectedEstadoFilter] = useListFilter('status', 'TODOS');
+  const [selectedTipoFilter, setSelectedTipoFilter] = useListFilter('type', 'TODOS');
 
   // Arrastre controlado en Kanban (T3.15 / RF-21)
   const [draggingAppId, setDraggingAppId] = useState<string | null>(null);
@@ -288,7 +294,7 @@ export function PanelSeguimientoPage() {
       {/* 1. Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E3DC] pb-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
+          <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
             Panel de Seguimiento y Control Institucional
           </h1>
           <p className="text-xs text-stone-500 mt-0.5">
@@ -341,7 +347,7 @@ export function PanelSeguimientoPage() {
             )}
             <span className="font-medium">{toastMessage.text}</span>
           </div>
-          <button
+          <button aria-label="Cerrar aviso"
             type="button"
             onClick={() => setToastMessage(null)}
             className="text-stone-400 hover:text-stone-700 p-1"
@@ -358,8 +364,8 @@ export function PanelSeguimientoPage() {
       />
 
       {/* 3. Barra de Filtros Multidimensionales (RF-11) */}
-      <div className="bg-white rounded-3xl border border-[#E5E3DC] p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
-        <div className="relative flex-1">
+      <div className="filter-toolbar bg-white rounded-3xl border border-[#E5E3DC] p-4 shadow-xs flex flex-row md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-2.5 text-stone-400" size={15} />
           <input
             type="text"
@@ -370,47 +376,49 @@ export function PanelSeguimientoPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <Filter size={14} className="text-stone-400" />
-            <select
-              value={selectedEstadoFilter}
-              onChange={(e) => setSelectedEstadoFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-700"
-            >
-              <option value="TODOS">Todos los estados</option>
-              <option value="RADICADA">Radicada</option>
-              <option value="PENDIENTE_DOCUMENTOS">Pendiente por documentos</option>
-              <option value="EN_REVISION">En revisión técnica</option>
-              <option value="LISTA_COMITE">Lista para comité</option>
-              <option value="DECIDIDAS">Decididas (Aprobadas / Rechazadas)</option>
-            </select>
-          </div>
+        <ResponsiveFilters activeCount={Number(selectedEstadoFilter !== 'TODOS') + Number(selectedTipoFilter !== 'TODOS')} onReset={() => { setSelectedEstadoFilter('TODOS'); setSelectedTipoFilter('TODOS'); }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Filter size={14} className="text-stone-400" />
+              <ResponsiveSelect sheetTitle="Estado de la solicitud"
+                value={selectedEstadoFilter}
+                onChange={(e) => setSelectedEstadoFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-700"
+              >
+                <option value="TODOS">Todos los estados</option>
+                <option value="RADICADA">Radicada</option>
+                <option value="PENDIENTE_DOCUMENTOS">Pendiente por documentos</option>
+                <option value="EN_REVISION">En revisión técnica</option>
+                <option value="LISTA_COMITE">Lista para comité</option>
+                <option value="DECIDIDAS">Decididas (Aprobadas / Rechazadas)</option>
+              </ResponsiveSelect>
+            </div>
 
-          <select
-            value={selectedTipoFilter}
-            onChange={(e) => setSelectedTipoFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-700 max-w-[200px] truncate"
-          >
-            <option value="TODOS">Todos los tipos de trámite</option>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            <ResponsiveSelect sheetTitle="Tipo de trámite"
+              value={selectedTipoFilter}
+              onChange={(e) => setSelectedTipoFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-700 max-w-[200px] truncate"
+            >
+              <option value="TODOS">Todos los tipos de trámite</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </ResponsiveSelect>
+          </div>
+        </ResponsiveFilters>
       </div>
 
       {/* 4. Diálogo de Acción Guiada (RF-21) */}
-      {actionModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      <ResponsiveOverlay isOpen={Boolean(actionModal)} onClose={() => setActionModal(null)} label="Transición de solicitud">
+        {actionModal && (<>
           <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-7 max-w-lg w-full space-y-4 shadow-xl text-xs">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-lg bg-[#14281D] text-white">
                 {actionModal.app.filing_number}
               </span>
-              <button
+              <button aria-label="Cerrar panel"
                 type="button"
                 onClick={() => setActionModal(null)}
                 className="text-stone-400 hover:text-stone-700"
@@ -504,12 +512,12 @@ export function PanelSeguimientoPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </>)}
+      </ResponsiveOverlay>
 
       {/* 5. VISTA KANBAN CON ARRASTRE CONTROLADO (RF-21) */}
       {viewMode === 'KANBAN' ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 items-start">
+        <div className="mobile-carousel grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 items-start">
           {KANBAN_COLUMNS.map((col) => {
             const itemsInCol = filteredApplications.filter((app) =>
               col.statuses.includes(app.current_status)
@@ -561,7 +569,7 @@ export function PanelSeguimientoPage() {
                           key={app.id}
                           draggable={!isReadOnly}
                           onDragStart={(e) => handleDragStart(e, app.id)}
-                          onClick={() => navigate(`/solicitudes/${app.id}`)}
+                          onClick={() => navigate(`/solicitudes/${app.id}`, { state: { fromList: '/panel' } })}
                           className={`bg-white rounded-2xl border p-3.5 space-y-2 text-xs transition-all shadow-2xs ${
                             isReadOnly ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
                           } hover:border-[#14281D] hover:shadow-xs`}
@@ -570,17 +578,22 @@ export function PanelSeguimientoPage() {
                             <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-stone-100 text-[#14281D] border border-stone-200">
                               {app.filing_number}
                             </span>
-                            <StatusBadge status={app.current_status} size="sm" />
+                            <span className="order-first md:order-none"><StatusBadge status={app.current_status} size="sm" /></span>
                           </div>
 
                           <h4 className="font-bold text-[#14281D] line-clamp-2 leading-snug">
                             {app.title}
                           </h4>
 
-                          <div className="text-[11px] text-stone-500 space-y-0.5 pt-1">
+                          <div className="hidden md:block text-[11px] text-stone-500 space-y-0.5 pt-1">
                             <div className="truncate">Sol: {applicant?.full_name}</div>
                             <div className="truncate">Tipo: {typeObj?.code}</div>
                           </div>
+
+                          <p className="md:hidden rounded-lg bg-[#F7F6F2] p-2.5 text-xs leading-relaxed text-stone-700">
+                            <span className="block text-[10px] font-semibold text-stone-500 mb-1">Próxima acción</span>
+                            {computeQueFalta(app)}
+                          </p>
 
                           {/* Plazo / Días en estado */}
                           <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[10px]">
@@ -614,7 +627,7 @@ export function PanelSeguimientoPage() {
         /* 6. VISTA TABLA ESTRUCTURADA (RF-11) */
         <div className="bg-white rounded-3xl border border-[#E5E3DC] overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="mobile-data-table w-full text-left text-xs">
               <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
                 <tr>
                   <th className="py-3 px-4">Radicado</th>
@@ -641,30 +654,30 @@ export function PanelSeguimientoPage() {
                   return (
                     <tr
                       key={app.id}
-                      onClick={() => navigate(`/solicitudes/${app.id}`)}
+                      onClick={() => navigate(`/solicitudes/${app.id}`, { state: { fromList: '/panel' } })}
                       className="hover:bg-[#FAF9F6] transition-colors cursor-pointer group"
                     >
-                      <td className="py-3 px-4 font-mono font-bold text-[#14281D] whitespace-nowrap">
+                      <td data-label="Radicado" className="py-3 px-4 font-mono font-bold text-[#14281D] whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded bg-stone-100 border border-stone-200">
                           {app.filing_number}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-stone-700 whitespace-nowrap">
+                      <td data-label="Tipo de trámite" className="py-3 px-4 text-stone-700 whitespace-nowrap">
                         {typeObj?.name}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-[#14281D] max-w-xs truncate">
+                      <td data-label="Proyecto" className="py-3 px-4 font-semibold text-[#14281D] max-w-xs truncate">
                         {app.title}
                       </td>
-                      <td className="py-3 px-4 text-stone-600 whitespace-nowrap">
+                      <td data-label="Investigador" className="py-3 px-4 text-stone-600 whitespace-nowrap">
                         {applicant?.full_name}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
+                      <td data-label="Estado" className="py-3 px-4 whitespace-nowrap">
                         <StatusBadge status={app.current_status} size="sm" />
                       </td>
-                      <td className="py-3 px-4 text-stone-500 whitespace-nowrap">
+                      <td data-label="Días en etapa" className="py-3 px-4 text-stone-500 whitespace-nowrap">
                         {diffDays} días
                       </td>
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <td data-label="Acción" className="py-3 px-4 text-right whitespace-nowrap">
                         <span className="p-1.5 rounded-lg text-stone-400 group-hover:text-[#14281D] inline-flex items-center gap-1">
                           <Eye size={14} />
                         </span>
