@@ -1,20 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ClipboardCheck,
   CheckCircle2,
   XCircle,
-  FileText,
   Search,
-  Filter,
   Check,
   ChevronRight,
-  Eye,
   AlertCircle,
   Download,
   ShieldAlert,
-  Send,
-  Building2,
   FolderOpen,
 } from 'lucide-react';
 import { useSessionStore } from '../../stores/session.store.ts';
@@ -22,6 +16,8 @@ import { useApplicationStore } from '../../features/applications/applicationStor
 import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { useUserStore } from '../../features/users/userStore.ts';
 import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
+import { getDocumentaryQueue } from '../../features/validation/documentaryQueue.ts';
+import { getSupabaseClient } from '../../lib/supabase.ts';
 
 export function ValidacionPage() {
   const navigate = useNavigate();
@@ -29,22 +25,24 @@ export function ValidacionPage() {
   const {
     requests,
     documents,
+    auditHistory,
+    isLoading,
     validateRequirementDocument,
     finalizeAdministrativeValidation,
   } = useApplicationStore();
   const { types, requirements } = useCatalogStore();
   const { users } = useUserStore();
 
-  // Solicitudes en estado Radicada o Pendiente por documentos (sección 4.4 del plan)
+  // Only actionable requests participate in FIFO; corrections awaiting the researcher do not block it.
   const expedientesPorValidar = useMemo(() => {
-    return requests.filter(
-      (a) => a.current_status === 'RADICADA' || a.current_status === 'PENDIENTE_DOCUMENTOS'
-    );
-  }, [requests]);
-
-  const [selectedId, setSelectedId] = useState<string>(
-    expedientesPorValidar[0]?.id || requests[0]?.id || ''
-  );
+    return getDocumentaryQueue(requests, documents, auditHistory);
+  }, [requests, documents, auditHistory]);
+  const selectedExp = expedientesPorValidar[0];
+  const waitingCount = requests.filter((request) =>
+    (request.current_status === 'PENDIENTE_DOCUMENTOS' || request.current_status === 'PENDING_DOCUMENTS')
+    && !expedientesPorValidar.some((pending) => pending.id === request.id)).length;
+  const saving = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
@@ -58,31 +56,56 @@ export function ValidacionPage() {
   } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const selectedExp = useMemo(() => {
-    return (
-      requests.find((a) => a.id === selectedId) ||
-      expedientesPorValidar[0] ||
-      requests[0]
-    );
-  }, [requests, selectedId, expedientesPorValidar]);
+  useEffect(() => {
+    if (!user?.id || !getSupabaseClient()) return;
+    void useApplicationStore.getState().loadFromSupabase().then((result) => {
+      if (!result.success) setFeedback({ type: 'error', message: result.error ?? 'No se pudo cargar la cola de validación.' });
+    });
+  }, [user?.id]);
+
+  async function runAction<T extends { success: boolean; error?: string }>(
+    operation: () => Promise<T>, onSuccess: (result: T) => void,
+  ): Promise<void> {
+    if (saving.current || !user || isLoading) return;
+    saving.current = true;
+    setIsSaving(true);
+    setFeedback(null);
+    try {
+      const result = await operation();
+      if (useSessionStore.getState().user?.id !== user.id) return;
+      if (result.success) onSuccess(result);
+      else setFeedback({ type: 'error', message: result.error ?? 'No se pudo guardar la validación. Intente nuevamente.' });
+    } catch {
+      setFeedback({ type: 'error', message: 'No se pudo confirmar el guardado. Intente nuevamente.' });
+    } finally {
+      saving.current = false;
+      setIsSaving(false);
+    }
+  }
 
   const applicant = useMemo(() => {
     return users.find((u) => u.id === selectedExp?.applicant_id);
   }, [users, selectedExp]);
 
   const appType = useMemo(() => {
-    return types.find((t) => t.id === selectedExp?.application_type_id);
+    return types.find((t) => t.id === (selectedExp?.application_type_id ?? selectedExp?.request_type_id));
   }, [types, selectedExp]);
 
   const typeReqs = useMemo(() => {
     if (!selectedExp) return [];
-    return requirements.filter((r) => r.application_type_id === selectedExp.application_type_id);
+    return requirements.filter((r) => (r.application_type_id ?? r.request_type_id)
+      === (selectedExp.application_type_id ?? selectedExp.request_type_id));
   }, [requirements, selectedExp]);
 
   const appDocs = useMemo(() => {
     if (!selectedExp) return [];
-    return documents.filter((d) => d.application_id === selectedExp.id);
+    return documents.filter((d) => (d.application_id ?? d.request_id) === selectedExp.id);
   }, [documents, selectedExp]);
+  const mandatoryReqs = typeReqs.filter((requirement) => requirement.is_mandatory);
+  const reviewedCount = mandatoryReqs.filter((requirement) => appDocs.some((document) =>
+    document.requirement_id === requirement.id && !['PENDING', 'PENDIENTE'].includes(document.validation_status))).length;
+  const pendingCount = mandatoryReqs.filter((requirement) => appDocs.some((document) =>
+    document.requirement_id === requirement.id && ['PENDING', 'PENDIENTE'].includes(document.validation_status))).length;
 
   const filteredExpedientes = useMemo(() => {
     return expedientesPorValidar.filter((exp) => {
@@ -98,7 +121,7 @@ export function ValidacionPage() {
 
   // Manejo de marcar como Válido
   const handleMarkValido = async (reqId: string) => {
-    if (!selectedExp) return;
+    if (!selectedExp || !user) return;
     const doc = appDocs.find((d) => d.requirement_id === reqId);
     if (!doc) {
       setFeedback({
@@ -108,26 +131,21 @@ export function ValidacionPage() {
       return;
     }
 
-    const res = await validateRequirementDocument(
+    await runAction(() => validateRequirementDocument(
       selectedExp.id,
       reqId,
       'VALIDO',
       null,
-      user?.id || 'usr-adm-02',
-      user?.fullName || 'Personal Administrativo'
-    );
-
-    if (res.success) {
+      user.id,
+      user.fullName
+    ), () => {
       setFeedback({ type: 'success', message: 'Requisito marcado como VÁLIDO conforme a norma.' });
-      setTimeout(() => setFeedback(null), 3000);
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Error al validar requisito.' });
-    }
+    });
   };
 
   // Confirmar rechazo con motivo (RF-13, RN-05)
   const handleConfirmRechazo = async () => {
-    if (!selectedExp || !rejectingDocId) return;
+    if (!selectedExp || !rejectingDocId || !user) return;
 
     if (!rejectReason.trim()) {
       setFeedback({
@@ -137,53 +155,49 @@ export function ValidacionPage() {
       return;
     }
 
-    const res = await validateRequirementDocument(
+    await runAction(() => validateRequirementDocument(
       selectedExp.id,
       rejectingDocId.reqId,
       'RECHAZADO',
       rejectReason.trim(),
-      user?.id || 'usr-adm-02',
-      user?.fullName || 'Personal Administrativo'
-    );
-
-    if (res.success) {
+      user.id,
+      user.fullName
+    ), () => {
       setFeedback({
         type: 'success',
         message: `Requisito "${rejectingDocId.reqName}" marcado como RECHAZADO con justificación asentada.`,
       });
       setRejectingDocId(null);
       setRejectReason('');
-      setTimeout(() => setFeedback(null), 3500);
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Error al rechazar requisito.' });
-    }
+    });
   };
 
   // Finalizar validación documental con transición automática (T3.6 / RF-14, RN-02, RN-11)
   const handleFinalizar = async () => {
-    if (!selectedExp) return;
-
-    const res = await finalizeAdministrativeValidation(
+    if (!selectedExp || !user) return;
+    const completedNumber = selectedExp.filing_number;
+    await runAction(() => finalizeAdministrativeValidation(
       selectedExp.id,
-      user?.id || 'usr-adm-02',
-      user?.fullName || 'Personal Administrativo'
-    );
-
-    if (res.success && res.application) {
+      user.id,
+      user.fullName
+    ), (res) => {
+      if (!res.application) {
+        setFeedback({ type: 'error', message: 'No se recibió la confirmación del cierre documental.' });
+        return;
+      }
       const nuevo = res.application.current_status;
-      const mensaje = selectedExp.current_status === nuevo
-        ? 'La validación ya estaba finalizada. La solicitud conserva su estado actual.'
-        : nuevo === 'EN_REVISION'
-          ? '¡Validación aprobada! 100% de requisitos conformes. La solicitud avanzó a "En revisión técnica".'
-          : nuevo === 'PENDIENTE_DOCUMENTOS'
-          ? 'Validación concluida con requisitos subsanables observados. La solicitud pasó a "Pendiente por documentos".'
+      const mensaje = nuevo === 'EN_REVISION' || nuevo === 'UNDER_REVIEW'
+          ? 'Validación documental aprobada. La solicitud avanzó a revisión técnica.'
+          : nuevo === 'PENDIENTE_DOCUMENTOS' || nuevo === 'PENDING_DOCUMENTS'
+          ? 'Validación documental finalizada. La solicitud queda esperando correcciones del investigador.'
           : 'Validación finalizada con rechazo directo por requisito no subsanable.';
-
-      setFeedback({ type: 'success', message: mensaje });
-      setTimeout(() => setFeedback(null), 4500);
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'No fue posible finalizar la validación.' });
-    }
+      const state = useApplicationStore.getState();
+      const next = getDocumentaryQueue(state.requests, state.documents, state.auditHistory)[0];
+      setSearchTerm('');
+      setFeedback({ type: 'success', message: `${completedNumber}: ${mensaje} ${next
+        ? `Ahora se muestra ${next.filing_number}, la siguiente solicitud de la cola.`
+        : 'No quedan solicitudes listas para validación.'}` });
+    });
   };
 
   const handleDownloadDoc = (fileName: string, hash: string) => {
@@ -204,12 +218,14 @@ export function ValidacionPage() {
           Bandeja de Validación Documental
         </h1>
         <p className="text-xs text-stone-500 mt-0.5">
-          Revise los documentos y registre las correcciones necesarias.
+          Primero en llegar, primero en atender. Al finalizar se abrirá automáticamente la siguiente solicitud.
         </p>
       </div>
 
       {feedback && (
         <div
+          role={feedback.type === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
           className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
             feedback.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
@@ -245,6 +261,7 @@ export function ValidacionPage() {
                 Motivo / Justificación del Rechazo *
               </label>
               <textarea
+                disabled={isSaving}
                 rows={4}
                 required
                 value={rejectReason}
@@ -257,6 +274,7 @@ export function ValidacionPage() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => {
                   setRejectingDocId(null);
                   setRejectReason('');
@@ -267,17 +285,21 @@ export function ValidacionPage() {
               </button>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={handleConfirmRechazo}
                 className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold cursor-pointer transition-colors"
               >
-                Confirmar Rechazo Documental
+                {isSaving ? 'Guardando…' : 'Confirmar Rechazo Documental'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {isLoading && <p role="status" className="text-xs text-stone-600">Actualizando cola de validación…</p>}
+      {waitingCount > 0 && <p className="text-xs text-stone-600">En espera de correcciones del investigador: {waitingCount}.</p>}
+      <fieldset disabled={isSaving || isLoading} aria-busy={isSaving || isLoading}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0">
         {/* Columna Izquierda: Cola de expedientes (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-stone-700">
@@ -300,7 +322,7 @@ export function ValidacionPage() {
             <div className="p-8 text-center bg-white rounded-2xl border border-[#E5E3DC] space-y-2">
               <FolderOpen size={32} className="mx-auto text-stone-300" />
               <p className="text-xs text-stone-500 font-medium">
-                No hay expedientes pendientes de validación en esta bandeja.
+                {searchTerm ? 'No hay resultados para esta búsqueda.' : 'No hay expedientes pendientes de validación en esta bandeja.'}
               </p>
             </div>
           ) : (
@@ -308,17 +330,19 @@ export function ValidacionPage() {
               {filteredExpedientes.map((exp) => {
                 const isSelected = exp.id === selectedExp?.id;
                 const tName = types.find((t) => t.id === exp.application_type_id)?.name;
-                const expDocs = documents.filter((d) => d.application_id === exp.id);
-                const validCount = expDocs.filter((d) => d.validation_status === 'VALIDO').length;
+                const expDocs = documents.filter((d) => (d.application_id ?? d.request_id) === exp.id);
+                const validCount = requirements.filter((requirement) => requirement.is_mandatory
+                  && (requirement.application_type_id ?? requirement.request_type_id) === (exp.application_type_id ?? exp.request_type_id)
+                  && expDocs.some((document) => document.requirement_id === requirement.id
+                    && (document.validation_status === 'VALIDO' || document.validation_status === 'VALID'))).length;
                 const totalMandatory = requirements.filter(
-                  (r) => r.application_type_id === exp.application_type_id && r.is_mandatory
+                  (r) => (r.application_type_id ?? r.request_type_id) === (exp.application_type_id ?? exp.request_type_id) && r.is_mandatory
                 ).length;
 
                 return (
                   <div
                     key={exp.id}
-                    onClick={() => setSelectedId(exp.id)}
-                    className={`p-4 rounded-2xl border text-xs transition-all cursor-pointer space-y-2 ${
+                    className={`p-4 rounded-2xl border text-xs transition-all space-y-2 ${
                       isSelected
                         ? 'bg-white border-[#14281D] shadow-xs ring-2 ring-[#14281D]'
                         : 'bg-white border-[#E5E3DC] hover:border-stone-400'
@@ -332,6 +356,7 @@ export function ValidacionPage() {
                     </div>
 
                     <h4 className="font-bold text-[#14281D] line-clamp-1">{exp.title}</h4>
+                    <p className="font-semibold text-stone-600">{isSelected ? 'En atención' : `Turno ${expedientesPorValidar.indexOf(exp) + 1}`}</p>
                     <p className="text-[11px] text-stone-500 truncate">{tName}</p>
 
                     <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
@@ -342,6 +367,7 @@ export function ValidacionPage() {
                         {new Date(exp.created_at).toLocaleDateString('es-CO', {
                           day: '2-digit',
                           month: 'short',
+                          timeZone: 'America/Bogota',
                         })}
                       </span>
                     </div>
@@ -389,6 +415,12 @@ export function ValidacionPage() {
               </div>
 
               {/* Lista de Requisitos con botón Válido / Rechazar (RF-12, RF-13) */}
+              <div role="status" className="rounded-xl bg-stone-50 p-3 text-xs text-stone-700 space-y-1">
+                <p>Requisitos obligatorios revisados: {reviewedCount} de {mandatoryReqs.length}.</p>
+                {pendingCount === 0
+                  ? <p className="font-semibold text-emerald-800">Puede finalizar la validación documental para guardar el resultado y continuar con la siguiente solicitud.</p>
+                  : <p>Falta dictaminar {pendingCount} documento(s) obligatorio(s) antes de finalizar.</p>}
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider">
@@ -399,14 +431,16 @@ export function ValidacionPage() {
                 {typeReqs.map((req, idx) => {
                   const doc = appDocs.find((d) => d.requirement_id === req.id);
                   const status = doc?.validation_status || 'PENDIENTE';
+                  const isValid = status === 'VALIDO' || status === 'VALID';
+                  const isRejected = status === 'RECHAZADO' || status === 'REJECTED';
 
                   return (
                     <div
                       key={req.id}
                       className={`p-4 rounded-2xl border text-xs space-y-3 transition-all ${
-                        status === 'VALIDO'
+                        isValid
                           ? 'bg-emerald-50/50 border-emerald-300'
-                          : status === 'RECHAZADO'
+                          : isRejected
                           ? 'bg-rose-50/50 border-rose-300'
                           : 'bg-[#F7F6F2] border-[#E5E3DC]'
                       }`}
@@ -465,19 +499,20 @@ export function ValidacionPage() {
                           <button
                             type="button"
                             onClick={() => handleMarkValido(req.id)}
-                            disabled={!doc}
+                            disabled={!doc || isValid || isSaving}
                             className={`px-3 py-1.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40 ${
-                              status === 'VALIDO'
+                              isValid
                                 ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
                                 : 'bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-200'
                             }`}
                           >
                             <Check size={13} />
-                            <span>Válido</span>
+                            <span>{isValid ? 'Validado' : 'Válido'}</span>
                           </button>
 
                           <button
                             type="button"
+                            disabled={!doc || isSaving}
                             onClick={() =>
                               setRejectingDocId({
                                 reqId: req.id,
@@ -486,7 +521,7 @@ export function ValidacionPage() {
                               })
                             }
                             className={`px-3 py-1.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
-                              status === 'RECHAZADO'
+                              isRejected
                                 ? 'bg-rose-700 text-white border-rose-700 shadow-xs'
                                 : 'bg-white hover:bg-rose-50 text-rose-800 border-rose-200'
                             }`}
@@ -498,7 +533,7 @@ export function ValidacionPage() {
                       </div>
 
                       {/* Motivo de rechazo actual */}
-                      {status === 'RECHAZADO' && doc?.validation_observations && (
+                      {isRejected && doc?.validation_observations && (
                         <div className="p-3 rounded-xl bg-rose-100/70 border border-rose-300 text-rose-900 text-[11px] space-y-1">
                           <span className="font-bold flex items-center gap-1 text-rose-800">
                             <AlertCircle size={13} />
@@ -520,20 +555,21 @@ export function ValidacionPage() {
 
                 <button
                   type="button"
+                  disabled={isSaving || isLoading || pendingCount > 0 || !user}
                   onClick={handleFinalizar}
                   className="px-5 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs shrink-0"
                 >
-                  Finalizar Validación Documental
+                  {isSaving ? 'Guardando validación…' : 'Finalizar Validación Documental'}
                 </button>
               </div>
             </>
           ) : (
             <div className="p-12 text-center text-xs text-stone-500">
-              Seleccione un expediente de la columna izquierda para iniciar la validación.
+              No hay solicitudes listas para validar. Las solicitudes finalizadas ya no se muestran en esta cola.
             </div>
           )}
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

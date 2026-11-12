@@ -17,6 +17,8 @@ import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 import { createUuid } from '../../lib/uuid.ts';
+import { getDocumentVersions } from '../validation/documentaryQueue.ts';
+import { documentaryCompletionSchema } from '../validation/documentaryCompletionSchema.ts';
 
 export interface UploadedFilePayload {
   requirement_id: string;
@@ -926,6 +928,26 @@ export const useRequestStore = create<RequestState>()(
           return { success: false, error: 'Solicitud no encontrada.' };
         }
 
+        const client = getSupabaseClient();
+        if (client) {
+          const { data, error } = await client.rpc('finalize_documentary_validation', {
+            p_application_id: requestId,
+          });
+          const parsed = documentaryCompletionSchema.safeParse(data);
+          if (error || !parsed.success || parsed.data.application.id !== requestId
+            || parsed.data.audits.some((audit) => audit.application_id !== requestId)) {
+            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el cierre de la validación documental.') };
+          }
+          const saved = parsed.data;
+          const request = { ...saved.application, request_type_id: saved.application.application_type_id };
+          set((state) => ({
+            requests: state.requests.map((item) => item.id === requestId ? request : item),
+            auditHistory: [...state.auditHistory.filter((event) => !saved.audits.some((audit) => audit.id === event.id)),
+              ...saved.audits.map((audit) => ({ ...audit, request_id: requestId }))],
+          }));
+          return { success: true, request, application: request };
+        }
+
         const typeId = req.request_type_id || req.application_type_id || '';
         const catalog = useCatalogStore.getState();
         const typeReqs = catalog.requirements.filter(
@@ -972,11 +994,9 @@ export const useRequestStore = create<RequestState>()(
             '100% de los requisitos obligatorios verificados conformes a la normativa. Expediente habilitado para evaluación técnica.';
         }
 
-        if (req.current_status === targetStatus) {
-          return { success: true, request: req, application: req };
-        }
-
-        return get().transitionRequestStatus(
+        const result = req.current_status === targetStatus
+          ? { success: true, request: req, application: req }
+          : await get().transitionRequestStatus(
           requestId,
           targetStatus,
           validatedBy,
@@ -988,6 +1008,23 @@ export const useRequestStore = create<RequestState>()(
             mandatory_valid: docs.filter((d) => d.validation_status === 'VALIDO' || d.validation_status === 'VALID').length,
           }
         );
+        if (result.success && result.application) {
+          const versions = getDocumentVersions(docs);
+          const previousClosure = get().auditHistory.find((event) => event.application_id === requestId
+            && event.action === 'VALIDACION_DOCUMENTAL_FINALIZADA'
+            && JSON.stringify(event.details.document_versions) === JSON.stringify(versions));
+          if (!previousClosure) {
+            const completed = result.application;
+            set((state) => ({ auditHistory: [...state.auditHistory, {
+              id: createUuid(), application_id: requestId, request_id: requestId,
+              actor_id: validatedBy, action: 'VALIDACION_DOCUMENTAL_FINALIZADA',
+              previous_status: completed.current_status, new_status: completed.current_status,
+              details: { document_versions: versions, reason: transitionReason, actor_name: validatedByName },
+              created_at: new Date().toISOString(),
+            }] }));
+          }
+        }
+        return result;
       },
 
       transitionRequestStatus: async (
