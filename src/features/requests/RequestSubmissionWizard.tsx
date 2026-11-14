@@ -1,3 +1,5 @@
+import { FundingFields } from '../calls/FundingFields.tsx';
+import { financingError, useCalls } from '../calls/callsApi.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { TypeOptionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import React, { useEffect, useRef, useState } from 'react';
@@ -6,7 +8,7 @@ import { useLocalDraft } from '../drafts/useLocalDraft.ts';
 import { DraftNotice } from '../drafts/DraftNotice.tsx';
 import { requestDraftSchema } from '../drafts/draftSchemas.ts';
 import type { RequestDraft } from '../drafts/draftSchemas.ts';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   FileText,
   CheckCircle2,
@@ -43,6 +45,8 @@ export function RequestSubmissionWizard() {
 
 function RequestSubmissionForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const calls = useCalls();
   const { user } = useSessionStore();
   const { types, requirements, isLoading: isCatalogLoading, isInitialized: isCatalogInitialized } = useCatalogStore();
   const { groups } = useGroupsStore();
@@ -54,8 +58,9 @@ function RequestSubmissionForm() {
     ownerId: user?.id ?? '', scope: 'request:new', context: 'request:v1', schema: requestDraftSchema,
     createInitial: (): RequestDraft => ({
       currentStep: 1, selectedTypeId: activeTypes[0]?.id ?? '', submissionId: createUuid(),
-      formData: { title: '', related_project: '', abstract: '', research_group_id: groups[0]?.id ?? '',
-        budget_requested: 0, is_tutor_endorsed: false }, uploadedFiles: {},
+      formData: { title: '', related_project: '', abstract: '', research_group_id: user?.researchGroupId ?? groups[0]?.id ?? '',
+        budget_requested: 0, is_tutor_endorsed: false, funding_call_id: searchParams.get('convocatoria') ?? '',
+        funding_mode: searchParams.has('convocatoria') ? 'funded' : 'academic' }, uploadedFiles: {},
     }),
     hasContent: (value) => Boolean(value.selectedTypeId) || value.currentStep > 1 || Boolean(value.formData.title || value.formData.abstract
       || value.formData.related_project || Object.keys(value.uploadedFiles).length),
@@ -154,6 +159,13 @@ function RequestSubmissionForm() {
     URL.revokeObjectURL(url);
   };
 
+  const checkFunding = () => {
+    const mode = formData.funding_mode ?? (formData.budget_requested > 0 ? 'funded' : 'academic');
+    if (mode === 'funded' && formData.budget_requested <= 0) return 'Indique un monto mayor que cero para solicitar financiamiento.';
+    return financingError(formData.budget_requested, formData.funding_call_id, calls.data ?? [], selectedTypeId,
+      groups.find((g) => g.id === formData.research_group_id)?.faculty);
+  };
+
   const handleNextStep = () => {
     if (uploadLock.current) return;
     setGeneralError(null);
@@ -168,6 +180,8 @@ function RequestSubmissionForm() {
     }
 
     if (currentStep === 2) {
+      const fundingIssue = checkFunding();
+      if (fundingIssue) { setGeneralError(fundingIssue); return; }
       const parseResult = step2GeneralDataSchema.safeParse({
         title: formData.title,
         related_project: formData.related_project || null,
@@ -221,6 +235,8 @@ function RequestSubmissionForm() {
       setCurrentStep(1);
       return;
     }
+    const fundingIssue = checkFunding();
+    if (fundingIssue) { setGeneralError(fundingIssue); setCurrentStep(2); return; }
     const checkedData = step2GeneralDataSchema.safeParse(formData);
     if (!checkedData.success || (formData.research_group_id && !groups.some((group) => group.id === formData.research_group_id))) {
       setGeneralError('Revise los datos generales recuperados y el grupo de investigación antes de radicar.');
@@ -253,6 +269,7 @@ function RequestSubmissionForm() {
       abstract: formData.abstract,
       related_project: formData.related_project || null,
       research_group_id: formData.research_group_id || null,
+      funding_call_id: formData.funding_call_id || null,
       budget_requested: Number(formData.budget_requested) || 0,
       is_tutor_endorsed: formData.is_tutor_endorsed,
       documents: docsPayload,
@@ -620,21 +637,8 @@ function RequestSubmissionForm() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-stone-800 mb-1">
-                    Presupuesto Solicitado ($ COP si aplica)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={500000}
-                    value={formData.budget_requested}
-                    onChange={(e) =>
-                      setFormData({ ...formData, budget_requested: Number(e.target.value) })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none text-xs text-stone-800 font-mono"
-                  />
-                </div>
+                <FundingFields value={formData} onChange={setFormData} typeId={selectedTypeId}
+                  faculty={groups.find((g) => g.id === formData.research_group_id)?.faculty} />
               </div>
 
               <div>
@@ -870,6 +874,7 @@ function RequestSubmissionForm() {
                 <div>
                   <span className="text-stone-400 block text-[11px]">Presupuesto Solicitado:</span>
                   <span className="font-mono font-bold text-[#14281D]">
+                    {formData.funding_call_id && <p>Convocatoria: {calls.data?.find((c) => c.id === formData.funding_call_id)?.title ?? 'No disponible'}</p>}
                     {formData.budget_requested > 0
                       ? `$ ${formData.budget_requested.toLocaleString('es-CO')} COP`
                       : 'No aplica / Sin presupuesto'}

@@ -7,7 +7,8 @@ export const uploadedDraftFileSchema = z.object({
 export const requestDraftSchema = z.object({
   currentStep: z.number().int().min(1).max(4), selectedTypeId: z.string(), submissionId: z.string().uuid(),
   formData: z.object({ title: z.string(), related_project: z.string(), abstract: z.string(),
-    research_group_id: z.string(), budget_requested: z.number(), is_tutor_endorsed: z.boolean() }),
+    research_group_id: z.string(), funding_call_id: z.string().optional(), funding_mode: z.enum(['academic', 'funded']).optional(),
+    budget_requested: z.number(), is_tutor_endorsed: z.boolean() }),
   uploadedFiles: z.record(z.string(), uploadedDraftFileSchema),
 });
 export type RequestDraft = z.infer<typeof requestDraftSchema>;

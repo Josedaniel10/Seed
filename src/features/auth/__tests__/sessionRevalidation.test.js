@@ -1,3 +1,5 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+const callTestClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
 import assert from 'node:assert/strict';
 import { test, beforeEach, afterEach, after } from 'node:test';
 import { JSDOM } from 'jsdom';
@@ -61,11 +63,11 @@ function Probe() {
 async function mount(Component = Probe, allowed = ['committee_member']) {
   const container = document.createElement('div'); document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(createElement(MemoryRouter, { initialEntries: ['/private'] },
+  await act(async () => root.render(createElement(QueryClientProvider, { client: callTestClient }, createElement(MemoryRouter, { initialEntries: ['/private'] },
     createElement(SessionSyncNotice), createElement(Routes, null,
       createElement(Route, { path: '/private', element: createElement(RutaProtegida, { rolesPermitidos: allowed }, createElement(Component)) }),
       createElement(Route, { path: '/login', element: createElement('p', null, 'Inicio de sesión') }),
-      createElement(Route, { path: '/sin-acceso', element: createElement('p', null, 'Acceso restringido') })))));
+      createElement(Route, { path: '/sin-acceso', element: createElement('p', null, 'Acceso restringido') }))))));
 }
 async function change(element, value) {
   assert.ok(element, 'Missing field');

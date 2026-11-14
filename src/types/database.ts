@@ -99,6 +99,7 @@ export interface Request {
   title: string;
   abstract: string | null;
   research_group_id: string | null;
+  funding_call_id?: string | null;
   budget_requested: number;
   current_status: RequestDbStatus;
   is_tutor_endorsed: boolean;

@@ -65,7 +65,7 @@ const successResult = await appStore.createApplication({
   abstract:
     'Estudio integral de síntesis ecológica de nanomateriales utilizando extractos de plantas nativas altoandinas para aplicaciones en desinfección hospitalaria.',
   research_group_id: 'grp-001',
-  budget_requested: 38000000,
+  budget_requested: 0,
   is_tutor_endorsed: true,
   documents: validDocumentsPayload,
 });

@@ -135,6 +135,10 @@ export const ROLE_MENU_ITEMS: Record<string, MenuItem[]> = {
   ],
 };
 
+for (const items of Object.values(ROLE_MENU_ITEMS)) {
+  items.push({ label: 'Convocatorias', path: '/convocatorias', iconName: 'Calendar' });
+}
+
 export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/my-requests': ['researcher', 'investigador'],
   '/mis-solicitudes': ['researcher', 'investigador'],

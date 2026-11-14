@@ -1,3 +1,5 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+const callTestClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import { JSDOM } from 'jsdom';
@@ -34,7 +36,7 @@ async function mount(Component) {
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => { root.render(createElement(MemoryRouter, null, createElement(Component))); });
+  await act(async () => { root.render(createElement(QueryClientProvider, { client: callTestClient }, createElement(MemoryRouter, null, createElement(Component)))); });
 }
 
 afterEach(async () => {

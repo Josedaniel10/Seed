@@ -42,6 +42,7 @@ export interface CreateRequestPayload {
   abstract: string;
   related_project?: string | null;
   research_group_id?: string | null;
+  funding_call_id?: string | null;
   budget_requested?: number;
   is_tutor_endorsed?: boolean;
   documents: UploadedFilePayload[];
@@ -595,6 +596,7 @@ export const useRequestStore = create<RequestState>()(
               p_title: payload.title,
               p_abstract: payload.abstract,
               p_group_id: payload.research_group_id || null,
+              p_call_id: payload.funding_call_id || null,
               p_budget: payload.budget_requested ?? 0,
               p_tutor_endorsed: !!payload.is_tutor_endorsed,
               p_documents: payload.documents.map(({
@@ -627,6 +629,9 @@ export const useRequestStore = create<RequestState>()(
             return { success: true, request, application: request };
           }
 
+          if ((payload.budget_requested ?? 0) > 0 || payload.funding_call_id) {
+            return { success: false, error: 'Debe conectar Supabase para validar la convocatoria y radicar con financiamiento.' };
+          }
           const catalog = useCatalogStore.getState();
           const targetType = catalog.types.find((t) => t.id === typeId);
 
@@ -1603,6 +1608,7 @@ export const useRequestStore = create<RequestState>()(
               title: app.title,
               abstract: app.abstract,
               research_group_id: app.research_group_id,
+              funding_call_id: app.funding_call_id,
               budget_requested: Number(app.budget_requested || 0),
               current_status: app.current_status,
               is_tutor_endorsed: !!app.is_tutor_endorsed,

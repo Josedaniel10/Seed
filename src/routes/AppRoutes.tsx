@@ -1,3 +1,4 @@
+import { CallsPage } from '../features/calls/CallsPage.tsx';
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
@@ -70,6 +71,7 @@ export function AppRoutes() {
         {/* Rutas compartidas por todos los usuarios con sesión */}
         <Route path="/sin-acceso" element={<SinAccesoPage />} />
         <Route path="/notificaciones" element={<NotificacionesPage />} />
+        <Route path="/convocatorias" element={<CallsPage />} />
         <Route path="/perfil" element={<PerfilPage />} />
         <Route path="/solicitudes/:id" element={<DetalleSolicitudPage />} />
 

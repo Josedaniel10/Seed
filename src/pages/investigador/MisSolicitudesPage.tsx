@@ -1,3 +1,4 @@
+import { CallsNotice } from '../../features/calls/CallsNotice.tsx';
 import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { RequestCardsSkeleton } from '../../features/loading/RequestCardsSkeleton.tsx';
@@ -85,6 +86,7 @@ export function MisSolicitudesPage() {
 
   return (
     <div className="space-y-6">
+      <CallsNotice />
       {/* 1. Título y botón "Nueva solicitud" a la derecha */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E3DC] pb-4">
         <div>

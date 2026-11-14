@@ -318,6 +318,7 @@ export function DetalleSolicitudPage() {
           {activeTab === 'resumen' && (
             <div className="space-y-5 text-xs">
               <div className="space-y-1.5">
+                {application.funding_call_id && <p className="text-sm">Modalidad: aval académico con financiamiento · <a className="underline" href={`/convocatorias?convocatoria=${application.funding_call_id}`}>Consultar convocatoria vinculada</a></p>}
                 <h3 className="font-bold text-[#14281D] text-sm">Resumen Ejecutivo y Justificación</h3>
                 <p className="text-stone-700 leading-relaxed bg-[#F7F6F2] p-4 rounded-2xl border border-[#E5E3DC]">
                   {application.abstract || 'Sin resumen registrado.'}
