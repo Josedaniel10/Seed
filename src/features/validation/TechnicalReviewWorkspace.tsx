@@ -18,7 +18,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
   onConceptSubmitted: (message: string) => void;
 }): ReactElement {
   const { user } = useSessionStore();
-  const { addTechnicalObservation, submitReviewerConcept } = useApplicationStore();
+  const { addTechnicalObservation, submitReviewerConcept, auditHistory } = useApplicationStore();
   const context = JSON.stringify(appDocs.map((document) => [document.id, document.file_hash_sha256, document.uploaded_at]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
   const { draft: savedDraft, controller: draftController } = useLocalDraft({
     ownerId: user?.id ?? '', scope: `review:${app.id}:${assignmentId}`, context,
@@ -134,7 +134,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
         </p>
       </div>
 
-      <ExpedienteDocuments documents={appDocs} requirements={requirements} />
+      <ExpedienteDocuments documents={appDocs} requirements={requirements} auditHistory={auditHistory} />
 
       {/* Observaciones registradas */}
       <div className="space-y-2">

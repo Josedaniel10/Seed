@@ -1,3 +1,6 @@
+import { getDocumentCorrection } from '../../features/documents/documentCorrection.ts';
+import { DocumentCorrectionNotice } from '../../features/documents/DocumentCorrectionNotice.tsx';
+import { DocumentValidationBadge } from '../../features/documents/DocumentValidationBadge.tsx';
 import { ObservationThread } from '../../features/validation/ObservationThread.tsx';
 import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
@@ -156,7 +159,7 @@ export function DetalleSolicitudPage() {
       );
 
       if (res.success) {
-        setSubsanarSuccess(`Documento "${file.name}" cargado y corregido exitosamente.`);
+        setSubsanarSuccess(`Archivo corregido "${file.name}" guardado. Está pendiente de validación administrativa.`);
         setSubsanandoReqId(null);
 
       } else {
@@ -388,6 +391,8 @@ export function DetalleSolicitudPage() {
                   {appDocuments.map((doc, idx) => {
                     const reqObj = requirements.find((r) => r.id === doc.requirement_id);
                     const isRejected = doc.validation_status === 'RECHAZADO' || doc.validation_status === 'REJECTED';
+                    const isPending = doc.validation_status === 'PENDIENTE' || doc.validation_status === 'PENDING';
+                    const correctionReceived = Boolean(getDocumentCorrection(doc, auditHistory));
                     const isSubsanandoThis = subsanandoReqId === doc.requirement_id;
 
                     return (
@@ -396,6 +401,7 @@ export function DetalleSolicitudPage() {
                         className={`p-4 rounded-2xl border transition-all space-y-3 ${
                           isRejected
                             ? 'bg-rose-50/40 border-rose-200 ring-1 ring-rose-200'
+                            : correctionReceived && isPending ? 'bg-white border-emerald-300 ring-1 ring-emerald-100'
                             : 'bg-[#F7F6F2] border-[#E5E3DC]'
                         }`}
                       >
@@ -423,35 +429,21 @@ export function DetalleSolicitudPage() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            {doc.validation_status === 'VALIDO' ? (
-                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                                <CheckCircle2 size={12} />
-                                <span>Válido</span>
-                              </span>
-                            ) : doc.validation_status === 'RECHAZADO' ? (
-                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
-                                <XCircle size={12} />
-                                <span>Rechazado</span>
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-stone-200 text-stone-700 flex items-center gap-1">
-                                <Clock size={12} />
-                                <span>Pendiente de validación</span>
-                              </span>
-                            )}
+                            <DocumentValidationBadge status={doc.validation_status} />
 
                             <DocumentFileActions key={`${doc.id}-${doc.file_hash_sha256}-${doc.uploaded_at}`} document={doc} />
                           </div>
                         </div>
 
-                        {/* Hash SHA-256 de inmutabilidad */}
+                        {correctionReceived && <DocumentCorrectionNotice document={doc} />}
+
+                        {/* Fecha de la versión actual */}
                         <div className="text-[10px] text-stone-500 font-mono bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between">
                           <span className="shrink-0 text-stone-400 font-sans font-semibold">
                             Cargado:{' '}
-                            {new Date(doc.uploaded_at).toLocaleDateString('es-CO', {
-                              day: '2-digit',
-                              month: 'short',
-                            })}
+                            {new Date(doc.uploaded_at).toLocaleString('es-CO', {
+                              dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota',
+                            })} (Colombia)
                           </span>
                         </div>
 
@@ -467,10 +459,10 @@ export function DetalleSolicitudPage() {
                         )}
 
                         {/* Botón y formulario para subsanar si el documento fue rechazado */}
-                        {user?.id === application.applicant_id && reqObj?.is_subsanable && ['RADICADA', 'SUBMITTED', 'PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status) && (isRejected || ['PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status)) && (
+                        {user?.id === application.applicant_id && reqObj?.is_subsanable && ['RADICADA', 'SUBMITTED', 'PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status) && (isRejected || (isPending && ['PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status))) && (
                           <div className="pt-2 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <span className="text-[11px] text-amber-900 font-semibold">
-                              Requiere subsanación o corrección documental.
+                            <span className={`text-[11px] font-semibold ${correctionReceived && isPending ? 'text-emerald-800' : 'text-amber-900'}`}>
+                              {correctionReceived && isPending ? 'Nueva versión enviada. Esperando revisión administrativa.' : 'Requiere subsanación o corrección documental.'}
                             </span>
 
                             {isSubsanandoThis ? (
@@ -503,10 +495,10 @@ export function DetalleSolicitudPage() {
                                 type="button"
                                 disabled={isUploading}
                                 onClick={() => setSubsanandoReqId(doc.requirement_id)}
-                                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer inline-flex items-center gap-1"
+                                className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer inline-flex items-center gap-1 ${correctionReceived && isPending ? 'border border-[#E5E3DC] bg-white hover:bg-stone-50 text-stone-700' : 'bg-amber-600 hover:bg-amber-700 text-white'}`}
                               >
                                 <Upload size={13} />
-                                <span>Subsanar este documento</span>
+                                <span>{correctionReceived && isPending ? 'Reemplazar archivo enviado' : 'Subsanar este documento'}</span>
                               </button>
                             )}
                           </div>
