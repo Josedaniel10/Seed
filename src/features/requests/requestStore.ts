@@ -746,6 +746,34 @@ export const useRequestStore = create<RequestState>()(
           (d) => (d.request_id === requestId || d.application_id === requestId) && d.requirement_id === requirementId
         );
 
+        const client = getSupabaseClient();
+        if (client) {
+          try {
+            const { data, error } = await client.rpc('cure_application_document', {
+              p_application_id: requestId,
+              p_requirement_id: requirementId,
+              p_expected_hash: targetDoc?.file_hash_sha256 ?? null,
+              p_document: {
+                file_name: file.file_name, file_path: file.file_path,
+                file_size_bytes: file.file_size_bytes, file_hash_sha256: file.file_hash_sha256,
+                mime_type: file.mime_type,
+              },
+            }).overrideTypes<{ document: RequestDocument; audit: AuditHistory }, { merge: false }>();
+            if (error || !data || typeof data !== 'object' || !('document' in data) || !('audit' in data)
+              || !data.document?.id || !data.audit?.id) {
+              return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la subsanación. Intente nuevamente.') };
+            }
+            const document = { ...data.document, request_id: requestId };
+            set((state) => ({
+              documents: [...state.documents.filter((item) => item.id !== document.id), document],
+              auditHistory: [...state.auditHistory.filter((item) => item.id !== data.audit.id), { ...data.audit, request_id: requestId }],
+            }));
+            return { success: true, document };
+          } catch {
+            return { success: false, error: 'No se pudo confirmar la subsanación. Revise la conexión e intente nuevamente.' };
+          }
+        }
+
         if (targetDoc) {
           const updatedDoc: RequestDocument = {
             ...targetDoc,
@@ -783,44 +811,6 @@ export const useRequestStore = create<RequestState>()(
             documents: state.documents.map((d) => (d.id === targetDoc.id ? updatedDoc : d)),
             auditHistory: [...state.auditHistory, newAudit],
           }));
-
-          const client = getSupabaseClient();
-          if (client) {
-            client
-              .from('application_documents')
-              .update({
-                file_name: updatedDoc.file_name,
-                file_path: updatedDoc.file_path,
-                file_size_bytes: updatedDoc.file_size_bytes,
-                file_hash_sha256: updatedDoc.file_hash_sha256,
-                mime_type: updatedDoc.mime_type,
-                validation_status: updatedDoc.validation_status,
-                validation_observations: null,
-                validated_by: null,
-                validated_at: null,
-                uploaded_at: nowIso,
-              })
-              .eq('id', targetDoc.id)
-              .then(({ error }) => {
-                if (error) console.warn('Supabase document cure update error:', error.message);
-              });
-
-            const supabaseActorId = (actorId && actorId.length > 20) ? actorId : null;
-            client
-              .from('audit_history')
-              .insert({
-                id: newAudit.id,
-                application_id: requestId,
-                actor_id: supabaseActorId,
-                action: newAudit.action,
-                previous_status: newAudit.previous_status,
-                new_status: newAudit.new_status,
-                details: newAudit.details,
-              })
-              .then(({ error }) => {
-                if (error) console.warn('Supabase audit insert error:', error.message);
-              });
-          }
 
           return { success: true, document: updatedDoc };
         }

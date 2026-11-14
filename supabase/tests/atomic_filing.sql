@@ -12,6 +12,10 @@ VALUES ('29355a94-3419-445c-bd4d-617af8954c03', 'TEST-ATOMIC-FILING', 'Atomic fi
 INSERT INTO public.requirements (id, application_type_id, name)
 VALUES ('29355a94-3419-445c-bd4d-617af8954c04', '29355a94-3419-445c-bd4d-617af8954c03', 'Required PDF');
 
+INSERT INTO storage.objects(bucket_id,name,owner_id,metadata) VALUES
+ ('documents','29355a94-3419-445c-bd4d-617af8954c01/filing/test.pdf','29355a94-3419-445c-bd4d-617af8954c01','{"size":10,"mimetype":"application/pdf"}'),
+ ('documents','29355a94-3419-445c-bd4d-617af8954c02/filing/test.pdf','29355a94-3419-445c-bd4d-617af8954c02','{"size":10,"mimetype":"application/pdf"}');
+
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"29355a94-3419-445c-bd4d-617af8954c01","role":"authenticated"}';
 
@@ -22,8 +26,8 @@ DECLARE
   v_type uuid := '29355a94-3419-445c-bd4d-617af8954c03';
   v_docs jsonb := '[{
     "requirement_id":"29355a94-3419-445c-bd4d-617af8954c04",
-    "file_name":"test.pdf", "file_path":"test/test.pdf", "file_size_bytes":10,
-    "file_hash_sha256":"test-hash", "mime_type":"application/pdf"
+    "file_name":"test.pdf", "file_path":"29355a94-3419-445c-bd4d-617af8954c01/filing/test.pdf", "file_size_bytes":10,
+    "file_hash_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mime_type":"application/pdf"
   }]';
   v_first jsonb;
   v_retry jsonb;
@@ -41,7 +45,7 @@ BEGIN
       v_failed_id, auth.uid(), v_type, 'Test', 'Summary', NULL, 0, false, v_docs #- '{0,file_path}'
     );
     RAISE EXCEPTION 'Filing with a failed document insert succeeded';
-  EXCEPTION WHEN not_null_violation THEN
+  EXCEPTION WHEN not_null_violation OR invalid_parameter_value THEN
     NULL;
   END;
 
@@ -67,6 +71,7 @@ BEGIN
     NULL;
   END;
 
+  v_docs := jsonb_set(v_docs,'{0,file_path}',to_jsonb('29355a94-3419-445c-bd4d-617af8954c02/filing/test.pdf'::text));
   v_second := public.file_application(v_failed_id, auth.uid(), v_type, 'Second', 'Summary', NULL, 0, false, v_docs);
   IF substring(v_second#>>'{application,filing_number}' FROM '[0-9]+$')::numeric
     IS DISTINCT FROM substring(v_first#>>'{application,filing_number}' FROM '[0-9]+$')::numeric + 1

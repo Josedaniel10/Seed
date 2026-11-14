@@ -20,16 +20,18 @@ BEGIN
     (reviewer_id, reviewer_id || '@example.invalid', '{"full_name":"Test reviewer"}', '{"seed_initial_role":"integrante_comite"}');
   INSERT INTO public.application_types (id, code, name) VALUES (type_id, type_id::text, 'Test lifecycle');
   INSERT INTO public.requirements (id, application_type_id, name) VALUES (requirement_id, type_id, 'Test PDF');
+  INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+    VALUES ('documents',owner_id::text||'/lifecycle/test.pdf',owner_id::text,'{"size":10,"mimetype":"application/pdf"}');
 
   SET LOCAL ROLE authenticated;
   PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', owner_id, 'role', 'authenticated')::text, true);
   document_id := (public.file_application(request_id, owner_id, type_id, 'Test application', 'Test summary',
     NULL, 0, false, jsonb_build_array(jsonb_build_object('requirement_id', requirement_id,
-      'file_name', 'test.pdf', 'file_path', 'test.pdf', 'file_size_bytes', 10,
-      'file_hash_sha256', 'test-hash', 'mime_type', 'application/pdf'))) #>> '{documents,0,id}')::uuid;
+      'file_name', 'test.pdf', 'file_path', owner_id::text||'/lifecycle/test.pdf', 'file_size_bytes', 10,
+      'file_hash_sha256', repeat('a',64), 'mime_type', 'application/pdf'))) #>> '{documents,0,id}')::uuid;
 
   PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', staff_id, 'role', 'authenticated')::text, true);
-  PERFORM public.validate_application_document(request_id, document_id, 'test-hash', 'VALIDO', NULL);
+  PERFORM public.validate_application_document(request_id, document_id, repeat('a',64), 'VALIDO', NULL);
   PERFORM public.transition_application_status(request_id, 'RADICADA', 'EN_REVISION', NULL, '{}');
   BEGIN
     PERFORM public.assign_application_reviewer(request_id, reviewer_id, current_date + 5);

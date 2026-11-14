@@ -5,3 +5,5 @@ Estructura para el backend de Supabase:
 - `functions/`: Edge functions o scripts de soporte.
 - `seed.sql`: Precarga inicial del catálogo normativo de solicitudes y requisitos estándar.
 - `tests/`: Pruebas de reglas de negocio en SQL.
+
+El flujo documental usa Supabase Storage privado. Consulte [archivos documentales](../docs/archivos-documentales.md) para la migración, permisos y verificación de carga, consulta y subsanación.

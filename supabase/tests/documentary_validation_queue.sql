@@ -41,6 +41,7 @@ BEGIN
 END $$;
 RESET ROLE;
 -- Simulate a new version uploaded by the researcher, then another round with the same pending state.
+SET LOCAL request.jwt.claims='{}';
 UPDATE public.application_documents SET uploaded_at=clock_timestamp(),file_hash_sha256='correction',validation_status='PENDIENTE',validated_at=NULL
  WHERE id='a0fbc100-0000-4000-8000-000000000030';
 SET LOCAL ROLE authenticated;
@@ -55,6 +56,7 @@ BEGIN
    RAISE EXCEPTION 'New correction round did not persist its closure'; END IF;
 END $$;
 RESET ROLE;
+SET LOCAL request.jwt.claims='{}';
 UPDATE public.application_documents SET uploaded_at=clock_timestamp(),file_hash_sha256='signed',validation_status='PENDING',validated_at=NULL
  WHERE id='a0fbc100-0000-4000-8000-000000000030';
 SET LOCAL ROLE authenticated;

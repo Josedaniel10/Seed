@@ -18,9 +18,8 @@ import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useGroupsStore } from '../groups/groupsStore.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useRequestStore, UploadedFilePayload } from './requestStore.ts';
-import { validateDocumentFile, computeFileSha256 } from './documentValidator.ts';
 import { step2GeneralDataSchema } from './requestSchema.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { uploadDocumentFile } from '../documents/documentFiles.ts';
 import { createUuid } from '../../lib/uuid.ts';
 
 const STEPS = [
@@ -69,6 +68,7 @@ export function RequestSubmissionWizard() {
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedFilePayload>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
+  const uploadLock = useRef(false);
 
   const [submittedRequest, setSubmittedRequest] = useState<{
     id: string;
@@ -85,78 +85,19 @@ export function RequestSubmissionWizard() {
   const mandatoryRequirements = typeRequirements.filter((r) => r.is_mandatory);
 
   const handleFileUpload = async (requirementId: string, file: File) => {
+    if (uploadLock.current) return;
+    uploadLock.current = true;
     setUploadErrors((prev) => ({ ...prev, [requirementId]: '' }));
     setUploadingReqId(requirementId);
 
-    const validation = validateDocumentFile(file.name, file.size, 10);
-    if (!validation.valid) {
-      setUploadErrors((prev) => ({
-        ...prev,
-        [requirementId]: validation.error || 'Archivo inválido.',
-      }));
-      setUploadingReqId(null);
-      return;
-    }
-
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const sha256 = await computeFileSha256(arrayBuffer);
-
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
-
-      let savedFilePath = `file-service/storage/${sha256.substring(0, 12)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-
-      // Subida real a Supabase Storage (Bucket 'documents')
-      const client = getSupabaseClient();
-      if (client) {
-        const { data: authData, error: authError } = await client.auth.getSession();
-        if (authError) {
-          throw new Error('No se pudo verificar su sesión. Ingrese nuevamente.');
-        }
-        if (!authData.session) {
-          throw new Error(
-            'Inicie sesión para adjuntar documentos.'
-          );
-        }
-        if (user?.id !== authData.session.user.id) {
-          throw new Error(
-            'Su sesión ha cambiado. Cierre sesión e ingrese nuevamente.'
-          );
-        }
-
-        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const storagePath = `${Date.now()}_${sha256.substring(0, 8)}_${cleanName}`;
-        const { data: uploadData, error: uploadError } = await client.storage
-          .from('documents')
-          .upload(storagePath, file, { cacheControl: '3600', upsert: false });
-
-        if (uploadError) {
-          throw new Error(
-            'No se pudo cargar el archivo. Intente nuevamente.'
-          );
-        }
-        if (!uploadData.path) {
-          throw new Error('No se pudo confirmar la carga del archivo. Intente nuevamente.');
-        }
-
-        const { data: publicUrlData } = client.storage.from('documents').getPublicUrl(uploadData.path);
-        savedFilePath = publicUrlData.publicUrl || uploadData.path;
-      }
-
-      const payload: UploadedFilePayload = {
-        requirement_id: requirementId,
-        file_name: file.name,
-        file_path: savedFilePath,
-        file_size_bytes: file.size,
-        file_hash_sha256: sha256,
-        mime_type: file.type || 'application/pdf',
-        file_base64: base64,
-      };
+      if (!user) throw new Error('Inicie sesión para adjuntar documentos.');
+      const requirement = typeRequirements.find((item) => item.id === requirementId);
+      const payload = await uploadDocumentFile({
+        file, requirementId, userId: user.id,
+        maxSizeMb: requirement?.max_size_mb,
+        allowedFormats: requirement?.allowed_formats,
+      });
 
       setUploadedFiles((prev) => ({
         ...prev,
@@ -170,6 +111,7 @@ export function RequestSubmissionWizard() {
           : 'Error desconocido al procesar o subir el archivo.',
       }));
     } finally {
+      uploadLock.current = false;
       setUploadingReqId(null);
     }
   };
@@ -195,6 +137,7 @@ export function RequestSubmissionWizard() {
   };
 
   const handleNextStep = () => {
+    if (uploadLock.current) return;
     setGeneralError(null);
 
     if (currentStep === 1) {
@@ -251,7 +194,7 @@ export function RequestSubmissionWizard() {
   };
 
   const handleSubmitFiling = async () => {
-    if (useRequestStore.getState().isSubmitting) return;
+    if (useRequestStore.getState().isSubmitting || uploadLock.current) return;
     setGeneralError(null);
 
     const docsPayload = typeRequirements.flatMap(({ id }) => uploadedFiles[id] ? [uploadedFiles[id]] : []);
@@ -781,7 +724,7 @@ export function RequestSubmissionWizard() {
 
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            Cargado y Validado
+                            Archivo cargado
                           </span>
                           <button
                             type="button"
@@ -807,10 +750,11 @@ export function RequestSubmissionWizard() {
                             type="file"
                             id={`file-input-${req.id}`}
                             accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            disabled={isUploading}
+                            disabled={Boolean(uploadingReqId)}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
-                              if (f) handleFileUpload(req.id, f);
+                              e.target.value = '';
+                              if (f) void handleFileUpload(req.id, f);
                             }}
                             className="hidden"
                           />
@@ -949,7 +893,7 @@ export function RequestSubmissionWizard() {
         <button
           type="button"
           onClick={handlePrevStep}
-          disabled={currentStep === 1 || isSubmitting}
+          disabled={currentStep === 1 || isSubmitting || Boolean(uploadingReqId)}
           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#E5E3DC] text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 disabled:opacity-40 cursor-pointer shadow-xs"
         >
           <ArrowLeft size={14} />
@@ -960,6 +904,7 @@ export function RequestSubmissionWizard() {
           <button
             type="button"
             onClick={handleNextStep}
+            disabled={Boolean(uploadingReqId)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
           >
             <span>Continuar al Paso {currentStep + 1}</span>
@@ -969,7 +914,7 @@ export function RequestSubmissionWizard() {
           <button
             type="button"
             onClick={handleSubmitFiling}
-            disabled={isSubmitting}
+            disabled={isSubmitting || Boolean(uploadingReqId)}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#74b810] text-[#14281D] text-xs font-extrabold cursor-pointer transition-colors shadow-xs disabled:opacity-50"
           >
             <CheckCircle2 size={16} />

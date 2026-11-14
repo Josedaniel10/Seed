@@ -1,20 +1,20 @@
+import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
+import { uploadDocumentFile } from '../../features/documents/documentFiles.ts';
 import { formatUserMessage } from '../../lib/userMessages.ts';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
-import { useApplicationStore, UploadedFilePayload } from '../../features/applications/applicationStore.ts';
+import { useApplicationStore } from '../../features/applications/applicationStore.ts';
 import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { useGroupsStore } from '../../features/groups/groupsStore.ts';
 import { useUserStore } from '../../features/users/userStore.ts';
 import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
-import { validateDocumentFile, computeFileSha256 } from '../../features/applications/documentValidator.ts';
 import {
   FileText,
   Clock,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
-  Download,
   Upload,
   MessageSquare,
   History,
@@ -64,6 +64,8 @@ export function DetalleSolicitudPage() {
   const [subsanandoReqId, setSubsanandoReqId] = useState<string | null>(null);
   const [subsanarError, setSubsanarError] = useState<string | null>(null);
   const [subsanarSuccess, setSubsanarSuccess] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const uploadLock = React.useRef(false);
 
   // Buscar la solicitud en el store
   const application = useMemo(() => {
@@ -84,7 +86,7 @@ export function DetalleSolicitudPage() {
 
   const appDocuments = useMemo(() => {
     if (!application) return [];
-    return documents.filter((d) => d.application_id === application.id);
+    return documents.filter((d) => (d.application_id ?? d.request_id) === application.id);
   }, [documents, application]);
 
   const appHistory = useMemo(() => {
@@ -125,48 +127,27 @@ export function DetalleSolicitudPage() {
     );
   }
 
-  // Descarga del archivo físico / datos simulados
-  const handleDownloadFile = (docName: string, hash: string) => {
-    const content = `EXPEDIENTE INSTITUCIONAL DE INVESTIGACIÓN\nDocumento: ${docName}\nSHA-256: ${hash}\nFecha: ${new Date().toISOString()}`;
-    const blob = new Blob([content], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = docName;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   // Subsanación de documento (RF-10, RF-23)
   const handleSubsanarUpload = async (requirementId: string, file: File) => {
     setSubsanarError(null);
     setSubsanarSuccess(null);
 
-    const val = validateDocumentFile(file.name, file.size, 10);
-    if (!val.valid) {
-      setSubsanarError(val.error || 'Archivo inválido');
-      return;
-    }
-
+    if (uploadLock.current || !user) return;
+    uploadLock.current = true;
+    setIsUploading(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const sha256 = await computeFileSha256(buffer);
-
-      const payload: UploadedFilePayload = {
-        requirement_id: requirementId,
-        file_name: file.name,
-        file_path: `file-service/storage/${sha256.substring(0, 12)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-        file_size_bytes: file.size,
-        file_hash_sha256: sha256,
-        mime_type: file.type || 'application/pdf',
-      };
+      const requirement = requirements.find((item) => item.id === requirementId);
+      const payload = await uploadDocumentFile({
+        file, requirementId, userId: user.id,
+        maxSizeMb: requirement?.max_size_mb, allowedFormats: requirement?.allowed_formats,
+      });
 
       const res = await subsanarDocument(
         application.id,
         requirementId,
         payload,
-        user?.id || 'usr-001',
-        user?.fullName || 'Investigador Principal'
+        user.id,
+        user.fullName
       );
 
       if (res.success) {
@@ -176,8 +157,11 @@ export function DetalleSolicitudPage() {
       } else {
         setSubsanarError(res.error || 'Error al subsanar documento.');
       }
-    } catch {
-      setSubsanarError('Error al procesar el archivo subsanado.');
+    } catch (error) {
+      setSubsanarError(error instanceof Error ? error.message : 'Error al procesar el archivo subsanado.');
+    } finally {
+      uploadLock.current = false;
+      setIsUploading(false);
     }
   };
 
@@ -387,6 +371,17 @@ export function DetalleSolicitudPage() {
                 </div>
               )}
 
+              {user?.id === application.applicant_id && ['PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status)
+                && typeRequirements.filter((requirement) => requirement.is_subsanable && !appDocuments.some((document) => document.requirement_id === requirement.id))
+                  .map((requirement) => <div key={requirement.id} className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="font-semibold text-amber-900">Documento faltante: {requirement.name}</p>
+                    <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-[#14281D] px-3 text-white">
+                      <Upload size={14} />{isUploading ? 'Guardando documento…' : 'Adjuntar documento faltante'}
+                      <input type="file" accept=".pdf,.docx,.doc" className="hidden" disabled={isUploading}
+                        onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void handleSubsanarUpload(requirement.id, file); }} />
+                    </label>
+                  </div>)}
+
               {appDocuments.length === 0 ? (
                 <p className="text-stone-500 italic p-6 text-center bg-[#F7F6F2] rounded-2xl">
                   No hay documentos vinculados a este expediente.
@@ -430,7 +425,7 @@ export function DetalleSolicitudPage() {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             {doc.validation_status === 'VALIDO' ? (
                               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                                 <CheckCircle2 size={12} />
@@ -448,14 +443,7 @@ export function DetalleSolicitudPage() {
                               </span>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadFile(doc.file_name, doc.file_hash_sha256)}
-                              className="p-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-[#14281D] cursor-pointer"
-                              title="Descargar documento"
-                            >
-                              <Download size={13} />
-                            </button>
+                            <DocumentFileActions key={`${doc.id}-${doc.file_hash_sha256}-${doc.uploaded_at}`} document={doc} />
                           </div>
                         </div>
 
@@ -482,7 +470,7 @@ export function DetalleSolicitudPage() {
                         )}
 
                         {/* Botón y formulario para subsanar si el documento fue rechazado */}
-                        {(isRejected || application.current_status === 'PENDIENTE_DOCUMENTOS') && (
+                        {user?.id === application.applicant_id && reqObj?.is_subsanable && ['RADICADA', 'SUBMITTED', 'PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status) && (isRejected || ['PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status)) && (
                           <div className="pt-2 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <span className="text-[11px] text-amber-900 font-semibold">
                               Requiere subsanación o corrección documental.
@@ -492,14 +480,16 @@ export function DetalleSolicitudPage() {
                               <div className="flex items-center gap-2">
                                 <label className="px-3 py-1.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-1.5">
                                   <Upload size={13} />
-                                  <span>Seleccionar archivo corregido</span>
+                                  <span>{isUploading ? 'Guardando documento…' : 'Seleccionar archivo corregido'}</span>
                                   <input
                                     type="file"
                                     accept=".pdf,.docx,.doc"
+                                    disabled={isUploading}
                                     className="hidden"
                                     onChange={(e) => {
                                       const f = e.target.files?.[0];
-                                      if (f) handleSubsanarUpload(doc.requirement_id, f);
+                                      e.target.value = '';
+                                      if (f) void handleSubsanarUpload(doc.requirement_id, f);
                                     }}
                                   />
                                 </label>
@@ -514,6 +504,7 @@ export function DetalleSolicitudPage() {
                             ) : (
                               <button
                                 type="button"
+                                disabled={isUploading}
                                 onClick={() => setSubsanandoReqId(doc.requirement_id)}
                                 className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer inline-flex items-center gap-1"
                               >

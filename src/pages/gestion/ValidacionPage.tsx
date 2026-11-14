@@ -1,3 +1,4 @@
+import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -9,7 +10,6 @@ import {
   Check,
   ChevronRight,
   AlertCircle,
-  Download,
   ShieldAlert,
   FolderOpen,
 } from 'lucide-react';
@@ -200,17 +200,6 @@ export function ValidacionPage() {
         ? `Ahora se muestra ${next.filing_number}, la siguiente solicitud de la cola.`
         : 'No quedan solicitudes listas para validación.'}` });
     });
-  };
-
-  const handleDownloadDoc = (fileName: string, hash: string) => {
-    const content = `EXPEDIENTE INSTITUCIONAL DE INVESTIGACIÓN\nDocumento: ${fileName}\nSHA-256: ${hash}`;
-    const blob = new Blob([content], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -474,20 +463,12 @@ export function ValidacionPage() {
                           </div>
 
                           {doc ? (
-                            <div className="text-[11px] text-stone-600 flex items-center gap-3 pt-1">
+                            <div className="text-[11px] text-stone-600 flex flex-wrap items-start gap-3 pt-1">
                               <span className="font-mono text-stone-800 font-bold truncate">
                                 📎 {doc.file_name}
                               </span>
                               <span>{(doc.file_size_bytes / (1024 * 1024)).toFixed(2)} MB</span>
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadDoc(doc.file_name, doc.file_hash_sha256)}
-                                className="text-stone-500 hover:text-[#14281D] cursor-pointer inline-flex items-center gap-1 font-semibold"
-                                title="Descargar"
-                              >
-                                <Download size={12} />
-                                <span>Descargar</span>
-                              </button>
+                              <DocumentFileActions key={`${doc.id}-${doc.file_hash_sha256}-${doc.uploaded_at}`} document={doc} />
                             </div>
                           ) : (
                             <span className="text-[11px] text-rose-600 font-semibold italic block pt-1">

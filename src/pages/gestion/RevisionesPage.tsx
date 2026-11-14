@@ -1,19 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ExpedienteDocuments } from '../../features/documents/ExpedienteDocuments.tsx';
 import {
   CheckSquare,
   Clock,
   AlertCircle,
-  FileText,
-  Eye,
   CheckCircle2,
   Send,
-  MessageSquare,
-  ShieldCheck,
   ChevronDown,
   ChevronUp,
-  AlertTriangle,
-  Download,
 } from 'lucide-react';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useApplicationStore } from '../../features/applications/applicationStore.ts';
@@ -22,7 +16,6 @@ import { useUserStore } from '../../features/users/userStore.ts';
 import { ReviewerConcept, ObservationCategory } from '../../types/database.ts';
 
 export function RevisionesPage() {
-  const navigate = useNavigate();
   const { user } = useSessionStore();
   const {
     requests,
@@ -33,19 +26,22 @@ export function RevisionesPage() {
     addTechnicalObservation,
     submitReviewerConcept,
   } = useApplicationStore();
-  const { types } = useCatalogStore();
+  const { types, requirements } = useCatalogStore();
   const { users } = useUserStore();
 
-  const currentUserId = user?.id || 'usr-003';
+  const currentUserId = user?.id;
+  useEffect(() => {
+    if (currentUserId) void useApplicationStore.getState().loadFromSupabase();
+  }, [currentUserId]);
 
   // Solicitudes asignadas al evaluador actual (o todas en revisión si es secretario)
   const isSecretario = user?.activeRole === 'secretario';
   const myAssignedApps = useMemo(() => {
     return requests.filter((app) => {
-      if (app.current_status !== 'EN_REVISION') return false;
+      if (!currentUserId || !['EN_REVISION', 'UNDER_REVIEW'].includes(app.current_status)) return false;
       if (isSecretario) return true;
       const asg = assignments.find(
-        (a) => a.application_id === app.id && a.reviewer_id === currentUserId && a.is_active
+        (a) => (a.application_id ?? a.request_id) === app.id && a.reviewer_id === currentUserId && a.is_active
       );
       return !!asg;
     });
@@ -66,6 +62,7 @@ export function RevisionesPage() {
   );
 
   const handleAddObservation = async (appId: string) => {
+    if (!user) return;
     if (!obsContent.trim()) {
       setFeedback({ type: 'error', message: 'La observación técnica no puede estar vacía.' });
       return;
@@ -73,7 +70,7 @@ export function RevisionesPage() {
 
     const res = await addTechnicalObservation(
       appId,
-      user?.id || currentUserId,
+      user.id,
       user?.fullName || 'Evaluador Par',
       obsCategory,
       obsContent.trim()
@@ -89,6 +86,7 @@ export function RevisionesPage() {
   };
 
   const handleSubmitConcept = async (appId: string) => {
+    if (!user) return;
     if (!conceptJustification.trim()) {
       setFeedback({
         type: 'error',
@@ -99,7 +97,7 @@ export function RevisionesPage() {
 
     const res = await submitReviewerConcept(
       appId,
-      user?.id || currentUserId,
+      user.id,
       user?.fullName || 'Evaluador Par',
       concept,
       conceptJustification.trim()
@@ -159,7 +157,7 @@ export function RevisionesPage() {
             const deadline = getDeadlineStatus(app.id);
             const appType = types.find((t) => t.id === app.application_type_id);
             const applicant = users.find((u) => u.id === app.applicant_id);
-            const appDocs = documents.filter((d) => d.application_id === app.id);
+            const appDocs = documents.filter((d) => (d.application_id ?? d.request_id) === app.id);
             const appObs = observations.filter((o) => o.application_id === app.id);
 
             return (
@@ -231,27 +229,7 @@ export function RevisionesPage() {
                       </p>
                     </div>
 
-                    {/* Documentos Cargados */}
-                    <div className="space-y-2">
-                      <span className="font-bold text-xs text-[#14281D] uppercase tracking-wider block">
-                        Documentos del Expediente ({appDocs.length})
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {appDocs.map((doc) => (
-                          <div
-                            key={doc.id}
-                            className="p-3 rounded-xl bg-white border border-[#E5E3DC] flex items-center justify-between gap-2"
-                          >
-                            <span className="truncate font-medium text-stone-800">
-                              📄 {doc.file_name}
-                            </span>
-                            <span className="font-mono text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {doc.validation_status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <ExpedienteDocuments documents={appDocs} requirements={requirements} />
 
                     {/* Observaciones registradas */}
                     <div className="space-y-2">
