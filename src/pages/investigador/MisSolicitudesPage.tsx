@@ -1,3 +1,4 @@
+import { NextActionCell } from '../../features/requests/NextActionCell.tsx';
 import { CallsNotice } from '../../features/calls/CallsNotice.tsx';
 import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
@@ -86,7 +87,6 @@ export function MisSolicitudesPage() {
 
   return (
     <div className="space-y-6">
-      <CallsNotice />
       {/* 1. Título y botón "Nueva solicitud" a la derecha */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E3DC] pb-4">
         <div>
@@ -108,6 +108,8 @@ export function MisSolicitudesPage() {
           <span>Nueva Solicitud</span>
         </button>
       </div>
+
+      <CallsNotice />
 
       {/* 2. Barra de Filtros en Vivo: Búsqueda, Estado y Tipo de Trámite */}
       <div className="filter-toolbar bg-white rounded-2xl border border-[#E5E3DC] p-4 shadow-xs flex flex-row md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
@@ -214,12 +216,12 @@ export function MisSolicitudesPage() {
                   <th className="py-3 px-4">Título del Proyecto</th>
                   <th className="py-3 px-4">Estado</th>
                   <th className="py-3 px-4">Última Actualización</th>
-                  <th className="py-3 px-4">Qué Falta (Acción)</th>
+                  <th className="py-3 px-4">Próxima acción</th>
                   <th className="py-3 px-4 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E3DC]">
-                {isInitialLoading && <SkeletonRows labels={['Radicado', 'Tipo de Solicitud', 'Título del Proyecto', 'Estado', 'Última Actualización', 'Qué Falta (Acción)', 'Acción']} label="Cargando sus solicitudes…" />}
+                {isInitialLoading && <SkeletonRows labels={['Radicado', 'Tipo de Solicitud', 'Título del Proyecto', 'Estado', 'Última Actualización', 'Próxima acción', 'Acción']} label="Cargando sus solicitudes…" />}
                 {!isInitialLoading && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
                   const formattedDate = new Date(app.updated_at || app.created_at).toLocaleDateString(
@@ -264,17 +266,7 @@ export function MisSolicitudesPage() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div
-                          className={`text-[11px] font-medium px-2 py-0.5 rounded ${
-                            app.current_status === 'PENDIENTE_DOCUMENTOS'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                              : app.current_status === 'RADICADA'
-                              ? 'bg-blue-50 text-blue-900 border border-blue-100'
-                              : 'bg-stone-100 text-stone-700'
-                          }`}
-                        >
-                          <NextActionCard request={app} compact />
-                        </div>
+                        <NextActionCell request={app} />
                       </td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
