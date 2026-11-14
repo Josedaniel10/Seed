@@ -649,11 +649,20 @@ export function DetalleSolicitudPage() {
                                 </div>
                               )}
                               {typeof item.details.session_number === 'string' && <p>Sesión {item.details.session_number}</p>}
-                              {typeof item.details.justification === 'string' && <p>Fundamento {item.details.justification}</p>}
+                              {typeof item.details.file_name === 'string' && <p>Archivo: {item.details.file_name}</p>}
+                              {typeof item.details.observations === 'string' && item.details.observations.trim() && (
+                                <div>
+                                  <span className="font-semibold text-stone-800">
+                                    {item.action === 'DOCUMENTO_RECHAZADO' ? 'Justificación del rechazo:' : 'Observaciones:'}
+                                  </span>
+                                  <p className="whitespace-pre-wrap break-words">{item.details.observations}</p>
+                                </div>
+                              )}
+                              {typeof item.details.justification === 'string' && <p className="whitespace-pre-wrap break-words">Fundamento: {item.details.justification}</p>}
                               {Boolean(item.details.reason) && (
                                 <div>
                                   <span className="text-rose-600 font-semibold">Motivo:</span>{' '}
-                                  <span>{formatUserMessage(String(item.details.reason))}</span>
+                                  <span className="whitespace-pre-wrap break-words">{String(item.details.reason)}</span>
                                 </div>
                               )}
                               {Boolean(item.details.notes) && (
