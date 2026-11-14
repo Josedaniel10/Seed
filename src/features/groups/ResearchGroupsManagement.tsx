@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
@@ -12,14 +13,12 @@ import {
   Filter,
   Plus,
   UserCheck,
-  CheckCircle2,
   RefreshCw,
   FolderGit2,
   GraduationCap,
   Sparkles,
   ToggleLeft,
   ToggleRight,
-  ShieldAlert,
 } from 'lucide-react';
 
 export const ResearchGroupsManagement: React.FC = () => {
@@ -55,7 +54,7 @@ export const ResearchGroupsManagement: React.FC = () => {
     void loadUsers();
   }, [loadFromSupabase, loadUsers]);
 
-  const [notification, setNotification] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -66,9 +65,8 @@ export const ResearchGroupsManagement: React.FC = () => {
   const [newLeaderId, setNewLeaderId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const showFeedback = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
+  const showFeedback = (message: string, tone: 'success' | 'error' = 'success') => {
+    setNotification({ message, tone });
   };
 
   const handleLeaderChange = async (groupId: string, newLeaderId: string, groupName: string) => {
@@ -79,7 +77,7 @@ export const ResearchGroupsManagement: React.FC = () => {
         `Líder de "${groupName}" asignado verificablemente a ${leaderUser?.full_name || 'nuevo líder'}.`
       );
     } else {
-      showFeedback(result.error || 'No se pudo asignar el líder.');
+      showFeedback(result.error || 'No se pudo asignar el líder.', 'error');
     }
   };
 
@@ -94,7 +92,7 @@ export const ResearchGroupsManagement: React.FC = () => {
     if (res.success) {
       showFeedback(`Lista actualizada. ${res.count || 0} grupos de investigación.`);
     } else {
-      showFeedback(`Aviso de sincronización: ${res.error}`);
+      showFeedback(`Aviso de sincronización: ${res.error}`, 'error');
     }
     setIsSyncing(false);
   };
@@ -183,17 +181,9 @@ export const ResearchGroupsManagement: React.FC = () => {
       </div>
 
       {/* Immediate Notification Toast */}
-      {notification && (
-        <div className="bg-[#A3E635]/25 border border-[#84CC16] rounded-xl p-3 text-xs text-[#14281D] font-medium flex items-center gap-2 shadow-2xs animate-fade-in">
-          <CheckCircle2 size={16} className="text-[#14281D] shrink-0" />
-          <span>{notification}</span>
-        </div>
-      )}
-      {usersError && (
-        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-          No fue posible cargar los usuarios: {usersError}
-        </div>
-      )}
+      <FloatingAlert message={notification?.message} tone={notification?.tone} onDismiss={() => setNotification(null)} />
+
+      <FloatingAlert message={usersError ? `No fue posible cargar los usuarios: ${usersError}` : null} />
 
       {/* Filter and Search Bar */}
       <div className="filter-toolbar flex flex-row md:items-center justify-between gap-3 text-xs">
@@ -356,12 +346,7 @@ export const ResearchGroupsManagement: React.FC = () => {
               </button>
             </div>
 
-            {formError && (
-              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-1.5">
-                <ShieldAlert size={14} className="shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
+            <FloatingAlert message={formError} onDismiss={() => setFormError(null)} />
 
             <form onSubmit={handleCreateGroup} className="space-y-3 text-xs">
               <div>

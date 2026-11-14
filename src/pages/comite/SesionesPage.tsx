@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SessionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import { useUserStore } from '../../features/users/userStore.ts';
@@ -111,7 +112,7 @@ export function SesionesPage() {
       </div>
 
       {isLoading && sessions.length === 0 && <SessionsSkeleton />}
-      {error && <p role="alert" className="text-rose-800">{error}</p>}
+      <FloatingAlert message={error} />
       {!isLoading && !error && sessions.length === 0 && <p>No hay sesiones programadas.</p>}
       {/* Lista de Sesiones */}
       <div className="space-y-4">

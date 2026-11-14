@@ -1,14 +1,13 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { AssignmentCardsSkeleton } from '../../features/loading/AssignmentCardsSkeleton.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UserCheck,
-  CheckCircle2,
   AlertTriangle,
   FileText,
   Clock,
-  ShieldAlert,
   Search,
   Building2,
   Calendar,
@@ -115,7 +114,7 @@ export function AsignacionesPage() {
         });
         setSelectedAppId('');
         setSelectedReviewerId('');
-        setTimeout(() => setFeedback(null), 4000);
+
       } else {
         throw new Error(res.error || 'Error al asignar evaluador.');
       }
@@ -134,22 +133,7 @@ export function AsignacionesPage() {
         </p>
       </div>
 
-      {feedback && (
-        <div
-          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
-            feedback.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900'
-          }`}
-        >
-          {feedback.type === 'success' ? (
-            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
-          ) : (
-            <ShieldAlert size={16} className="text-rose-600 shrink-0" />
-          )}
-          <span className="font-medium">{feedback.message}</span>
-        </div>
-      )}
+      <FloatingAlert message={feedback?.message} tone={feedback?.type} onDismiss={() => setFeedback(null)} />
 
       {/* Lista de Solicitudes En Revisión */}
       <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs space-y-4">

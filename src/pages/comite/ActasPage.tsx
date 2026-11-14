@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
@@ -65,7 +66,7 @@ export function ActasPage() {
       <span className="text-stone-500">Mostrando {filteredMinutes.length} actas institucionales</span>
     </div>
 
-    {(error || actionError) && <p role="alert" className="text-rose-800">{error || actionError}</p>}
+    <FloatingAlert message={actionError || error} onDismiss={() => setActionError(null)} />
     {!isLoading && !error && !filteredMinutes.length && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
     <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-x-auto">
       <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs">

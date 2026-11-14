@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useState } from 'react';
 import { useMinutesStore } from './minutesStore.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
@@ -33,7 +34,7 @@ export function SessionMinutesPanel({ sessionId, isCompleted, canManage }: Sessi
   return (
     <fieldset disabled={isSaving} className="bg-white rounded-2xl border border-[#E5E3DC] p-6 space-y-4 text-sm">
       <h2 className="font-bold">{minute?.minute_number ?? 'Acta de la sesión'}</h2>
-      {error && <p role="alert" className="text-rose-800">{error}</p>}
+      <FloatingAlert message={error} onDismiss={() => setError(null)} />
       {!minute && <p>Finalice la sesión con una decisión o constancia en cada punto para generar el borrador.</p>}
       {!minute && canManage && (
         <button disabled={!isCompleted || isSaving} onClick={() => void handleGenerate()}

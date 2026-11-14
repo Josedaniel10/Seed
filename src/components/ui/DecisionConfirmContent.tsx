@@ -1,3 +1,4 @@
+import { FloatingAlert } from './FloatingAlert.tsx';
 import type { ReactElement, ReactNode } from 'react';
 import { AlertTriangle, LoaderCircle } from 'lucide-react';
 import type { PendingDecision } from './decisionConfirmation.ts';
@@ -18,7 +19,7 @@ export function DecisionConfirmContent({ decision, onCancel, onConfirm, children
     <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 leading-relaxed text-amber-950">
       <AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />{prompt.consequence}
     </p>
-    {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-rose-800">{error}</p>}
+    <FloatingAlert message={error} />
     {isPending && <p role="status" className="inline-flex items-center gap-2 text-stone-600"><LoaderCircle size={15} className="animate-spin" />Guardando. Espere la confirmación…</p>}
     <div className="flex flex-wrap justify-end gap-2 border-t border-stone-100 pt-4">
       <button type="button" autoFocus disabled={isPending} onClick={onCancel}

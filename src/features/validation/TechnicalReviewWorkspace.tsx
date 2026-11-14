@@ -1,6 +1,7 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import React, { useRef, useState } from 'react';
 import type { Dispatch, SetStateAction, ReactElement } from 'react';
-import { AlertCircle, CheckCircle2, Send } from 'lucide-react';
+import { CheckCircle2, Send } from 'lucide-react';
 import type { Request, RequestDocument, Requirement, Observation, ReviewerConcept } from '../../types/database.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useApplicationStore } from '../applications/applicationStore.ts';
@@ -61,7 +62,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
         draftController.update((current) => current.obsContent === obsContent && current.obsCategory === obsCategory
           ? { ...current, obsContent: '' } : current);
         draftController.flush();
-        setTimeout(() => setFeedback(null), 3000);
+
       } else {
         setFeedback({ type: 'error', message: res.error || 'Error al guardar observación.' });
       }
@@ -118,22 +119,8 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
     <section aria-label={`Revisión técnica de ${app.filing_number}`} className="p-6 md:p-8 border-t border-[#E5E3DC] bg-[#FAF9F6] space-y-6 text-xs">
       {decisionDialog}
       <DraftNotice draft={savedDraft} controller={draftController} label={app.filing_number} disabled={isSendingObservation} />
-      {feedback && (
-        <div
-          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
-            feedback.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900'
-          }`}
-        >
-          {feedback.type === 'success' ? (
-            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
-          ) : (
-            <AlertCircle size={16} className="text-rose-600 shrink-0" />
-          )}
-          <span className="font-medium">{feedback.message}</span>
-        </div>
-      )}
+      <FloatingAlert message={feedback?.message} tone={feedback?.type} onDismiss={() => setFeedback(null)} />
+
       {/* Resumen del Proyecto */}
       <div className="space-y-1.5">
         <span className="font-bold text-xs text-[#14281D] uppercase tracking-wider block">

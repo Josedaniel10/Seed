@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useEffect, useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -100,7 +101,7 @@ function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: Com
     <form onSubmit={handleSave} className="space-y-5 text-sm">
       {decisionDialog}
       <p role="status" className="text-stone-600">{minute.is_approved ? 'Aprobada · Contenido bloqueado para edición' : legacy ? 'Borrador pendiente de revisión' : 'Borrador guardado · En revisión'}</p>
-      {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-rose-800">{error}</p>}
+      <FloatingAlert message={error} onDismiss={() => setError(null)} />
       <fieldset disabled={!editable || busy || isSaving} className="space-y-6 min-w-0">
         <MinuteSnapshot content={content} />
         <label className="block">Hora de cierre (opcional)

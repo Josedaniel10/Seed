@@ -1,10 +1,10 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import {
   FileText,
   Plus,
-  Check,
   AlertCircle,
   Clock,
   RefreshCw,
@@ -247,7 +247,7 @@ export function CatalogManagement() {
         message: result.error || 'No se pudo actualizar el catálogo.',
       });
     }
-    setTimeout(() => setSyncFeedback(null), 6000);
+
   };
 
   return (
@@ -288,18 +288,7 @@ export function CatalogManagement() {
       </div>
 
       {/* Sync Status Banner */}
-      {syncFeedback && (
-        <div
-          className={`p-3 rounded-xl border text-xs flex items-center gap-2 transition-all ${
-            syncFeedback.success
-              ? 'bg-[#A3E635]/20 border-[#84CC16] text-[#14281D]'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
-          }`}
-        >
-          {syncFeedback.success ? <Check size={15} /> : <AlertCircle size={15} />}
-          <span>{syncFeedback.message}</span>
-        </div>
-      )}
+      <FloatingAlert message={syncFeedback?.message} tone={syncFeedback?.success ? 'success' : 'error'} onDismiss={() => setSyncFeedback(null)} />
 
       {/* Rules Notice Badge */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">

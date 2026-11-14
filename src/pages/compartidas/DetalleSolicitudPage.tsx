@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { DetailSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
 import { uploadDocumentFile } from '../../features/documents/documentFiles.ts';
@@ -155,7 +156,7 @@ export function DetalleSolicitudPage() {
       if (res.success) {
         setSubsanarSuccess(`Documento "${file.name}" cargado y corregido exitosamente.`);
         setSubsanandoReqId(null);
-        setTimeout(() => setSubsanarSuccess(null), 4000);
+
       } else {
         setSubsanarError(res.error || 'Error al subsanar documento.');
       }
@@ -244,12 +245,7 @@ export function DetalleSolicitudPage() {
         </div>
       </div>
 
-      {subsanarSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
-          <CheckCircle2 size={16} className="text-emerald-700" />
-          <span>{subsanarSuccess}</span>
-        </div>
-      )}
+      <FloatingAlert message={subsanarSuccess} tone="success" onDismiss={() => setSubsanarSuccess(null)} />
 
       {/* 2. Distribución Principal (2/3) y Panel Lateral (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -366,12 +362,7 @@ export function DetalleSolicitudPage() {
                 </span>
               </div>
 
-              {subsanarError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center gap-2">
-                  <AlertCircle size={14} className="text-rose-600 shrink-0" />
-                  <span>{subsanarError}</span>
-                </div>
-              )}
+              <FloatingAlert message={subsanarError} onDismiss={() => setSubsanarError(null)} />
 
               {user?.id === application.applicant_id && ['PENDIENTE_DOCUMENTOS', 'PENDING_DOCUMENTS'].includes(application.current_status)
                 && typeRequirements.filter((requirement) => requirement.is_subsanable && !appDocuments.some((document) => document.requirement_id === requirement.id))

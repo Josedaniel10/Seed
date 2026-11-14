@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { NotificationsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { useState } from 'react';
@@ -74,11 +75,7 @@ export function NotificacionesPage() {
         </button>
       </div>
       {isPending && <NotificationsSkeleton />}
-      {(error || markRead.error || navigationError) && (
-        <p role="alert" className="text-sm text-rose-800">
-          {navigationError ?? markRead.error?.message ?? error?.message}
-        </p>
-      )}
+      <FloatingAlert message={navigationError ?? markRead.error?.message ?? error?.message} />
       {!isPending && !error && (
         <div className="bg-white rounded-2xl border border-[#E5E3DC] divide-y divide-[#E5E3DC] overflow-hidden shadow-xs">
           {filtered.length === 0 ? (

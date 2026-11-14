@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { BoardCardsSkeleton } from '../../features/loading/BoardCardsSkeleton.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
@@ -19,11 +20,8 @@ import {
   User,
   ArrowRight,
   Eye,
-  ShieldAlert,
-  CheckCircle2,
   AlertTriangle,
   MoveRight,
-  X,
 } from 'lucide-react';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useApplicationStore } from '../../features/applications/applicationStore.ts';
@@ -165,7 +163,7 @@ export function PanelSeguimientoPage() {
         type: 'error',
         text: 'Modo solo lectura: Su rol actual no tiene autorización para realizar transiciones por arrastre.',
       });
-      setTimeout(() => setToastMessage(null), 3500);
+
       return;
     }
     setDraggingAppId(appId);
@@ -195,7 +193,7 @@ export function PanelSeguimientoPage() {
           type: 'error',
           text: 'Complete la validación documental antes de pasar la solicitud a revisión.',
         });
-        setTimeout(() => setToastMessage(null), 3500);
+
         return;
       }
       targetStatus = 'EN_REVISION';
@@ -214,7 +212,7 @@ export function PanelSeguimientoPage() {
           type: 'error',
           text: 'Solo las solicitudes en "En revisión" con concepto técnico favorable pueden pasar a "Lista para comité".',
         });
-        setTimeout(() => setToastMessage(null), 3500);
+
         return;
       }
       targetStatus = 'LISTA_COMITE';
@@ -227,7 +225,7 @@ export function PanelSeguimientoPage() {
           type: 'error',
           text: 'Solo las solicitudes que estén en "Lista para comité" y sean deliberadas pueden recibir decisión formal.',
         });
-        setTimeout(() => setToastMessage(null), 3500);
+
         return;
       }
       targetStatus = 'APROBADA';
@@ -240,7 +238,7 @@ export function PanelSeguimientoPage() {
         type: 'error',
         text: 'Esta solicitud no puede pasar al estado seleccionado.',
       });
-      setTimeout(() => setToastMessage(null), 3500);
+
       return;
     }
 
@@ -296,7 +294,7 @@ export function PanelSeguimientoPage() {
       });
       setActionModal(null);
       setModalReason('');
-      setTimeout(() => setToastMessage(null), 4000);
+
     } else {
       setTransitionError(res.error || 'Error al ejecutar la transición.');
     }
@@ -350,31 +348,7 @@ export function PanelSeguimientoPage() {
         </div>
       </div>
 
-      {toastMessage && (
-        <div
-          className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
-            toastMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {toastMessage.type === 'success' ? (
-              <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
-            ) : (
-              <ShieldAlert size={16} className="text-rose-600 shrink-0" />
-            )}
-            <span className="font-medium">{toastMessage.text}</span>
-          </div>
-          <button aria-label="Cerrar aviso"
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="text-stone-400 hover:text-stone-700 p-1"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <FloatingAlert message={toastMessage?.text} tone={toastMessage?.type} onDismiss={() => setToastMessage(null)} />
 
       {/* 2. Franja Superior de Métricas Unificada (RF-35) */}
       <MetricsStrip

@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Download, Eye, LoaderCircle } from 'lucide-react';
@@ -48,7 +49,7 @@ export function DocumentFileActions({ document }: { document: RequestDocument })
       {busy && <span role="status" className="inline-flex items-center gap-1 text-stone-600"><LoaderCircle size={14} className="animate-spin" />Obteniendo archivo…</span>}
     </div>
     {!isPdf && <p className="text-stone-500">Documento Word: descargue el original para consultarlo.</p>}
-    {error && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-rose-800">{error}</p>}
+    <FloatingAlert message={error} onDismiss={() => setError(null)} />
     <Modal isOpen={Boolean(preview)} onClose={() => setPreview(null)} title={document.file_name}
       subtitle="Vista del archivo original · Solo lectura" maxWidth="2xl">
       {preview && <div className="space-y-3">

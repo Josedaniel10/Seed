@@ -1,8 +1,9 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { ROLE_HOME_PATHS } from '../../lib/permisos.ts';
-import { Mail, Lock, LogIn, AlertCircle, RefreshCw, Send, CheckCircle2, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, LogIn, RefreshCw, Send, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -76,14 +77,7 @@ export function LoginPage() {
         </p>
       </div>
 
-      {error && (
-        <div role="alert" className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
-          <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-          <div className="space-y-2 flex-1">
-            <p>{error}</p>
-          </div>
-        </div>
-      )}
+      <FloatingAlert message={error} onDismiss={() => setError(null)} />
 
       {/* Si el correo no está confirmado, ofrece ingresar el código OTP o reenviar correo */}
       {showOtpInput && unconfirmedEmail && (
@@ -139,19 +133,9 @@ export function LoginPage() {
         </div>
       )}
 
-      {resendStatus?.message && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
-          <span>{resendStatus.message}</span>
-        </div>
-      )}
+      <FloatingAlert message={resendStatus?.message} tone="success" onDismiss={() => setResendStatus(null)} />
 
-      {resendStatus?.error && (
-        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
-          <AlertCircle size={16} className="shrink-0 text-amber-600" />
-          <span>{resendStatus.error}</span>
-        </div>
-      )}
+      <FloatingAlert message={resendStatus?.error} onDismiss={() => setResendStatus(null)} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

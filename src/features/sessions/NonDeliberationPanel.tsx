@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useState } from 'react';
 import { useSessionStore } from '../../stores/session.store.ts';
@@ -61,7 +62,7 @@ export function NonDeliberationPanel({ sessionId, applicationId, record, canReco
         <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)}
           className="w-full rounded-lg border border-stone-300 p-3" />
       </label>
-      {error && <p role="alert" className="text-rose-800">{error}</p>}
+      <FloatingAlert message={error} onDismiss={() => setError(null)} />
       <button type="button" disabled={isSaving || !reason.trim()} onClick={() => void handleRecord()}
         className="rounded-xl bg-[#14281D] px-4 py-2 text-white font-bold disabled:opacity-40">
         Registrar como no deliberada

@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { DetailSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { NonDeliberationPanel } from '../../features/sessions/NonDeliberationPanel.tsx';
@@ -151,7 +152,6 @@ export function DetalleSesionPage() {
     } else {
       setActionSuccess('Expediente incorporado exitosamente en el orden del día.');
       setSelectedAppId('');
-      setTimeout(() => setActionSuccess(null), 3000);
     }
   };
 
@@ -187,7 +187,6 @@ export function DetalleSesionPage() {
         throw new Error(res.error || 'Error al cerrar la agenda.');
       } else {
         setActionSuccess('Agenda cerrada. La sesión está lista para registrar decisiones.');
-        setTimeout(() => setActionSuccess(null), 3500);
       }
     });
   };
@@ -232,7 +231,6 @@ export function DetalleSesionPage() {
         setActionSuccess(['APLAZADA', 'POSTPONED'].includes(itemData.decision)
           ? 'Aplazamiento registrado. La solicitud permanece lista para comité.'
           : 'Decisión registrada. El estado de la solicitud se actualizó.');
-        setTimeout(() => setActionSuccess(null), 3500);
       }
     });
   };
@@ -255,7 +253,6 @@ export function DetalleSesionPage() {
         throw new Error(res.error || 'Error al finalizar sesión.');
       } else {
         setActionSuccess('Sesión finalizada. Puede generar el acta con las decisiones y constancias registradas.');
-        setTimeout(() => setActionSuccess(null), 3500);
       }
     });
   };
@@ -346,24 +343,8 @@ export function DetalleSesionPage() {
       )}
 
       {/* Alertas de Acción */}
-      {actionError && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={15} className="shrink-0 text-rose-600" />
-            <span>{actionError}</span>
-          </div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer text-stone-500 hover:text-stone-800">
-            <XCircle size={14} />
-          </button>
-        </div>
-      )}
-
-      {actionSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-          <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
-          <span>{actionSuccess}</span>
-        </div>
-      )}
+      <FloatingAlert message={actionError} onDismiss={() => setActionError(null)} />
+      <FloatingAlert message={actionSuccess} tone="success" onDismiss={() => setActionSuccess(null)} />
 
       {/* Pestañas de la Sesión */}
       <div className="flex border-b border-[#E5E3DC] gap-6 text-xs font-bold overflow-x-auto">

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { AlertProvider } from './components/ui/AlertProvider.tsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsSync } from './features/notifications/useNotifications.ts';
 import { BrowserRouter } from 'react-router-dom';
@@ -37,7 +38,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <NotificationsSync />
       <BrowserRouter>
-        <AppRoutes />
+        <AlertProvider>
+          <AppRoutes />
+        </AlertProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

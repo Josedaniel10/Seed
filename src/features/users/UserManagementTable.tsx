@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
@@ -11,7 +12,6 @@ import {
   Search,
   Filter,
   Shield,
-  CheckCircle2,
   UserPlus,
   Building,
   GraduationCap,
@@ -47,7 +47,7 @@ export const UserManagementTable: React.FC = () => {
     loadFromSupabase,
   } = useUserStore();
 
-  const [notification, setNotification] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -62,9 +62,8 @@ export const UserManagementTable: React.FC = () => {
     loadFromSupabase();
   }, [loadFromSupabase]);
 
-  const showFeedback = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
+  const showFeedback = (message: string, tone: 'success' | 'error' = 'success') => {
+    setNotification({ message, tone });
   };
 
   const handleRoleChange = (userId: string, newRole: UserRole, userName: string) => {
@@ -83,10 +82,10 @@ export const UserManagementTable: React.FC = () => {
     setIsSyncing(true);
     try {
       const result = await loadFromSupabase();
-      showFeedback(result.success ? `Lista actualizada. ${result.count ?? 0} usuarios.` : result.error ?? 'No se pudieron cargar los perfiles.');
+      showFeedback(result.success ? `Lista actualizada. ${result.count ?? 0} usuarios.` : result.error ?? 'No se pudieron cargar los perfiles.', result.success ? 'success' : 'error');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al sincronizar';
-      showFeedback(`Fallo de sincronización: ${msg}`);
+      showFeedback(`Fallo de sincronización: ${msg}`, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -105,7 +104,7 @@ export const UserManagementTable: React.FC = () => {
         });
         if (error || !data?.id) {
           const body = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null;
-          showFeedback(typeof body?.error === 'string' ? body.error : error?.message ?? 'No se confirmó la creación.');
+          showFeedback(typeof body?.error === 'string' ? body.error : error?.message ?? 'No se confirmó la creación.', 'error');
           return;
         }
         const refreshed = await loadFromSupabase();
@@ -184,12 +183,7 @@ export const UserManagementTable: React.FC = () => {
       </div>
 
       {/* Immediate Notification Toast */}
-      {notification && (
-        <div className="bg-[#A3E635]/25 border border-[#84CC16] rounded-xl p-3 text-xs text-[#14281D] font-medium flex items-center gap-2 shadow-2xs animate-fade-in">
-          <CheckCircle2 size={16} className="text-[#14281D] shrink-0" />
-          <span>{notification}</span>
-        </div>
-      )}
+      <FloatingAlert message={notification?.message} tone={notification?.tone} onDismiss={() => setNotification(null)} />
 
       {/* Filter and Search Bar */}
       <div className="filter-toolbar flex flex-row md:items-center justify-between gap-3 text-xs">

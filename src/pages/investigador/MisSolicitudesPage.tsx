@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { RequestCardsSkeleton } from '../../features/loading/RequestCardsSkeleton.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
@@ -161,11 +162,7 @@ export function MisSolicitudesPage() {
 
       {/* 3. Tabla de Solicitudes con radicado, tipo, título, estado, actualización y Qué Falta */}
       <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-hidden shadow-xs">
-        {loadError && (
-          <div role="alert" className="m-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-            No fue posible actualizar las solicitudes: {loadError}
-          </div>
-        )}
+        <FloatingAlert message={loadError ? `No fue posible actualizar las solicitudes: ${loadError}` : null} onDismiss={() => setLoadError(null)} />
         {!isInitialLoading && filteredApplications.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <FolderOpen size={40} className="mx-auto text-stone-300" />

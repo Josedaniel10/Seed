@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
@@ -6,7 +7,6 @@ import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CheckCircle2,
   XCircle,
   Search,
   Check,
@@ -258,24 +258,7 @@ export function ValidacionPage() {
         </p>
       </div>
 
-      {feedback && (
-        <div
-          role={feedback.type === 'error' ? 'alert' : 'status'}
-          aria-live="polite"
-          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
-            feedback.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900'
-          }`}
-        >
-          {feedback.type === 'success' ? (
-            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
-          ) : (
-            <AlertCircle size={16} className="text-rose-600 shrink-0" />
-          )}
-          <span className="font-medium">{feedback.message}</span>
-        </div>
-      )}
+      <FloatingAlert message={feedback?.message} tone={feedback?.type} onDismiss={() => setFeedback(null)} />
 
       {/* Modal / Diálogo de Rechazo Documental con Justificación (RN-05, RF-13) */}
       <ResponsiveOverlay isOpen={Boolean(rejectingDocId)} onClose={() => setRejectingDocId(null)} label="Rechazar documento">

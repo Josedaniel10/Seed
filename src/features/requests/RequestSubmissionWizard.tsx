@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { TypeOptionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import React, { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -183,6 +184,7 @@ function RequestSubmissionForm() {
           errors[field] = issue.message;
         }
         setFormErrors(errors);
+        setGeneralError(Object.values(errors).join(' '));
         return;
       }
 
@@ -396,12 +398,7 @@ function RequestSubmissionForm() {
         </div>
       </div>
 
-      {generalError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
-          <AlertCircle size={16} className="text-rose-600 shrink-0" />
-          <span>{generalError}</span>
-        </div>
-      )}
+      <FloatingAlert message={generalError} onDismiss={() => setGeneralError(null)} />
 
       <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs">
         {currentStep === 1 && (

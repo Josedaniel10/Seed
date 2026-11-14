@@ -1,3 +1,4 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { ReviewCardsSkeleton } from '../../features/loading/ReviewCardsSkeleton.tsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { TechnicalReviewWorkspace } from '../../features/validation/TechnicalReviewWorkspace.tsx';
@@ -70,7 +71,7 @@ export function RevisionesPage() {
       </div>
 
 
-      {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">{notice}</p>}
+      <FloatingAlert message={notice} tone="success" onDismiss={() => setNotice(null)} />
       {isLoading && !isInitialized ? (
         <ReviewCardsSkeleton />
       ) : myAssignedApps.length === 0 ? (

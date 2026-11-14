@@ -1,9 +1,10 @@
+import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { RegistrationSteps } from '../../features/auth/RegistrationSteps.tsx';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { ROLE_HOME_PATHS } from '../../lib/permisos.ts';
-import { Mail, CheckCircle2, AlertCircle, RefreshCw, Send, KeyRound, Sparkles } from 'lucide-react';
+import { Mail, CheckCircle2, RefreshCw, Send, KeyRound, Sparkles } from 'lucide-react';
 
 export function RegistroPage() {
   const navigate = useNavigate();
@@ -122,12 +123,7 @@ export function RegistroPage() {
         </p>
       </div>
 
-      {error && (
-        <div role="alert" className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
-          <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-          <span>{error}</span>
-        </div>
-      )}
+      <FloatingAlert message={error} onDismiss={() => setError(null)} />
 
       {requiresConfirmation ? (
         <div className="p-5 rounded-2xl bg-white border border-[#E5E3DC] space-y-5 shadow-xs">
@@ -186,19 +182,9 @@ export function RegistroPage() {
               O simplemente haga clic en el botón <strong>"Confirm your mail"</strong> del correo recibido; esta pantalla se actualizará automáticamente y lo llevará a su panel.
             </p>
 
-            {resendStatus?.message && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
-                <span>{resendStatus.message}</span>
-              </div>
-            )}
+            <FloatingAlert message={resendStatus?.message} tone="success" onDismiss={() => setResendStatus(null)} />
 
-            {resendStatus?.error && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
-                <AlertCircle size={15} className="shrink-0 text-amber-600" />
-                <span>{resendStatus.error}</span>
-              </div>
-            )}
+            <FloatingAlert message={resendStatus?.error} onDismiss={() => setResendStatus(null)} />
 
             <div className="flex items-center justify-between text-xs pt-1">
               <button
