@@ -82,9 +82,11 @@ export function CallsPage(): ReactElement {
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo asignar.'); }
   };
   const detail = calls.data?.find((c) => c.id === selected);
-  return <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-6">
-    <header><h1 className="text-2xl font-bold text-[#14281D]">Convocatorias de investigación</h1>
-      <p className="text-stone-600 mt-2">Consulta oportunidades de financiamiento y sus requisitos. Postularse está sujeto a evaluación y no garantiza recursos.</p></header>
+  return <div className="space-y-6">
+    <header className="border-b border-[#E5E3DC] pb-4">
+      <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">Convocatorias de investigación</h1>
+      <p className="text-xs text-stone-500 mt-0.5">Consulta oportunidades de financiamiento y sus requisitos. Postularse está sujeto a evaluación y no garantiza recursos.</p>
+    </header>
     {error && <p role="alert" className="text-red-700">{error}</p>}
     {calls.isPending && <p role="status">Cargando convocatorias…</p>}
     {calls.error && <p role="alert">No se pudieron consultar las convocatorias: {calls.error.message} <button onClick={() => void calls.refetch()}>Reintentar</button></p>}
