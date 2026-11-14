@@ -15,6 +15,7 @@ export function ResponsiveOverlay({ isOpen, onClose, label, children }: Responsi
   const dialogRef = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<number | null>(null);
+  const pointerStartedInside = useRef(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const contentRef = useRef(children);
@@ -42,7 +43,16 @@ export function ResponsiveOverlay({ isOpen, onClose, label, children }: Responsi
   return createPortal(
     <dialog ref={dialogRef} aria-label={label} className="responsive-overlay" data-open={isOpen}
       onCancel={(event) => { event.preventDefault(); closeRef.current(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) closeRef.current(); }}>
+      onPointerDownCapture={(event) => {
+        pointerStartedInside.current = event.target !== event.currentTarget && event.target !== panelRef.current;
+      }}
+      onPointerCancel={() => { pointerStartedInside.current = false; }}
+      onClick={(event) => {
+        const target = event.target;
+        const startedInside = pointerStartedInside.current;
+        pointerStartedInside.current = false;
+        if (!startedInside && (target === event.currentTarget || target === panelRef.current)) closeRef.current();
+      }}>
       <div ref={panelRef} className="responsive-overlay-panel">
         <div className="sheet-grip" onPointerDown={(event) => {
           dragStart.current = event.clientY;
