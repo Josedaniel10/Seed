@@ -1,3 +1,4 @@
+import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { RequestCardsSkeleton } from '../../features/loading/RequestCardsSkeleton.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
@@ -25,7 +26,7 @@ import { getSupabaseClient } from '../../lib/supabase.ts';
 export function MisSolicitudesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
-  const { requests, computeQueFalta, loadFromSupabase, isLoading, isInitialized } = useApplicationStore();
+  const { requests, loadFromSupabase, isLoading, isInitialized } = useApplicationStore();
   const { types } = useCatalogStore();
   const isInitialLoading = isLoading && !isInitialized;
 
@@ -192,7 +193,7 @@ export function MisSolicitudesPage() {
                 <h2 className="text-base font-bold break-words line-clamp-2">{app.title}</h2>
                 <div className="rounded-xl bg-[#F7F6F2] px-3 py-2.5">
                   <span className="block text-[10px] font-semibold text-stone-500 mb-1">Próxima acción</span>
-                  <p className="text-sm text-[#14281D]">{computeQueFalta(app)}</p>
+                  <div className="text-sm text-[#14281D]"><NextActionCard request={app} compact /></div>
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-1 text-xs">
                   <span className="font-mono text-stone-500">{app.filing_number}</span>
@@ -219,7 +220,6 @@ export function MisSolicitudesPage() {
                 {isInitialLoading && <SkeletonRows labels={['Radicado', 'Tipo de Solicitud', 'Título del Proyecto', 'Estado', 'Última Actualización', 'Qué Falta (Acción)', 'Acción']} label="Cargando sus solicitudes…" />}
                 {!isInitialLoading && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
-                  const queFalta = computeQueFalta(app);
                   const formattedDate = new Date(app.updated_at || app.created_at).toLocaleDateString(
                     'es-CO',
                     {
@@ -262,7 +262,7 @@ export function MisSolicitudesPage() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <span
+                        <div
                           className={`text-[11px] font-medium px-2 py-0.5 rounded ${
                             app.current_status === 'PENDIENTE_DOCUMENTOS'
                               ? 'bg-amber-100 text-amber-900 border border-amber-200'
@@ -271,8 +271,8 @@ export function MisSolicitudesPage() {
                               : 'bg-stone-100 text-stone-700'
                           }`}
                         >
-                          {queFalta}
-                        </span>
+                          <NextActionCard request={app} compact />
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">

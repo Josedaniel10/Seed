@@ -1,3 +1,5 @@
+import { ObservationThread } from '../../features/validation/ObservationThread.tsx';
+import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { DetailSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
@@ -244,6 +246,8 @@ export function DetalleSolicitudPage() {
           </div>
         </div>
       </div>
+
+      <NextActionCard request={application} />
 
       <FloatingAlert message={subsanarSuccess} tone="success" onDismiss={() => setSubsanarSuccess(null)} />
 
@@ -527,21 +531,7 @@ export function DetalleSolicitudPage() {
               </div>
 
               {appObservations.length === 0 && <p className="text-stone-500">No hay observaciones registradas.</p>}
-              {appObservations.map((observation) => (
-                <article key={observation.id} className="p-4 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-bold text-[#14281D]">
-                      {users.find((profile) => profile.id === observation.author_id)?.full_name ?? 'Evaluador'}
-                    </span>
-                    <time dateTime={observation.created_at} className="text-stone-500">
-                      {new Date(observation.created_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}
-                    </time>
-                  </div>
-                  <p className="text-stone-700 whitespace-pre-wrap">{observation.content}</p>
-                  <p className="text-stone-500">{observation.is_resolved ? 'Atendida' : 'Pendiente de respuesta'}</p>
-                  {observation.applicant_response && <p>Respuesta: {observation.applicant_response}</p>}
-                </article>
-              ))}
+              {appObservations.map(observation => <ObservationThread key={observation.id} observation={observation} applicantId={application.applicant_id} />)}
             </div>
           )}
 

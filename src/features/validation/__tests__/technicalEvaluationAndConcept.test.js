@@ -38,7 +38,7 @@ if (!obsRes.success || !obsRes.observation) {
 const obsId = obsRes.observation.id;
 console.log(`1. Observación técnica clasificada registrada: [${obsRes.observation.category}] "${obsRes.observation.content.substring(0, 45)}..."`);
 
-// 2. Respuesta formal del investigador y resolución (RF-18)
+// 2. La respuesta del investigador espera aceptación del evaluador (RF-18).
 const respRes = await store.respondToObservation(
   obsId,
   'Se anexó la certificación emitida por el laboratorio central de metrología con fecha enero 2026.',
@@ -46,11 +46,18 @@ const respRes = await store.respondToObservation(
   'Dra. Carmen Morales'
 );
 
-if (!respRes.success || !respRes.observation?.is_resolved) {
+if (!respRes.success || respRes.observation?.is_resolved !== false) {
   console.error('ERROR al responder a la observación técnica:', respRes.error);
   process.exit(1);
 }
-console.log('2. Respuesta formal de ajustes y resolución de observación verificada exitosamente.');
+console.log('2. Respuesta guardada pendiente de verificación del evaluador.');
+
+const blocked = await store.submitReviewerConcept(appId, 'usr-003', 'Evaluador', 'FAVORABLE', 'Cumple');
+if (blocked.success) throw new Error('No debe permitir favorable con ajustes sin verificar');
+const verification = await store.verifyObservation(obsId, true, 'Evidencia comprobada', respRes.observation.applicant_response);
+if (!verification.success || !useApplicationStore.getState().observations.find(o => o.id === obsId)?.is_resolved) {
+  throw new Error('La verificación debe aceptar el ajuste');
+}
 
 // 3. Monitor de seguimiento de plazos y vencimientos (RF-22, T3.12)
 const deadlineStatus = store.getDeadlineStatus(appId);

@@ -1,3 +1,4 @@
+import { ObservationThread } from './ObservationThread.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import React, { useRef, useState } from 'react';
 import type { Dispatch, SetStateAction, ReactElement } from 'react';
@@ -26,6 +27,8 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
     hasContent: (value) => Boolean(value.obsContent || value.conceptJustification || value.concept !== 'FAVORABLE' || value.obsCategory !== 'SUGERENCIA'),
   });
   const { obsCategory, obsContent, concept, conceptJustification } = savedDraft.value;
+  const hasUnverifiedAdjustments = appObs.some(observation => !observation.is_resolved
+    && ['AJUSTE_OBLIGATORIO', 'MANDATORY_ADJUSTMENT'].includes(observation.category));
   const setObsCategory = (next: TechnicalReviewDraft['obsCategory']) => draftController.update((current) => ({ ...current, obsCategory: next }));
   const setObsContent: Dispatch<SetStateAction<string>> = (next) => draftController.update((current) => ({ ...current,
     obsContent: typeof next === 'function' ? next(current.obsContent) : next }));
@@ -144,27 +147,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
           </p>
         ) : (
           <div className="space-y-2">
-            {appObs.map((obs) => (
-              <div
-                key={obs.id}
-                className="p-3.5 rounded-xl bg-white border border-[#E5E3DC] space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#14281D] text-[11px] px-2 py-0.5 rounded bg-stone-100">
-                    {obs.category}
-                  </span>
-                  <span className="text-[10px] text-stone-400">
-                    {obs.is_resolved ? '✓ Ajuste atendido' : 'Pendiente de respuesta'}
-                  </span>
-                </div>
-                <p className="text-stone-700">{obs.content}</p>
-                {obs.applicant_response && (
-                  <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px]">
-                    <strong>Respuesta del investigador:</strong> {obs.applicant_response}
-                  </div>
-                )}
-              </div>
-            ))}
+            {appObs.map(obs => <ObservationThread key={obs.id} observation={obs} applicantId={app.applicant_id} />)}
           </div>
         )}
       </div>
@@ -247,6 +230,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
                 No favorable (Transita a "Rechazada")
               </option>
             </select>
+            {hasUnverifiedAdjustments && <p className="mt-2 text-amber-900">Hay ajustes obligatorios pendientes de aceptación. Para emitir Favorable sin ajustes debe verificarlos primero.</p>}
           </div>
 
           <div>
@@ -266,7 +250,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
           <div className="flex justify-end pt-1">
             <button
               type="button"
-              disabled={isSendingObservation}
+              disabled={isSendingObservation || (concept === 'FAVORABLE' && hasUnverifiedAdjustments)}
               onClick={() => handleSubmitConcept(app.id)}
               className="px-5 py-2.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-extrabold rounded-xl text-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors shadow-xs"
             >

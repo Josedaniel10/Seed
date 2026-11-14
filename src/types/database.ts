@@ -173,6 +173,9 @@ export interface Observation {
   content: string;
   is_resolved: boolean;
   applicant_response: string | null;
+  verification_notes?: string | null;
+  verified_by?: string | null;
+  verified_at?: string | null;
   created_at: string;
 }
 

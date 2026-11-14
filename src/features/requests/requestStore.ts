@@ -1,3 +1,5 @@
+import { getNextAction } from './nextAction.ts';
+import { observationAction } from '../validation/observationApi.ts';
 import { formatUserMessage } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -183,6 +185,7 @@ export interface RequestState {
   getAssignmentsByReviewer: (reviewerId: string) => ReviewerAssignment[];
 
   // Observations
+  verifyObservation: (id: string, accept: boolean, notes: string, expectedResponse: string) => Promise<{ success: boolean; error?: string }>;
   addTechnicalObservation: (
     requestId: string,
     authorId: string,
@@ -1283,6 +1286,12 @@ export const useRequestStore = create<RequestState>()(
           return { success: false, error: 'El contenido de la observación no puede estar vacío.' };
         }
 
+        if (getSupabaseClient()) {
+          const result = await observationAction({ p_application_id: requestId, p_action: 'ADD', p_content: content, p_category: category });
+          if (!result.success) return result;
+          set(state => ({ observations: [...state.observations, result.observation], auditHistory: [...state.auditHistory, result.audit] }));
+          return result;
+        }
         const nowIso = new Date().toISOString();
         const activeAssignment = get().getActiveAssignment(requestId);
 
@@ -1336,12 +1345,24 @@ export const useRequestStore = create<RequestState>()(
 
         const obs = get().observations.find((o) => o.id === observationId);
         if (!obs) return { success: false, error: 'Observación no encontrada.' };
+        if (obs.is_resolved) return { success: false, error: 'El ajuste ya fue verificado.' };
 
+        if (getSupabaseClient()) {
+          const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'RESPOND',
+            p_observation_id: observationId, p_content: applicantResponse });
+          if (!result.success) return result;
+          set(state => ({ observations: state.observations.map(item => item.id === observationId ? result.observation : item),
+            auditHistory: [...state.auditHistory, result.audit] }));
+          return result;
+        }
         const nowIso = new Date().toISOString();
         const updatedObs: Observation = {
           ...obs,
           applicant_response: applicantResponse.trim(),
-          is_resolved: true,
+          is_resolved: false,
+          verified_by: null,
+          verified_at: null,
+          verification_notes: null,
         };
 
         const auditItem: AuditHistory = {
@@ -1369,6 +1390,28 @@ export const useRequestStore = create<RequestState>()(
         return { success: true, observation: updatedObs };
       },
 
+      verifyObservation: async (id, accept, notes, expectedResponse) => {
+        const obs = get().observations.find(item => item.id === id);
+        if (!obs?.applicant_response || !notes.trim()) return { success: false, error: 'Se requiere respuesta y fundamento de verificación.' };
+        if (obs.is_resolved) return { success: false, error: 'El ajuste ya fue verificado.' };
+        if (obs.applicant_response !== expectedResponse) return { success: false, error: 'La respuesta cambió; revise el expediente antes de verificar.' };
+        if (getSupabaseClient()) {
+          const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'VERIFY',
+            p_observation_id: id, p_content: notes, p_accept: accept, p_expected_response: expectedResponse });
+          if (!result.success) return result;
+          set(state => ({ observations: state.observations.map(item => item.id === id ? result.observation : item), auditHistory: [...state.auditHistory, result.audit] }));
+          return { success: true };
+        }
+        const actor = get().getActiveAssignment(obs.application_id ?? obs.request_id ?? '')?.reviewer_id ?? null;
+        const now = new Date().toISOString();
+        set(state => ({ observations: state.observations.map(item => item.id === id ? { ...item, is_resolved: accept,
+          verification_notes: notes.trim(), verified_at: now, verified_by: actor } : item),
+          auditHistory: [...state.auditHistory, { id: createUuid(), application_id: obs.application_id ?? obs.request_id,
+            actor_id: actor, action: 'AJUSTE_VERIFY', previous_status: null, new_status: null,
+            details: { observation_id: id, content: notes.trim(), accepted: accept }, created_at: now }] }));
+        return { success: true };
+      },
+
       getObservationsByRequest: (requestId: string) => {
         return get().observations.filter((o) => o.request_id === requestId || o.application_id === requestId);
       },
@@ -1393,6 +1436,11 @@ export const useRequestStore = create<RequestState>()(
 
         const req = get().requests.find((a) => a.id === requestId);
         if (!req) return { success: false, error: 'Solicitud no encontrada.' };
+
+        if (concept === 'FAVORABLE' && get().observations.some(o => (o.application_id ?? o.request_id) === requestId
+          && ['AJUSTE_OBLIGATORIO', 'MANDATORY_ADJUSTMENT'].includes(o.category) && !o.is_resolved)) {
+          return { success: false, error: 'Verifique los ajustes obligatorios antes de emitir favorable sin ajustes.' };
+        }
 
         const activeAsg = get().getActiveAssignment(requestId);
         if (!activeAsg || activeAsg.reviewer_id !== reviewerId) {
@@ -1612,34 +1660,7 @@ export const useRequestStore = create<RequestState>()(
       },
 
       computePendingRequirements: (req: Request) => {
-        switch (req.current_status) {
-          case 'SUBMITTED':
-          case 'RADICADA':
-            return 'En espera de validación documental administrativa';
-          case 'PENDING_DOCUMENTS':
-          case 'PENDIENTE_DOCUMENTOS':
-            return 'Cargar documentos subsanables rechazados';
-          case 'UNDER_REVIEW':
-          case 'EN_REVISION':
-            return 'En evaluación técnica por revisor par asignado';
-          case 'COMMITTEE_READY':
-          case 'LISTA_COMITE':
-            return 'En agenda para deliberación en sesión de comité';
-          case 'APPROVED':
-          case 'APROBADA':
-            return 'Trámite finalizado exitosamente';
-          case 'APPROVED_WITH_ADJUSTMENTS':
-          case 'APROBADA_CON_AJUSTES':
-            return 'Entregar ajustes menores concertados en sesión';
-          case 'REJECTED':
-          case 'RECHAZADA':
-            return 'Solicitud rechazada';
-          case 'CLOSED':
-          case 'CERRADA':
-            return 'Expediente cerrado y archivado';
-          default:
-            return 'En trámite ordinario';
-        }
+        return getNextAction(req, { ...get(), requirements: useCatalogStore.getState().requirements }).title;
       },
 
       computeQueFalta: (req: Request) => {
@@ -1739,6 +1760,9 @@ export const useRequestStore = create<RequestState>()(
               content: o.content,
               is_resolved: o.is_resolved,
               applicant_response: o.applicant_response,
+              verification_notes: o.verification_notes,
+              verified_at: o.verified_at,
+              verified_by: o.verified_by,
               created_at: o.created_at,
             }));
 
