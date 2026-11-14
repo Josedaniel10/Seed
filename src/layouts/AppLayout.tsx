@@ -1,23 +1,8 @@
-import React, { useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import {
-  Bell,
-  LogOut,
-  User,
-  ChevronDown,
-  FileText,
-  PlusCircle,
-  ClipboardCheck,
-  LayoutDashboard,
-  CheckSquare,
-  Calendar,
-  FileCheck,
-  UserCheck,
-  BarChart3,
-  Users,
-  Layers,
-  BookOpen,
-} from 'lucide-react';
+import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
+import { AppSidebar } from './AppSidebar.tsx';
+import { useDismissiblePopover } from '../hooks/useDismissiblePopover.ts';
 import { useRouteScrollRestoration } from '../hooks/useRouteScrollRestoration.ts';
 import { MobileNavigation } from './MobileNavigation.tsx';
 import { SeedLogo } from '../components/SeedLogo.tsx';
@@ -26,25 +11,9 @@ import { useSessionStore } from '../stores/session.store.ts';
 import { useNotifications } from '../features/notifications/useNotifications.ts';
 import {
   ROLE_LABELS,
-  ROLE_MENU_ITEMS,
   ROLE_HOME_PATHS,
-  AppRole,
 } from '../lib/permisos.ts';
-
-const ICON_MAP: Record<string, React.ReactNode> = {
-  FileText: <FileText size={16} />,
-  PlusCircle: <PlusCircle size={16} />,
-  ClipboardCheck: <ClipboardCheck size={16} />,
-  LayoutDashboard: <LayoutDashboard size={16} />,
-  CheckSquare: <CheckSquare size={16} />,
-  Calendar: <Calendar size={16} />,
-  FileCheck: <FileCheck size={16} />,
-  UserCheck: <UserCheck size={16} />,
-  BarChart3: <BarChart3 size={16} />,
-  Users: <Users size={16} />,
-  Layers: <Layers size={16} />,
-  BookOpen: <BookOpen size={16} />,
-};
+import type { AppRole } from '../lib/permisos.ts';
 
 export function AppLayout() {
   useRouteScrollRestoration();
@@ -54,11 +23,19 @@ export function AppLayout() {
   const { data: notifications = [] } = useNotifications();
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const roleMenuRef = useDismissiblePopover(isRoleMenuOpen, () => setIsRoleMenuOpen(false));
+  const userMenuRef = useDismissiblePopover(isUserMenuOpen, () => setIsUserMenuOpen(false));
+  const roleMenuId = useId();
+  const userMenuId = useId();
+
+  useEffect(() => {
+    setIsRoleMenuOpen(false);
+    setIsUserMenuOpen(false);
+  }, [location.key, user?.id, user?.activeRole]);
 
   if (!user) return null;
 
   const activeRole = user.activeRole;
-  const menuItems = ROLE_MENU_ITEMS[activeRole] || [];
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
 
   const handleRoleChange = (newRole: AppRole) => {
@@ -66,13 +43,6 @@ export function AppLayout() {
     setIsRoleMenuOpen(false);
     navigate(ROLE_HOME_PATHS[newRole]);
   };
-
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-colors ${
-      isActive
-        ? 'bg-[#14281D] text-white font-semibold shadow-xs'
-        : 'text-stone-600 hover:text-[#14281D] hover:bg-stone-100'
-    }`;
 
   return (
     <div className="min-h-dvh bg-[#F7F6F2] text-[#14281D] flex flex-col">
@@ -86,9 +56,10 @@ export function AppLayout() {
           </NavLink>
 
           {/* Selector de Rol Activo (si el usuario tiene más de un rol, o indicador claro) */}
-          <div className="relative">
+          <div ref={roleMenuRef} className="relative">
             <button
-              onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+              onClick={() => { setIsUserMenuOpen(false); setIsRoleMenuOpen(!isRoleMenuOpen); }}
+              aria-label="Cambiar rol activo" aria-expanded={isRoleMenuOpen} aria-controls={roleMenuId}
               className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#F7F6F2] hover:bg-[#EFECE6] border border-[#E5E3DC] text-xs font-semibold text-[#14281D] cursor-pointer transition-colors"
               title="Cambiar rol activo"
             >
@@ -98,13 +69,14 @@ export function AppLayout() {
             </button>
 
             {isRoleMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-60 bg-white rounded-xl border border-[#E5E3DC] shadow-lg py-1.5 z-50 text-xs animate-in fade-in zoom-in-95">
+              <div id={roleMenuId} role="region" aria-label="Roles disponibles" className="absolute left-0 mt-1.5 w-60 bg-white rounded-xl border border-[#E5E3DC] shadow-lg py-1.5 z-50 text-xs animate-in fade-in zoom-in-95">
                 <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-400 border-b border-stone-100">
                   Cambiar Rol Activo
                 </div>
                 {user.roles.map((r) => (
                   <button
                     key={r}
+                    aria-pressed={activeRole === r}
                     onClick={() => handleRoleChange(r)}
                     className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
                       activeRole === r
@@ -138,9 +110,10 @@ export function AppLayout() {
           </NavLink>
 
           {/* Menú de Usuario */}
-          <div className="relative">
+          <div ref={userMenuRef} className="relative">
             <button
-              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              onClick={() => { setIsRoleMenuOpen(false); setIsUserMenuOpen(!isUserMenuOpen); }}
+              aria-label="Abrir menú de perfil" aria-expanded={isUserMenuOpen} aria-controls={userMenuId}
               className="flex items-center gap-2 pl-2 py-1 pr-1.5 rounded-xl hover:bg-stone-50 transition-colors cursor-pointer"
             >
               <div className="w-8 h-8 rounded-full bg-[#14281D] text-white text-xs font-bold flex items-center justify-center shrink-0">
@@ -157,7 +130,7 @@ export function AppLayout() {
             </button>
 
             {isUserMenuOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 bg-white rounded-xl border border-[#E5E3DC] shadow-lg py-1.5 z-50 text-xs animate-in fade-in zoom-in-95">
+              <div id={userMenuId} role="region" aria-label="Opciones de perfil" className="absolute right-0 mt-1.5 w-52 bg-white rounded-xl border border-[#E5E3DC] shadow-lg py-1.5 z-50 text-xs animate-in fade-in zoom-in-95">
                 <div className="px-3.5 py-2 border-b border-stone-100">
                   <div className="font-bold text-[#14281D] truncate">{user.fullName}</div>
                   <div className="text-[11px] text-stone-500 truncate">{user.email}</div>
@@ -192,17 +165,7 @@ export function AppLayout() {
       {/* 2. Cuerpo: Barra Lateral con Opciones del Rol + Contenido */}
       <div className="flex-1 flex min-w-0">
         {/* Barra lateral por rol activo (Sección 3 / Menú lateral por rol) */}
-        <aside className="w-60 bg-white border-r border-[#E5E3DC] p-3.5 space-y-1 shrink-0 hidden md:block">
-          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-400">
-            Menú del Rol ({ROLE_LABELS[activeRole]})
-          </div>
-          {menuItems.map((item) => (
-            <NavLink key={item.path} to={item.path} className={navLinkClass}>
-              {ICON_MAP[item.iconName] || <FileText size={16} />}
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </aside>
+        <AppSidebar activeRole={activeRole} />
 
         {/* Zona de contenido de la página */}
         <main className="app-content min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+.app-sidebar { transition: width 200ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar { transition: none; }
+}
+
 .alert-viewport {
   position: fixed;
   z-index: 1000;

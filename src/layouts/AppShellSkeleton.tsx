@@ -1,3 +1,4 @@
+import { readSidebarCollapsed } from '../lib/sidebarPreference.ts';
 import type { ReactElement } from 'react';
 import { SeedLogo } from '../components/SeedLogo.tsx';
 import { Skeleton, SkeletonRegion } from '../components/ui/Skeleton.tsx';
@@ -9,8 +10,8 @@ export function AppShellSkeleton(): ReactElement {
       <Skeleton className="h-8 w-8 rounded-full" />
     </div>
     <div className="flex min-h-[calc(100dvh-56px)]">
-      <div className="w-60 bg-white border-r border-[#E5E3DC] p-3.5 space-y-3 hidden md:block shrink-0">
-        <Skeleton className="h-4 w-36 my-3" />
+      <div className={`${readSidebarCollapsed() ? 'w-20' : 'w-60'} bg-white border-r border-[#E5E3DC] p-3.5 space-y-3 hidden md:block shrink-0`}>
+        <Skeleton className="h-4 w-full max-w-36 my-3" />
         {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-9 w-full rounded-xl" />)}
       </div>
       <div className="min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
