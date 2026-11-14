@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import type { ReactElement, FormEvent } from 'react';
+import type { ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { PlusCircle, CalendarDays } from 'lucide-react';
+import { PlusCircle, CalendarDays, Users, FileText } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal.tsx';
+import { CallManagersPanel } from './CallManagersPanel.tsx';
+import type { CallManager } from './CallManagersPanel.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { CallEditor } from './CallEditor.tsx';
 import type { CallDraftInput } from './CallEditor.tsx';
@@ -15,8 +18,8 @@ import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx
 import { callsClient, formatCallDate, isCallOpen, managerSchema, useCalls } from './callsApi.ts';
 import type { FundingCall } from './callsApi.ts';
 
-const field = 'w-full rounded-xl border border-stone-300 p-3 text-sm bg-white';
-const button = 'rounded-xl bg-[#14281D] px-4 py-2 text-sm text-white disabled:opacity-50';
+const button = 'inline-flex items-center justify-center gap-2 rounded-xl bg-[#14281D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#1E3A2B] disabled:opacity-50 cursor-pointer';
+const secondary = 'inline-flex items-center justify-center rounded-xl border border-[#E5E3DC] px-3 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 cursor-pointer';
 
 export function CallsPage(): ReactElement {
   const user = useSessionStore((s) => s.user);
@@ -33,30 +36,35 @@ export function CallsPage(): ReactElement {
   } });
   const faculties = [...new Set(groups.map((g) => g.faculty))];
   const allowed = admin ? faculties : [...new Set((managers.data ?? []).filter((m) => m.user_id === user?.id).map((m) => m.faculty))];
-  const [error, setError] = useState('');
   const [editor, setEditor] = useState<{ call: FundingCall | null } | null>(null);
   const [success, setSuccess] = useState('');
   const openEditor = (call: FundingCall | null = null): void => {
-    setError(''); setSuccess(''); setEditor({ call });
+    setSuccess(''); setEditor({ call });
   };
-  const [params] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(params.get('convocatoria'));
+  const [params, setParams] = useSearchParams();
+  const managersView = admin && params.get('vista') === 'responsables';
+  const showDetail = (id: string | null): void => {
+    const next = new URLSearchParams(params);
+    if (id) next.set('convocatoria', id); else next.delete('convocatoria');
+    setParams(next);
+  };
+  const [statusAction, setStatusAction] = useState<{ call: FundingCall; status: 'closed' | 'cancelled' } | null>(null);
   const [reason, setReason] = useState('');
-  const { requestDecision, decisionDialog } = useDecisionConfirmation(`calls:${user?.id}`);
+  const { requestDecision, decisionDialog, isDecisionOpen } = useDecisionConfirmation(`calls:${user?.id}`);
   const refresh = async () => { await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['funding-calls'] }),
     queryClient.invalidateQueries({ queryKey: ['call-managers'] }),
   ]); };
-  const changeStatus = (call: FundingCall, status: string) => {
-    const explanation = reason.trim();
-    if (status !== 'published' && !explanation) { setError('Escriba el motivo del cierre o cancelación.'); return; }
+  const changeStatus = (call: FundingCall, status: string, explanation = ''): void => {
+    if (status !== 'published' && !explanation.trim()) return;
     requestDecision({ title: 'Confirmar convocatoria', target: call.title, confirmLabel: status === 'published' ? 'Publicar convocatoria' : 'Registrar cambio',
-      details: [{ label: 'Estado solicitado', value: status }, { label: 'Motivo', value: explanation || 'Publicación' }],
+      details: [{ label: 'Estado solicitado', value: status === 'published' ? 'Publicada' : status === 'closed' ? 'Cerrada' : 'Cancelada' }, { label: 'Motivo', value: explanation || 'Publicación' }],
       consequence: 'Se actualizará la recepción de postulaciones. Las solicitudes ya radicadas conservarán su historial.',
     }, async () => {
       const { error: failure } = await callsClient().rpc('change_funding_call_status', { p_id: call.id, p_status: status, p_reason: explanation });
       if (failure) throw new Error(failure.message);
-      await refresh(); setReason('');
+      await refresh(); setReason(''); setStatusAction(null);
+      setSuccess('El estado de la convocatoria se actualizó correctamente.');
     });
   };
   const create = async (input: CallDraftInput): Promise<void> => {
@@ -65,17 +73,25 @@ export function CallsPage(): ReactElement {
     await refresh(); setEditor(null);
     setSuccess('Borrador guardado. Revisa la convocatoria en el listado y pulsa Publicar cuando esté lista.');
   };
-  const assign = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const values = new FormData(event.currentTarget); setError('');
-    try {
-      const { error: failure } = await callsClient().from('funding_call_managers').upsert({
-        user_id: values.get('user_id'), faculty: values.get('faculty'), designation: values.get('designation'),
-      });
-      if (failure) throw new Error(failure.message);
-      await refresh();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo asignar.'); }
+  const assign = async (manager: CallManager): Promise<void> => {
+    const { error: failure } = await callsClient().from('funding_call_managers').upsert(manager);
+    if (failure) throw new Error(failure.message);
+    await refresh(); setSuccess('Responsable asignado correctamente.');
   };
-  const detail = calls.data?.find((c) => c.id === selected);
+  const remove = async (manager: CallManager): Promise<void> => {
+    const { error: failure } = await callsClient().from('funding_call_managers').delete().eq('user_id', manager.user_id).eq('faculty', manager.faculty);
+    if (failure) throw new Error(failure.message);
+    await refresh(); setSuccess('Se retiró el permiso de gestión.');
+  };
+  const detail = calls.data?.find((call) => call.id === params.get('convocatoria'));
+  const sections = [
+    { title: 'En preparación', description: 'Borradores que puedes revisar y publicar.', items: (calls.data ?? []).filter((call) => call.status === 'draft') },
+    { title: 'Convocatorias vigentes', description: 'Recepción abierta o programada para una próxima fecha.', items: (calls.data ?? []).filter((call) => call.status === 'published' && Date.now() < Date.parse(call.closes_at)) },
+    { title: 'Historial', description: 'Convocatorias finalizadas, cerradas o canceladas.', items: (calls.data ?? []).filter((call) => call.status === 'closed' || call.status === 'cancelled' || (call.status === 'published' && Date.now() >= Date.parse(call.closes_at))) },
+  ];
+  const startStatusChange = (call: FundingCall, status: 'closed' | 'cancelled'): void => {
+    setReason(''); setStatusAction({ call, status });
+  };
   if (editor) return <CallEditor call={editor.call} faculties={allowed} types={types} onSave={create} onCancel={() => setEditor(null)} />;
   return <div className="space-y-6">
     <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E3DC] pb-4">
@@ -83,51 +99,66 @@ export function CallsPage(): ReactElement {
       <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">Convocatorias de investigación</h1>
       <p className="text-xs text-stone-500 mt-0.5">Consulta oportunidades de financiamiento y sus requisitos. Postularse está sujeto a evaluación y no garantiza recursos.</p>
       </div>
-      {allowed.length > 0 && <button type="button" onClick={() => openEditor()} className="inline-flex shrink-0 items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"><PlusCircle size={15} /> Nueva convocatoria</button>}
+      {!managersView && allowed.length > 0 && <button type="button" onClick={() => openEditor()} className="inline-flex shrink-0 items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"><PlusCircle size={15} /> Nueva convocatoria</button>}
     </header>
     <FloatingAlert message={success} tone="success" onDismiss={() => setSuccess('')} />
-    {error && <p role="alert" className="text-red-700">{error}</p>}
-    {calls.isPending && <p role="status">Cargando convocatorias…</p>}
-    {calls.error && <p role="alert">No se pudieron consultar las convocatorias: {calls.error.message} <button onClick={() => void calls.refetch()}>Reintentar</button></p>}
-    {managers.error && <p role="alert">No se pudieron consultar los permisos de gestión: {managers.error.message}</p>}
-    {detail && <section className="bg-white border rounded-2xl p-5 space-y-3">
-      <button onClick={() => setSelected(null)} className="underline">Volver al listado</button>
-      <h2 className="text-xl font-bold">{detail.title}</h2><p className="whitespace-pre-wrap">{detail.description}</p>
-      <p>{detail.faculty} · Destinatarios: {detail.audience === 'all' ? 'Todos' : detail.audience === 'students' ? 'Estudiantes' : 'Docentes'}</p>
-      <p>Apertura: {formatCallDate(detail.opens_at)} · Cierre: {formatCallDate(detail.closes_at)} (Colombia)</p>
-      <p>Tope: {detail.max_amount === null ? 'Sin tope individual definido' : `$ ${detail.max_amount.toLocaleString('es-CO')} COP`}</p>
-      <p>Trámites: {types.filter((t) => detail.type_ids.includes(t.id)).map((t) => t.name).join(', ')}</p>
-      {isCallOpen(detail) && user?.roles.includes('researcher') && <Link className={button} to={`/solicitudes/nueva?convocatoria=${detail.id}`}>Postularme</Link>}
-    </section>}
-    <div className="grid md:grid-cols-2 gap-4">{(calls.data ?? []).map((call) => <article key={call.id} className="bg-white border rounded-2xl p-5 space-y-3">
-      <p className="text-xs uppercase text-stone-500">{call.faculty} · {isCallOpen(call) ? 'Abierta' : call.status === 'published' ? (Date.now() < Date.parse(call.opens_at) ? 'Próximamente' : 'Finalizada') : { draft: 'Borrador', closed: 'Cerrada', cancelled: 'Cancelada' }[call.status]}</p>
-      <h2 className="text-lg font-bold">{call.title}</h2><p>Cierra el {formatCallDate(call.closes_at)}</p>
-      <button className="underline" onClick={() => setSelected(call.id)}>Ver requisitos y detalle</button>
-      {(admin || allowed.includes(call.faculty)) && <div className="flex gap-2 flex-wrap">
-        {call.status === 'draft' && <><button className="underline" onClick={() => openEditor(call)}>Editar borrador</button><button className={button} onClick={() => changeStatus(call, 'published')}>Publicar</button></>}
-        {call.status === 'published' && <button className={button} onClick={() => changeStatus(call, 'closed')}>Cerrar recepción</button>}
-        {['draft', 'published'].includes(call.status) && <button className="underline" onClick={() => changeStatus(call, 'cancelled')}>Cancelar convocatoria</button>}
-      </div>}
-    </article>)}</div>
+    {admin && <nav aria-label="Secciones de convocatorias" className="flex gap-1 border-b border-[#E5E3DC]">
+      {[{ path: '/convocatorias', label: 'Convocatorias', icon: FileText, active: !managersView }, { path: '/convocatorias?vista=responsables', label: 'Responsables', icon: Users, active: managersView }].map((item) => <Link key={item.path} to={item.path} aria-current={item.active ? 'page' : undefined} className={`inline-flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-colors ${item.active ? 'border-[#14281D] text-[#14281D]' : 'border-transparent text-stone-500 hover:text-[#14281D]'}`}><item.icon size={15} />{item.label}</Link>)}
+    </nav>}
+    {managersView ? <>
+      {managers.isPending && <p role="status" className="text-xs text-stone-500">Cargando responsables…</p>}
+      {managers.error && <p role="alert" className="text-xs text-red-700">No se pudieron consultar los responsables. <button className="underline cursor-pointer" onClick={() => void managers.refetch()}>Reintentar</button></p>}
+      {managers.isSuccess && <CallManagersPanel key={user?.id} managers={managers.data} users={users} faculties={faculties} onAssign={assign} onRemove={remove} />}
+    </> : <>
+    {calls.isPending && <p role="status" className="text-xs text-stone-500">Cargando convocatorias…</p>}
+    {calls.error && <p role="alert" className="text-xs text-red-700">No se pudieron consultar las convocatorias: {calls.error.message} <button className="underline cursor-pointer" onClick={() => void calls.refetch()}>Reintentar</button></p>}
+    {managers.error && <p role="alert" className="text-xs text-red-700">No se pudieron consultar los permisos de gestión: {managers.error.message}</p>}
+    {sections.filter((section) => section.items.length).map((section) => <section key={section.title} aria-label={section.title} className="space-y-3">
+      <div><h2 className="text-sm font-bold text-[#14281D]">{section.title} <span className="ml-1 rounded-full bg-stone-200/60 px-2 py-0.5 text-[10px] text-stone-500">{section.items.length}</span></h2><p className="text-xs text-stone-500 mt-1">{section.description}</p></div>
+      <div className="grid md:grid-cols-2 gap-4">{section.items.map((call) => <article key={call.id} className="flex flex-col rounded-2xl border border-[#E5E3DC] bg-white shadow-xs overflow-hidden">
+        <div className="p-5 space-y-3 flex-1">
+          <div className="flex items-start justify-between gap-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">{call.faculty}</p><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${isCallOpen(call) ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-600'}`}>{isCallOpen(call) ? 'Abierta' : call.status === 'published' ? (Date.now() < Date.parse(call.opens_at) ? 'Próximamente' : 'Finalizada') : { draft: 'Borrador', closed: 'Cerrada', cancelled: 'Cancelada' }[call.status]}</span></div>
+          <h3 className="text-sm font-bold text-[#14281D] break-words">{call.title}</h3>
+          <p className="flex items-start gap-2 text-xs text-stone-500"><CalendarDays size={14} className="shrink-0" />Cierra el {formatCallDate(call.closes_at)}</p>
+          <button type="button" className="text-xs font-semibold text-[#14281D] underline underline-offset-4 cursor-pointer" onClick={() => showDetail(call.id)}>Ver requisitos y detalle</button>
+        </div>
+        {(admin || allowed.includes(call.faculty)) && ['draft', 'published'].includes(call.status) && <footer className="flex items-center justify-between gap-2 flex-wrap border-t border-[#E5E3DC] bg-stone-50/50 px-5 py-3">
+          <div className="flex gap-2 flex-wrap">
+            {call.status === 'draft' && <><button type="button" className={secondary} onClick={() => openEditor(call)}>Editar borrador</button><button type="button" className={button} onClick={() => changeStatus(call, 'published')}>Publicar</button></>}
+            {call.status === 'published' && <button type="button" className={secondary} onClick={() => startStatusChange(call, 'closed')}>Cerrar recepción</button>}
+          </div>
+          <button type="button" className="py-2 text-xs text-stone-500 hover:text-red-700 cursor-pointer" onClick={() => startStatusChange(call, 'cancelled')}>Cancelar convocatoria</button>
+        </footer>}
+      </article>)}</div>
+    </section>)}
     {calls.isSuccess && !calls.data.length && <section className="rounded-2xl border border-[#E5E3DC] bg-white px-6 py-12 text-center space-y-3">
       <CalendarDays size={36} className="mx-auto text-stone-300" aria-hidden="true" />
       <h2 className="text-sm font-bold text-[#14281D]">Aún no hay convocatorias</h2>
       <p className="text-xs text-stone-500 max-w-md mx-auto">{allowed.length ? 'Crea la primera convocatoria. Te guiaremos para definir los requisitos, participantes y fechas antes de publicarla.' : 'Cuando se publique una convocatoria, podrás consultar aquí sus requisitos y fechas. Mientras tanto, puedes solicitar aval académico.'}</p>
       {allowed.length > 0 && <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-[#14281D] px-4 py-2.5 text-xs font-bold text-white cursor-pointer" onClick={() => openEditor()}><PlusCircle size={15} /> Crear primera convocatoria</button>}
     </section>}
-    {(calls.data ?? []).some((call) => (admin || allowed.includes(call.faculty)) && ['draft', 'published'].includes(call.status)) && <section className="rounded-2xl border border-[#E5E3DC] bg-white p-5 space-y-2">
-      <h2 className="text-sm font-bold">Cierre o cancelación</h2>
-      <p className="text-xs text-stone-500">Para cerrar o cancelar una convocatoria del listado, indica primero el motivo.</p>
-      <label className="block text-xs font-semibold">Motivo<input className={field} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-    </section>}
-    {admin && <section className="border rounded-2xl p-5 bg-white space-y-3"><h2 className="font-bold">Responsables por facultad o área</h2>
-      <form onSubmit={assign} className="space-y-3"><label className="block">Responsable<select required name="user_id" className={field}>{users.filter((u) => u.is_active).map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</select></label>
-        <label className="block">Facultad o área<select name="faculty" required className={field}>{faculties.map((f) => <option key={f}>{f}</option>)}</select></label>
-        <label className="block">Cargo<select name="designation" className={field}><option value="decano">Decano</option><option value="lider">Líder de investigación</option></select></label>
-        <button className={button}>Asignar responsable</button></form>
-      {(managers.data ?? []).map((m) => <div key={`${m.user_id}:${m.faculty}`} className="flex gap-3"><span>{users.find((u) => u.id === m.user_id)?.full_name ?? m.user_id} · {m.faculty} · {m.designation}</span>
-        <button className="underline" onClick={async () => { const { error: failure } = await callsClient().from('funding_call_managers').delete().eq('user_id', m.user_id).eq('faculty', m.faculty); if (failure) setError(failure.message); else await refresh(); }}>Retirar permiso</button></div>)}
-    </section>}
+    </>}
+    <Modal isOpen={Boolean(detail) && !managersView} onClose={() => showDetail(null)} title="Detalle de convocatoria" maxWidth="2xl">
+      {detail && <div className="space-y-4 text-sm">
+        <div><p className="text-xs text-stone-500">{detail.faculty}</p><h2 className="text-lg font-bold mt-1">{detail.title}</h2></div>
+        <p className="whitespace-pre-wrap break-words text-stone-600">{detail.description}</p>
+        <dl className="grid sm:grid-cols-2 gap-4 text-xs border-t border-[#E5E3DC] pt-4">
+          <div><dt className="text-stone-500">Dirigida a</dt><dd className="font-semibold mt-1">{detail.audience === 'all' ? 'Todos los investigadores' : detail.audience === 'students' ? 'Estudiantes' : 'Docentes'}</dd></div>
+          <div><dt className="text-stone-500">Tope por solicitud</dt><dd className="font-semibold mt-1">{detail.max_amount === null ? 'Sin tope individual definido' : `$ ${detail.max_amount.toLocaleString('es-CO')} COP`}</dd></div>
+          <div><dt className="text-stone-500">Apertura (Colombia)</dt><dd className="font-semibold mt-1">{formatCallDate(detail.opens_at)}</dd></div>
+          <div><dt className="text-stone-500">Cierre (Colombia)</dt><dd className="font-semibold mt-1">{formatCallDate(detail.closes_at)}</dd></div>
+        </dl>
+        <div className="border-t border-[#E5E3DC] pt-4"><h3 className="font-semibold text-xs">Tipos de solicitud admitidos</h3><ul className="mt-2 space-y-1 text-xs text-stone-600">{types.filter((type) => detail.type_ids.includes(type.id)).map((type) => <li key={type.id}>{type.name}</li>)}</ul></div>
+        {isCallOpen(detail) && user?.roles.includes('researcher') && <Link className={button} to={`/solicitudes/nueva?convocatoria=${detail.id}`}>Postularme</Link>}
+      </div>}
+    </Modal>
+    <Modal isOpen={Boolean(statusAction)} onClose={() => setStatusAction(null)} isDismissible={!isDecisionOpen} title={statusAction?.status === 'closed' ? 'Cerrar recepción' : 'Cancelar convocatoria'} subtitle={statusAction?.call.title} maxWidth="md">
+      {statusAction && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); changeStatus(statusAction.call, statusAction.status, reason.trim()); }}>
+        <p className="text-stone-500">{statusAction.status === 'closed' ? 'Se detendrá la recepción de nuevas postulaciones.' : 'La convocatoria dejará de recibir postulaciones.'} Las solicitudes ya radicadas conservarán su historial.</p>
+        <label className="block font-semibold">Motivo<textarea name="reason" required value={reason} onChange={(event) => setReason(event.target.value)} disabled={isDecisionOpen} rows={3} className="mt-1.5 w-full rounded-xl border border-[#E5E3DC] p-3 font-normal" placeholder="Explica el motivo de este cambio…" /></label>
+        <div className="flex justify-end gap-2 border-t border-[#E5E3DC] pt-4"><button type="button" className={secondary} disabled={isDecisionOpen} onClick={() => setStatusAction(null)}>Volver</button><button type="submit" disabled={!reason.trim() || isDecisionOpen} className={button}>Revisar cambio</button></div>
+      </form>}
+    </Modal>
     {decisionDialog}
   </div>;
 }
