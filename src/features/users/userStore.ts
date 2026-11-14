@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Profile, UserRole } from '../../types/database.ts';
 import { DEMO_USERS } from '../auth/authStore.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
 
 // Usuarios institucionales iniciales para gestión y pruebas
 export const INITIAL_PROFILES: Profile[] = [
@@ -96,7 +96,7 @@ export const useUserStore = create<UserManagementState>()(
       users: INITIAL_PROFILES,
       searchQuery: '',
       selectedRoleFilter: 'ALL',
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isInitialized: false,
       error: null,
 

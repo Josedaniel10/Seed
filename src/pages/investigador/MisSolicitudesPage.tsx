@@ -1,3 +1,5 @@
+import { RequestCardsSkeleton } from '../../features/loading/RequestCardsSkeleton.tsx';
+import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
@@ -22,8 +24,9 @@ import { getSupabaseClient } from '../../lib/supabase.ts';
 export function MisSolicitudesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
-  const { requests, computeQueFalta, loadFromSupabase, isLoading } = useApplicationStore();
+  const { requests, computeQueFalta, loadFromSupabase, isLoading, isInitialized } = useApplicationStore();
   const { types } = useCatalogStore();
+  const isInitialLoading = isLoading && !isInitialized;
 
   const [searchTerm, setSearchTerm] = useListFilter('search', '');
   const [filterEstado, setFilterEstado] = useListFilter('status', 'TODOS');
@@ -163,9 +166,7 @@ export function MisSolicitudesPage() {
             No fue posible actualizar las solicitudes: {loadError}
           </div>
         )}
-        {isLoading ? (
-          <div className="p-12 text-center text-xs text-stone-500">Cargando sus solicitudes...</div>
-        ) : filteredApplications.length === 0 ? (
+        {!isInitialLoading && filteredApplications.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <FolderOpen size={40} className="mx-auto text-stone-300" />
             <h3 className="font-bold text-sm text-[#14281D]">No se encontraron solicitudes</h3>
@@ -187,7 +188,8 @@ export function MisSolicitudesPage() {
         ) : (
           <>
           <div className="mobile-record-list md:hidden">
-            {filteredApplications.map((app) => (
+            {isInitialLoading && <RequestCardsSkeleton />}
+            {!isInitialLoading && filteredApplications.map((app) => (
               <Link key={app.id} to={`/solicitudes/${app.id}`} state={{ fromList: '/mis-solicitudes' }} className="mobile-record space-y-3">
                 <StatusBadge status={app.current_status} size="sm" />
                 <h2 className="text-base font-bold break-words line-clamp-2">{app.title}</h2>
@@ -203,7 +205,8 @@ export function MisSolicitudesPage() {
             ))}
           </div>
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[1100px] table-fixed text-left text-xs">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '15%' }} /><col style={{ width: '18%' }} /><col style={{ width: '19%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '16%' }} /><col style={{ width: '6%' }} /></colgroup>
               <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
                 <tr>
                   <th className="py-3 px-4">Radicado</th>
@@ -216,7 +219,8 @@ export function MisSolicitudesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E3DC]">
-                {filteredApplications.map((app) => {
+                {isInitialLoading && <SkeletonRows labels={['Radicado', 'Tipo de Solicitud', 'Título del Proyecto', 'Estado', 'Última Actualización', 'Qué Falta (Acción)', 'Acción']} label="Cargando sus solicitudes…" />}
+                {!isInitialLoading && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
                   const queFalta = computeQueFalta(app);
                   const formattedDate = new Date(app.updated_at || app.created_at).toLocaleDateString(

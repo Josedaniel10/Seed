@@ -1,3 +1,5 @@
+import { BoardCardsSkeleton } from '../../features/loading/BoardCardsSkeleton.tsx';
+import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
@@ -84,6 +86,8 @@ export function PanelSeguimientoPage() {
   const { user } = useSessionStore();
   const {
     requests,
+    isLoading,
+    isInitialized,
     assignments,
     transitionApplicationStatus,
     getDeadlineStatus,
@@ -533,7 +537,9 @@ export function PanelSeguimientoPage() {
 
                 {/* Tarjetas de la Columna */}
                 <div className="space-y-2.5 flex-1">
-                  {itemsInCol.length === 0 ? (
+                  {isLoading && !isInitialized ? (
+                    <BoardCardsSkeleton label={`Cargando ${col.label.toLowerCase()}…`} />
+                  ) : itemsInCol.length === 0 ? (
                     <div className="p-6 text-center text-[11px] text-stone-400 italic">
                       Sin solicitudes
                     </div>
@@ -615,7 +621,8 @@ export function PanelSeguimientoPage() {
         /* 6. VISTA TABLA ESTRUCTURADA (RF-11) */
         <div className="bg-white rounded-3xl border border-[#E5E3DC] overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
-            <table className="mobile-data-table w-full text-left text-xs">
+            <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} /></colgroup>
               <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
                 <tr>
                   <th className="py-3 px-4">Radicado</th>
@@ -628,7 +635,8 @@ export function PanelSeguimientoPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E3DC]">
-                {filteredApplications.map((app) => {
+                {isLoading && !isInitialized && <SkeletonRows labels={['Radicado', 'Tipo de Trámite', 'Título del Proyecto', 'Investigador', 'Estado', 'Días en etapa', 'Acción']} cellClassName="py-3 px-4" />}
+                {(!isLoading || isInitialized) && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
                   const applicant = users.find((u) => u.id === app.applicant_id);
                   const diffDays = Math.max(

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ApplicationType, Requirement } from '../../types/database.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
 
 /**
  * Catálogo estándar precargado de tipos de trámite y requisitos
@@ -687,7 +687,7 @@ export const useCatalogStore = create<CatalogState>()(
       selectedTypeId: 'apt-001',
       searchQuery: '',
       filterStatus: 'ALL',
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isInitialized: false,
       error: null,
 

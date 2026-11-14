@@ -1,3 +1,4 @@
+import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
@@ -30,6 +31,7 @@ export function ValidacionPage() {
     documents,
     auditHistory,
     isLoading,
+    isInitialized,
     validateRequirementDocument,
     finalizeAdministrativeValidation,
   } = useApplicationStore();
@@ -330,9 +332,9 @@ export function ValidacionPage() {
         </>)}
       </ResponsiveOverlay>
 
-      {isLoading && <p role="status" className="text-xs text-stone-600">Actualizando cola de validación…</p>}
+
       {waitingCount > 0 && <p className="text-xs text-stone-600">En espera de correcciones del investigador: {waitingCount}.</p>}
-      <fieldset disabled={isSaving || isLoading} aria-busy={isSaving || isLoading}
+      {isLoading && !isInitialized ? <SplitWorkspaceSkeleton label="Cargando cola de validación…" /> : <fieldset disabled={isSaving || isLoading} aria-busy={isSaving || isLoading}
         className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0">
         {/* Columna Izquierda: Cola de expedientes (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
@@ -595,7 +597,7 @@ export function ValidacionPage() {
             </div>
           )}
         </div>
-      </fieldset>
+      </fieldset>}
     </div>
   );
 }

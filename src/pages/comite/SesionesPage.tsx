@@ -1,3 +1,4 @@
+import { SessionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import { useUserStore } from '../../features/users/userStore.ts';
 import { normalizeRole } from '../../lib/permissions.ts';
@@ -109,7 +110,7 @@ export function SesionesPage() {
         )}
       </div>
 
-      {isLoading && <p role="status">Cargando sesiones…</p>}
+      {isLoading && sessions.length === 0 && <SessionsSkeleton />}
       {error && <p role="alert" className="text-rose-800">{error}</p>}
       {!isLoading && !error && sessions.length === 0 && <p>No hay sesiones programadas.</p>}
       {/* Lista de Sesiones */}

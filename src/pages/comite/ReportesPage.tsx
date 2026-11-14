@@ -1,3 +1,4 @@
+import { SkeletonRows, SkeletonValue } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
@@ -20,9 +21,10 @@ import { useCatalogStore } from '../../features/catalog/catalogStore.ts';
 import { useCommitteeSessionsStore } from '../../features/sessions/committeeSessionsStore.ts';
 
 export function ReportesPage() {
-  const { requests } = useApplicationStore();
+  const { requests, isLoading, isInitialized } = useApplicationStore();
+  const loading = isLoading && !isInitialized;
   const { types } = useCatalogStore();
-  const { sessions, decisions } = useCommitteeSessionsStore();
+  const { sessions, decisions, isLoading: sessionsLoading } = useCommitteeSessionsStore();
 
   const [periodo, setPeriodo] = useListFilter('period', '2026-I');
   const [tipoReporte, setTipoReporte] = useListFilter('report', 'solicitudes_por_tipo');
@@ -158,31 +160,31 @@ export function ReportesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="bg-white p-5 rounded-2xl border border-[#E5E3DC] shadow-xs space-y-1">
           <span className="text-xs text-stone-500 font-medium">Expedientes Totales Radicados</span>
-          <div className="text-2xl font-extrabold text-[#14281D]">{totalApplications}</div>
+          <div className="text-2xl font-extrabold text-[#14281D]"><SkeletonValue loading={loading}>{totalApplications}</SkeletonValue></div>
           <span className="text-[10px] text-stone-500 font-semibold">Base de datos en tiempo real</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-[#E5E3DC] shadow-xs space-y-1">
           <span className="text-xs text-stone-500 font-medium">Avalados y Aprobados</span>
           <div className="text-2xl font-extrabold text-emerald-800">
-            {approvedCount + approvedWithAdjustmentsCount}
+            <SkeletonValue loading={loading}>{approvedCount + approvedWithAdjustmentsCount}</SkeletonValue>
           </div>
           <span className="text-[10px] text-emerald-700 font-semibold">
-            {approvedWithAdjustmentsCount} con ajustes menores
+            <SkeletonValue loading={loading}>{approvedWithAdjustmentsCount}</SkeletonValue> con ajustes menores
           </span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-[#E5E3DC] shadow-xs space-y-1">
           <span className="text-xs text-stone-500 font-medium">Tasa de Aprobación Global</span>
-          <div className="text-2xl font-extrabold text-[#14281D]">{approvalRate}%</div>
+          <div className="text-2xl font-extrabold text-[#14281D]"><SkeletonValue loading={loading}>{approvalRate}%</SkeletonValue></div>
           <span className="text-[10px] text-stone-500 font-semibold">Efectividad colegiada</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-[#E5E3DC] shadow-xs space-y-1">
           <span className="text-xs text-stone-500 font-medium">Sesiones Convocadas</span>
-          <div className="text-2xl font-extrabold text-[#14281D]">{sessions.length}</div>
+          <div className="text-2xl font-extrabold text-[#14281D]"><SkeletonValue loading={sessionsLoading && sessions.length === 0}>{sessions.length}</SkeletonValue></div>
           <span className="text-[10px] text-stone-500 font-semibold">
-            {sessions.filter((s) => s.is_completed).length} finalizadas formalmente
+            <SkeletonValue loading={sessionsLoading && sessions.length === 0}>{sessions.filter((s) => s.is_completed).length}</SkeletonValue> finalizadas formalmente
           </span>
         </div>
       </div>
@@ -198,7 +200,9 @@ export function ReportesPage() {
           </span>
         </div>
 
-        <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto">
+        <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '10%' }} /><col style={{ width: '35%' }} /><col style={{ width: '11%' }} /><col style={{ width: '11%' }} /><col style={{ width: '11%' }} /><col style={{ width: '11%' }} /><col style={{ width: '11%' }} /></colgroup>
           <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
             <tr>
               <th className="py-3 px-4">Código</th>
@@ -211,30 +215,30 @@ export function ReportesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E5E3DC]">
-            {breakdownByType.map((item) => {
+            {loading ? <SkeletonRows labels={['Código', 'Tipo de Solicitud', 'Radicadas', 'Aprobadas', 'Rechazadas', 'En Trámite', 'Efectividad']} /> : breakdownByType.map((item) => {
               const rate = item.total > 0 ? Math.round((item.approved / item.total) * 100) : 0;
 
               return (
                 <tr key={item.id} className="hover:bg-[#FAF9F6] transition-colors">
-                  <td className="py-3.5 px-4 font-mono font-bold text-[#14281D]">
+                  <td data-label="Código" className="py-3.5 px-4 font-mono font-bold text-[#14281D]">
                     {item.code}
                   </td>
-                  <td className="py-3.5 px-4 font-semibold text-stone-800">
+                  <td data-label="Tipo de Solicitud" className="py-3.5 px-4 font-semibold text-stone-800">
                     {item.name}
                   </td>
-                  <td className="py-3.5 px-4 text-center font-bold text-stone-700">
+                  <td data-label="Radicadas" className="py-3.5 px-4 text-center font-bold text-stone-700">
                     {item.total}
                   </td>
-                  <td className="py-3.5 px-4 text-center font-bold text-emerald-800">
+                  <td data-label="Aprobadas" className="py-3.5 px-4 text-center font-bold text-emerald-800">
                     {item.approved}
                   </td>
-                  <td className="py-3.5 px-4 text-center font-bold text-rose-700">
+                  <td data-label="Rechazadas" className="py-3.5 px-4 text-center font-bold text-rose-700">
                     {item.rejected}
                   </td>
-                  <td className="py-3.5 px-4 text-center font-semibold text-stone-500">
+                  <td data-label="En Trámite" className="py-3.5 px-4 text-center font-semibold text-stone-500">
                     {item.inProcess}
                   </td>
-                  <td className="py-3.5 px-4 text-right font-bold text-[#14281D]">
+                  <td data-label="Efectividad" className="py-3.5 px-4 text-right font-bold text-[#14281D]">
                     {rate}%
                   </td>
                 </tr>
@@ -242,6 +246,7 @@ export function ReportesPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

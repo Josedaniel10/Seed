@@ -254,7 +254,8 @@ test('explicit logout clears access before the network response and prevents bac
 
 test('the real request wizard keeps its unsaved step while a same-user session is reconfirmed; its draft remains available', async () => {
   useSessionStore.setState({ user: { ...user, activeRole: 'researcher' } });
-  useCatalogStore.setState({ types: [{ id: 'type', name: 'Trámite', code: 'TEST', is_active: true }], requirements: [] });
+  useCatalogStore.setState({ types: [{ id: 'type', name: 'Trámite', code: 'TEST', is_active: true }], requirements: [],
+    isLoading: false, isInitialized: true });
   useGroupsStore.setState({ groups: [] });
   useRequestStore.setState({ isSubmitting: false });
   await mount(RequestSubmissionWizard, ['researcher']);

@@ -1,3 +1,4 @@
+import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
@@ -24,6 +25,8 @@ import {
 export const ResearchGroupsManagement: React.FC = () => {
   const {
     groups,
+    isLoading,
+    isInitialized,
     searchQuery,
     selectedFacultyFilter,
     setSearchQuery,
@@ -231,7 +234,8 @@ export const ResearchGroupsManagement: React.FC = () => {
 
       {/* Groups Table */}
       <div className="overflow-x-auto rounded-xl border border-[#E5E3DC]">
-        <table className="mobile-data-table w-full text-left text-xs border-collapse">
+        <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs border-collapse">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '18%' }} /><col style={{ width: '34%' }} /><col style={{ width: '34%' }} /><col style={{ width: '14%' }} /></colgroup>
           <thead>
             <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
               <th className="py-3 px-4">Código / Identificador</th>
@@ -241,7 +245,9 @@ export const ResearchGroupsManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E5E3DC]">
-            {filteredGroups.length === 0 ? (
+            {isLoading && !isInitialized ? (
+              <SkeletonRows labels={['Código', 'Grupo y facultad', 'Líder asignado', 'Estado']} cellClassName="py-3.5 px-4" contentClassName="h-9" />
+            ) : filteredGroups.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-8 text-center text-stone-500">
                   No se encontraron grupos de investigación con los criterios aplicados.

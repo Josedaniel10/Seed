@@ -129,7 +129,7 @@ export const useMinutesStore = create<MinutesState>()(
   persist(
     (set, get) => ({
       minutes: getSupabaseCredentials().isConfigured ? [] : INITIAL_MINUTES,
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isSaving: false,
       error: null,
 
@@ -424,7 +424,10 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
 
       loadFromSupabase: async () => {
         const client = getSupabaseClient();
-        if (!client) return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
+        if (!client) {
+          set({ isLoading: false });
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
+        }
         set({ isLoading: true, error: null });
         try {
           const { data, error } = await client.from('committee_minutes').select('*').order('created_at', { ascending: false });

@@ -1,3 +1,4 @@
+import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import {
@@ -31,6 +32,7 @@ export function CatalogManagement() {
     searchQuery,
     filterStatus,
     isLoading,
+    isInitialized,
     setSelectedTypeId,
     setSearchQuery,
     setFilterStatus,
@@ -358,7 +360,7 @@ export function CatalogManagement() {
       </div>
 
       {/* Main Grid: Application Types List & Selected Type Requirements */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {isLoading && !isInitialized ? <SplitWorkspaceSkeleton label="Cargando catálogo de trámites…" /> : <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: List of Application Types (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
           <div className="flex items-center justify-between">
@@ -611,7 +613,7 @@ export function CatalogManagement() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Modal: Crear / Editar Tipo de Trámite */}
       <ResponsiveOverlay isOpen={Boolean((isCreateTypeOpen || editingType))} onClose={() => { setIsCreateTypeOpen(false); setEditingType(null); }} label="Tipo de trámite">

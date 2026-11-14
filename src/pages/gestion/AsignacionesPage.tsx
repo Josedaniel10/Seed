@@ -1,3 +1,4 @@
+import { AssignmentCardsSkeleton } from '../../features/loading/AssignmentCardsSkeleton.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +29,8 @@ export function AsignacionesPage() {
   const { requestDecision, decisionDialog } = useDecisionConfirmation(user?.id ?? 'anonymous');
   const {
     requests,
+    isLoading,
+    isInitialized,
     assignments,
     assignReviewer,
     checkReviewerConflict,
@@ -156,7 +159,9 @@ export function AsignacionesPage() {
           </h3>
         </div>
 
-        {applicationsInReview.length === 0 ? (
+        {isLoading && !isInitialized ? (
+          <AssignmentCardsSkeleton />
+        ) : applicationsInReview.length === 0 ? (
           <div className="p-8 text-center text-xs text-stone-500 bg-[#F7F6F2] rounded-2xl">
             No hay solicitudes en estado "En revisión" pendientes de asignación o evaluación.
           </div>

@@ -1,3 +1,4 @@
+import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
@@ -63,15 +64,16 @@ export function ActasPage() {
       </label>
       <span className="text-stone-500">Mostrando {filteredMinutes.length} actas institucionales</span>
     </div>
-    {isLoading && <p role="status">Cargando actas…</p>}
+
     {(error || actionError) && <p role="alert" className="text-rose-800">{error || actionError}</p>}
     {!isLoading && !error && !filteredMinutes.length && <p>No hay actas para esta búsqueda. Puede generarlas desde una sesión finalizada.</p>}
     <div className="bg-white rounded-2xl border border-[#E5E3DC] overflow-x-auto">
-      <table className="mobile-data-table w-full text-left text-xs">
+      <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '19%' }} /><col style={{ width: '13%' }} /><col style={{ width: '21%' }} /><col style={{ width: '18%' }} /><col style={{ width: '29%' }} /></colgroup>
         <thead className="bg-[#F7F6F2] text-stone-600"><tr>
           <th className="p-4">Número de acta</th><th className="p-4">Vigencia anual</th><th className="p-4">Sesión vinculada</th><th className="p-4">Estado</th><th className="p-4 text-right">Acciones</th>
         </tr></thead>
-        <tbody className="divide-y divide-[#E5E3DC]">{filteredMinutes.map((minute) => <tr key={minute.id} className="hover:bg-stone-50">
+        <tbody className="divide-y divide-[#E5E3DC]">{isLoading && minutes.length === 0 && <SkeletonRows labels={['Número de acta', 'Vigencia anual', 'Sesión vinculada', 'Estado', 'Acciones']} cellClassName="p-4" contentClassName="h-[34px]" label="Cargando actas…" />}{filteredMinutes.map((minute) => <tr key={minute.id} className="hover:bg-stone-50">
           <td data-label="Número de acta" className="p-4 font-bold text-[#14281D]">{minute.minute_number}</td>
           <td data-label="Vigencia anual" className="p-4">{minute.year}</td>
           <td data-label="Sesión vinculada" className="p-4">{sessions.find((session) => session.id === minute.session_id)?.session_number || minute.session_id}</td>

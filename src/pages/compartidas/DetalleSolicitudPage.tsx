@@ -1,3 +1,4 @@
+import { DetailSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
 import { uploadDocumentFile } from '../../features/documents/documentFiles.ts';
 import { formatUserMessage } from '../../lib/userMessages.ts';
@@ -43,6 +44,7 @@ export function DetalleSolicitudPage() {
     subsanarDocument,
     computeQueFalta,
     isLoading,
+    isInitialized,
   } = useApplicationStore();
   const { types, requirements } = useCatalogStore();
   const { groups } = useGroupsStore();
@@ -105,7 +107,7 @@ export function DetalleSolicitudPage() {
   const appObservations = observations.filter((observation) =>
     (observation.application_id ?? observation.request_id) === application?.id);
 
-  if (isLoading && !application) return <p role="status">Cargando solicitud…</p>;
+  if (isLoading && (!isInitialized || !application)) return <DetailSkeleton kind="request" />;
   if (!application) {
     return (
       <div className="max-w-xl mx-auto bg-white rounded-3xl border border-[#E5E3DC] p-10 text-center space-y-4 shadow-sm">

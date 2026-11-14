@@ -247,7 +247,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       attendances: getSupabaseCredentials().isConfigured ? [] : INITIAL_ATTENDANCES,
       decisions: getSupabaseCredentials().isConfigured ? [] : INITIAL_DECISIONS,
       nonDeliberations: [],
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isSaving: false,
       error: null,
 
@@ -816,7 +816,10 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
 
       loadFromSupabase: async () => {
         const client = getSupabaseClient();
-        if (!client) return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
+        if (!client) {
+          set({ isLoading: false });
+          return { success: false, error: 'No se pudo conectar con el servicio. Intente nuevamente.' };
+        }
         set({ isLoading: true, error: null });
         try {
           const responses = await Promise.all([

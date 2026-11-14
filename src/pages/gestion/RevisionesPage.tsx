@@ -1,3 +1,4 @@
+import { ReviewCardsSkeleton } from '../../features/loading/ReviewCardsSkeleton.tsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { TechnicalReviewWorkspace } from '../../features/validation/TechnicalReviewWorkspace.tsx';
 import {
@@ -16,6 +17,8 @@ export function RevisionesPage() {
   const { user } = useSessionStore();
   const {
     requests,
+    isLoading,
+    isInitialized,
     assignments,
     documents,
     observations,
@@ -68,7 +71,9 @@ export function RevisionesPage() {
 
 
       {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">{notice}</p>}
-      {myAssignedApps.length === 0 ? (
+      {isLoading && !isInitialized ? (
+        <ReviewCardsSkeleton />
+      ) : myAssignedApps.length === 0 ? (
         <div className="bg-white rounded-3xl border border-[#E5E3DC] p-12 text-center text-xs text-stone-500 space-y-2">
           <CheckSquare size={36} className="mx-auto text-stone-300" />
           <h3 className="font-bold text-sm text-[#14281D]">Sin Revisiones Pendientes</h3>

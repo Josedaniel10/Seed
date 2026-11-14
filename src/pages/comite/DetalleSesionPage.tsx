@@ -1,3 +1,4 @@
+import { DetailSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { NonDeliberationPanel } from '../../features/sessions/NonDeliberationPanel.tsx';
 import { getRequestQuorum } from '../../features/sessions/requestQuorum.ts';
@@ -86,7 +87,7 @@ export function DetalleSesionPage() {
     Record<string, { decision: SessionDecisionType; justification: string }>
   >({});
 
-  if (isLoading && !session) return <p role="status">Cargando sesión…</p>;
+  if (isLoading && !session) return <DetailSkeleton kind="session" />;
   if (error) return <p role="alert" className="text-rose-800">{error}</p>;
 
   if (!session) {

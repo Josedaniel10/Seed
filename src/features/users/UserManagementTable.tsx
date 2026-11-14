@@ -1,3 +1,4 @@
+import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
@@ -34,6 +35,8 @@ const ALL_ROLES: { role: UserRole; label: string; badgeClass: string }[] = [
 export const UserManagementTable: React.FC = () => {
   const {
     users,
+    isLoading,
+    isInitialized,
     searchQuery,
     selectedRoleFilter,
     setSearchQuery,
@@ -227,7 +230,8 @@ export const UserManagementTable: React.FC = () => {
 
       {/* Users Table */}
       <div className="overflow-x-auto rounded-xl border border-[#E5E3DC]">
-        <table className="mobile-data-table w-full text-left text-xs border-collapse">
+        <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs border-collapse">
+          <colgroup className="hidden md:table-column-group"><col style={{ width: '30%' }} /><col style={{ width: '26%' }} /><col style={{ width: '30%' }} /><col style={{ width: '14%' }} /></colgroup>
           <thead>
             <tr className="bg-[#F7F6F2] text-[#14281D] font-bold border-b border-[#E5E3DC]">
               <th className="py-3 px-4">Usuario / Nombre</th>
@@ -237,7 +241,9 @@ export const UserManagementTable: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E5E3DC]">
-            {filteredUsers.length === 0 ? (
+            {isLoading && !isInitialized ? (
+              <SkeletonRows labels={['Usuario', 'Programa y vínculo', 'Rol asignado', 'Estado']} cellClassName="py-3.5 px-4" contentClassName="h-9" />
+            ) : filteredUsers.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-8 text-center text-stone-500">
                   No se encontraron usuarios institucionales con los filtros aplicados.

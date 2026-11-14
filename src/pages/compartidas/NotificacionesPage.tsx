@@ -1,3 +1,4 @@
+import { NotificationsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -72,7 +73,7 @@ export function NotificacionesPage() {
           Sin leer ({unreadCount})
         </button>
       </div>
-      {isPending && <p role="status" className="text-sm">Cargando notificaciones…</p>}
+      {isPending && <NotificationsSkeleton />}
       {(error || markRead.error || navigationError) && (
         <p role="alert" className="text-sm text-rose-800">
           {navigationError ?? markRead.error?.message ?? error?.message}

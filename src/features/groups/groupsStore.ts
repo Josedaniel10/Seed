@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ResearchGroup, UserRole, Profile } from '../../types/database.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
 import { useUserStore } from '../users/userStore.ts';
 
 export const INITIAL_RESEARCH_GROUPS: ResearchGroup[] = [
@@ -101,7 +101,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
       groups: INITIAL_RESEARCH_GROUPS,
       searchQuery: '',
       selectedFacultyFilter: 'ALL',
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isInitialized: false,
       error: null,
 

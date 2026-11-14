@@ -15,7 +15,7 @@ import {
 } from '../../types/database.ts';
 import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useUserStore } from '../users/userStore.ts';
-import { getSupabaseClient } from '../../lib/supabase.ts';
+import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
 import { createUuid } from '../../lib/uuid.ts';
 import { getDocumentVersions } from '../validation/documentaryQueue.ts';
 import { documentaryCompletionSchema } from '../validation/documentaryCompletionSchema.ts';
@@ -537,7 +537,7 @@ export const useRequestStore = create<RequestState>()(
       assignments: INITIAL_ASSIGNMENTS,
       observations: INITIAL_OBSERVATIONS,
       isSubmitting: false,
-      isLoading: false,
+      isLoading: getSupabaseCredentials().isConfigured,
       isInitialized: false,
 
       generateNextFilingNumber: async (year?: number): Promise<string> => {

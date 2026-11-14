@@ -1,3 +1,4 @@
+import { TypeOptionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import React, { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useLocalDraft } from '../drafts/useLocalDraft.ts';
@@ -42,7 +43,7 @@ export function RequestSubmissionWizard() {
 function RequestSubmissionForm() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
-  const { types, requirements } = useCatalogStore();
+  const { types, requirements, isLoading: isCatalogLoading, isInitialized: isCatalogInitialized } = useCatalogStore();
   const { groups } = useGroupsStore();
   const { createRequest, isSubmitting } = useRequestStore();
 
@@ -419,7 +420,7 @@ function RequestSubmissionForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {activeTypes.map((type) => {
+              {isCatalogLoading && !isCatalogInitialized ? <div className="md:col-span-2"><TypeOptionsSkeleton count={activeTypes.length || 4} /></div> : activeTypes.map((type) => {
                 const isSelected = selectedTypeId === type.id;
                 const reqCount = requirements.filter(
                   (r) => (r.request_type_id || r.application_type_id) === type.id
@@ -466,7 +467,7 @@ function RequestSubmissionForm() {
               })}
             </div>
 
-            {selectedType && (
+            {selectedType && (!isCatalogLoading || isCatalogInitialized) && (
               <div className="p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-3 mt-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -792,7 +793,7 @@ function RequestSubmissionForm() {
                             type="file"
                             id={`file-input-${req.id}`}
                             accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            disabled={Boolean(uploadingReqId)}
+                            disabled={Boolean(uploadingReqId) || (isCatalogLoading && !isCatalogInitialized)}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               e.target.value = '';
@@ -946,7 +947,7 @@ function RequestSubmissionForm() {
           <button
             type="button"
             onClick={handleNextStep}
-            disabled={Boolean(uploadingReqId)}
+            disabled={Boolean(uploadingReqId) || (isCatalogLoading && !isCatalogInitialized)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
           >
             <span>Continuar al Paso {currentStep + 1}</span>

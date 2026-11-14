@@ -1,3 +1,4 @@
+import { SkeletonValue } from '../../../components/ui/Skeleton.tsx';
 import React, { useMemo } from 'react';
 import { APPLICATION_STATUS_CONFIG, ApplicationStatus } from '../../../types/theme.ts';
 import { useCatalogStore } from '../../catalog/catalogStore.ts';
@@ -12,6 +13,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
   const catalogCount = useCatalogStore((s) => s.types.length);
   const requirementsCount = useCatalogStore((s) => s.requirements.length);
   const applications = useRequestStore((s) => s.requests);
+  const loading = useRequestStore((s) => s.isLoading && !s.isInitialized);
 
   // Contadores reales individuales para cada estado exacto (RF-35)
   const realCounts = useMemo(() => {
@@ -68,7 +70,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
           Solicitudes por estado
         </span>
         <span className="text-[11px] text-stone-500 font-medium">
-          {applications.length} expedientes registrados · {catalogCount} tipos activos
+          <SkeletonValue loading={loading}>{applications.length}</SkeletonValue> expedientes registrados · {catalogCount} tipos activos
         </span>
       </div>
 
@@ -100,7 +102,7 @@ export function MetricsStrip({ onSelectStatus, selectedStatus }: MetricsStripPro
                 </span>
               </div>
               <div className="text-2xl font-extrabold font-mono text-[#14281D] tabular-nums mt-0.5">
-                {count}
+                <SkeletonValue loading={loading}>{count}</SkeletonValue>
               </div>
               <div className="text-[10px] text-stone-400 mt-1 truncate">
                 {status === 'LISTA_COMITE'
