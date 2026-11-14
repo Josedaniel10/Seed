@@ -22,6 +22,27 @@ const store = useApplicationStore.getState();
 // Solicitud en revisión: sol-003
 const appId = 'sol-003';
 
+// Exercise observation writes through their persisted RPC, without local fallbacks.
+const originalFetch = globalThis.fetch;
+process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:54321';
+process.env.VITE_SUPABASE_ANON_KEY = 'technical-review-test-key';
+let remoteObservation;
+let observationAuditCount = 0;
+globalThis.fetch = async (input, options) => {
+  if (!String(input).endsWith('/rpc/act_on_observation')) throw new Error('Unexpected endpoint');
+  const args = JSON.parse(options.body);
+  if (args.p_action === 'ADD') remoteObservation = {
+    id: 'saved-observation', application_id: appId, assignment_id: 'assignment', author_id: 'usr-003',
+    category: args.p_category, content: args.p_content, is_resolved: false, applicant_response: null,
+    verified_by: null, verified_at: null, verification_notes: null, created_at: '2026-11-14',
+  };
+  if (args.p_action === 'RESPOND') remoteObservation.applicant_response = args.p_content;
+  if (args.p_action === 'VERIFY') Object.assign(remoteObservation, { is_resolved: args.p_accept,
+    verified_by: 'usr-003', verified_at: '2026-11-14', verification_notes: args.p_content });
+  return Response.json({ observation: remoteObservation, audit: { id: 'obs-audit-' + (++observationAuditCount),
+    application_id: appId, actor_id: 'actor', action: 'AJUSTE_' + args.p_action, details: {}, created_at: '2026-11-14' } });
+};
+
 // 1. Registro de observación técnica clasificada (RF-17)
 const obsRes = await store.addTechnicalObservation(
   appId,
@@ -58,6 +79,10 @@ const verification = await store.verifyObservation(obsId, true, 'Evidencia compr
 if (!verification.success || !useApplicationStore.getState().observations.find(o => o.id === obsId)?.is_resolved) {
   throw new Error('La verificación debe aceptar el ajuste');
 }
+
+globalThis.fetch = originalFetch;
+delete process.env.VITE_SUPABASE_URL;
+delete process.env.VITE_SUPABASE_ANON_KEY;
 
 // 3. Monitor de seguimiento de plazos y vencimientos (RF-22, T3.12)
 const deadlineStatus = store.getDeadlineStatus(appId);

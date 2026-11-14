@@ -1278,119 +1278,26 @@ export const useRequestStore = create<RequestState>()(
         return get().assignments.filter((asg) => asg.reviewer_id === reviewerId && asg.is_active);
       },
 
-      addTechnicalObservation: async (
-        requestId: string,
-        authorId: string,
-        authorName: string,
-        category: ObservationCategory,
-        content: string
-      ) => {
-        if (!content || content.trim().length === 0) {
-          return { success: false, error: 'El contenido de la observación no puede estar vacío.' };
-        }
-
-        if (getSupabaseClient()) {
-          const result = await observationAction({ p_application_id: requestId, p_action: 'ADD', p_content: content, p_category: category });
-          if (!result.success) return result;
-          set(state => ({ observations: [...state.observations, result.observation], auditHistory: [...state.auditHistory, result.audit] }));
-          return result;
-        }
-        const nowIso = new Date().toISOString();
-        const activeAssignment = get().getActiveAssignment(requestId);
-
-        const newObs: Observation = {
-          id: `obs-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-          request_id: requestId,
-          application_id: requestId,
-          assignment_id: activeAssignment?.id || null,
-          author_id: authorId,
-          category,
-          content: content.trim(),
-          is_resolved: false,
-          applicant_response: null,
-          created_at: nowIso,
-        };
-
-        const auditItem: AuditHistory = {
-          id: createUuid(),
-          request_id: requestId,
-          application_id: requestId,
-          actor_id: authorId,
-          action: 'OBSERVACION_TECNICA_REGISTRADA',
-          previous_status: null,
-          new_status: null,
-          details: {
-            category,
-            author_name: authorName,
-            content_snippet: content.substring(0, 100),
-            timestamp: nowIso,
-          },
-          created_at: nowIso,
-        };
-
-        set((state) => ({
-          observations: [...state.observations, newObs],
-          auditHistory: [...state.auditHistory, auditItem],
-        }));
-
-        return { success: true, observation: newObs };
+      addTechnicalObservation: async (requestId, _authorId, _authorName, category, content) => {
+        if (!content.trim()) return { success: false, error: 'El contenido de la observación no puede estar vacío.' };
+        const result = await observationAction({ p_application_id: requestId, p_action: 'ADD', p_content: content, p_category: category });
+        if (!result.success) return result;
+        set(state => ({ observations: [...state.observations.filter(item => item.id !== result.observation.id), result.observation],
+          auditHistory: [...state.auditHistory.filter(item => item.id !== result.audit.id), result.audit] }));
+        return result;
       },
 
-      respondToObservation: async (
-        observationId: string,
-        applicantResponse: string,
-        actorId: string,
-        actorName: string
-      ) => {
-        if (!applicantResponse || applicantResponse.trim().length === 0) {
-          return { success: false, error: 'La respuesta al ajuste no puede estar vacía.' };
-        }
-
-        const obs = get().observations.find((o) => o.id === observationId);
+      respondToObservation: async (observationId, applicantResponse, _actorId, _actorName) => {
+        if (!applicantResponse.trim()) return { success: false, error: 'La respuesta al ajuste no puede estar vacía.' };
+        const obs = get().observations.find(item => item.id === observationId);
         if (!obs) return { success: false, error: 'Observación no encontrada.' };
         if (obs.is_resolved) return { success: false, error: 'El ajuste ya fue verificado.' };
-
-        if (getSupabaseClient()) {
-          const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'RESPOND',
-            p_observation_id: observationId, p_content: applicantResponse });
-          if (!result.success) return result;
-          set(state => ({ observations: state.observations.map(item => item.id === observationId ? result.observation : item),
-            auditHistory: [...state.auditHistory, result.audit] }));
-          return result;
-        }
-        const nowIso = new Date().toISOString();
-        const updatedObs: Observation = {
-          ...obs,
-          applicant_response: applicantResponse.trim(),
-          is_resolved: false,
-          verified_by: null,
-          verified_at: null,
-          verification_notes: null,
-        };
-
-        const auditItem: AuditHistory = {
-          id: createUuid(),
-          request_id: obs.request_id || obs.application_id || '',
-          application_id: obs.request_id || obs.application_id || '',
-          actor_id: actorId,
-          action: 'RESPUESTA_AJUSTES_INVESTIGADOR',
-          previous_status: null,
-          new_status: null,
-          details: {
-            observation_id: observationId,
-            actor_name: actorName,
-            response_snippet: applicantResponse.substring(0, 100),
-            timestamp: nowIso,
-          },
-          created_at: nowIso,
-        };
-
-        set((state) => ({
-          observations: state.observations.map((o) => (o.id === observationId ? updatedObs : o)),
-          auditHistory: [...state.auditHistory, auditItem],
-        }));
-
-        return { success: true, observation: updatedObs };
+        const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'RESPOND',
+          p_observation_id: observationId, p_content: applicantResponse });
+        if (!result.success) return result;
+        set(state => ({ observations: state.observations.map(item => item.id === observationId ? result.observation : item),
+          auditHistory: [...state.auditHistory.filter(item => item.id !== result.audit.id), result.audit] }));
+        return result;
       },
 
       verifyObservation: async (id, accept, notes, expectedResponse) => {
@@ -1398,20 +1305,11 @@ export const useRequestStore = create<RequestState>()(
         if (!obs?.applicant_response || !notes.trim()) return { success: false, error: 'Se requiere respuesta y fundamento de verificación.' };
         if (obs.is_resolved) return { success: false, error: 'El ajuste ya fue verificado.' };
         if (obs.applicant_response !== expectedResponse) return { success: false, error: 'La respuesta cambió; revise el expediente antes de verificar.' };
-        if (getSupabaseClient()) {
-          const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'VERIFY',
-            p_observation_id: id, p_content: notes, p_accept: accept, p_expected_response: expectedResponse });
-          if (!result.success) return result;
-          set(state => ({ observations: state.observations.map(item => item.id === id ? result.observation : item), auditHistory: [...state.auditHistory, result.audit] }));
-          return { success: true };
-        }
-        const actor = get().getActiveAssignment(obs.application_id ?? obs.request_id ?? '')?.reviewer_id ?? null;
-        const now = new Date().toISOString();
-        set(state => ({ observations: state.observations.map(item => item.id === id ? { ...item, is_resolved: accept,
-          verification_notes: notes.trim(), verified_at: now, verified_by: actor } : item),
-          auditHistory: [...state.auditHistory, { id: createUuid(), application_id: obs.application_id ?? obs.request_id,
-            actor_id: actor, action: 'AJUSTE_VERIFY', previous_status: null, new_status: null,
-            details: { observation_id: id, content: notes.trim(), accepted: accept }, created_at: now }] }));
+        const result = await observationAction({ p_application_id: obs.application_id ?? obs.request_id ?? '', p_action: 'VERIFY',
+          p_observation_id: id, p_content: notes, p_accept: accept, p_expected_response: expectedResponse });
+        if (!result.success) return result;
+        set(state => ({ observations: state.observations.map(item => item.id === id ? result.observation : item),
+          auditHistory: [...state.auditHistory.filter(item => item.id !== result.audit.id), result.audit] }));
         return { success: true };
       },
 
@@ -1671,6 +1569,8 @@ export const useRequestStore = create<RequestState>()(
       },
 
       loadFromSupabase: async () => {
+        const observationsBeforeRead = get().observations;
+        const auditBeforeRead = get().auditHistory;
         set({ isLoading: true });
         const client = getSupabaseClient();
         if (!client) {
@@ -1772,9 +1672,9 @@ export const useRequestStore = create<RequestState>()(
             set({
               requests: mappedApps,
               documents: mappedDocs,
-              auditHistory: mappedAud,
+              auditHistory: auditBeforeRead === get().auditHistory ? mappedAud : get().auditHistory,
               assignments: mappedAsg,
-              observations: mappedObs,
+              observations: observationsBeforeRead === get().observations ? mappedObs : get().observations,
               isInitialized: true,
               isLoading: false,
             });

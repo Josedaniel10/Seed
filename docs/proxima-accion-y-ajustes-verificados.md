@@ -19,6 +19,8 @@
 7. No se pueden escribir verificaciones directamente desde el cliente ni simular sus eventos de auditoría.
 8. Los plazos mostrados pertenecen a la asignación del evaluador. No se utilizan como plazo del investigador ni se inventan fechas para las demás acciones.
 9. Las respuestas antiguas que fueron marcadas automáticamente como resueltas se reabren si el expediente todavía está en revisión. Los expedientes finalizados conservan su registro histórico.
+10. Registrar, responder o aceptar observaciones exige confirmación de Supabase. No existe un guardado local alternativo que anuncie éxito; si falla, el texto permanece disponible para reintentar.
+11. Las observaciones y su auditoría se actualizan en segundo plano entre sesiones autorizadas, sin reiniciar formularios. Se reciben cambios en vivo y se comprueba el servidor cada 15 segundos mientras la pestaña está visible, al volver a ella y al recuperar conexión.
 
 Las respuestas técnicas incluyen referencias a documentos, páginas o secciones del expediente. La carga de versiones documentales continúa en el flujo de subsanación documental. El seguimiento posterior a una **aprobación con ajustes del comité** requiere un flujo propio; esta entrega cubre la revisión técnica previa a comité.
 
@@ -33,7 +35,7 @@ Las respuestas técnicas incluyen referencias a documentos, páginas o secciones
 
 ## Base de datos y pruebas
 
-Migración: `20261114000001_verified_adjustments.sql`.
+Migraciones: `20261114000001_verified_adjustments.sql` y `20261114000002_observation_realtime.sql`. La segunda añade observaciones a la publicación Realtime; conserva los permisos de consulta existentes.
 
 ```sh
 # Verifica la migración y las reglas con datos que se revierten.

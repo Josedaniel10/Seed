@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AlertProvider } from './components/ui/AlertProvider.tsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsSync } from './features/notifications/useNotifications.ts';
+import { ObservationSync } from './features/validation/ObservationSync.tsx';
 import { BrowserRouter } from 'react-router-dom';
 import { useMobileViewport } from './hooks/useMobileViewport.ts';
 import { AppRoutes } from './routes/AppRoutes.tsx';
@@ -39,6 +40,7 @@ export default function App() {
       <NotificationsSync />
       <BrowserRouter>
         <AlertProvider>
+          <ObservationSync />
           <AppRoutes />
         </AlertProvider>
       </BrowserRouter>

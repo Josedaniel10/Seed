@@ -1,4 +1,9 @@
 BEGIN;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM pg_publication WHERE pubname='supabase_realtime') AND NOT EXISTS(
+   SELECT 1 FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='observations'
+ ) THEN RAISE EXCEPTION 'Observations are missing from Realtime publication'; END IF;
+END $$;
 INSERT INTO auth.users(id,email,raw_app_meta_data) VALUES
  ('d0140000-0000-4000-8000-000000000001','adjust-owner@example.invalid','{}'),
  ('d0140000-0000-4000-8000-000000000002','adjust-reviewer@example.invalid','{"seed_initial_role":"integrante_comite"}'),
@@ -31,11 +36,13 @@ BEGIN
  BEGIN PERFORM public.act_on_observation(a,'VERIFY',o,'Verificado',p_accept=>true,p_expected_response=>'Respuesta');
    RAISE EXCEPTION 'Foreign verification accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  PERFORM set_config('request.jwt.claims','{"sub":"d0140000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+ IF NOT EXISTS(SELECT 1 FROM public.observations WHERE id=o AND content='Corregir metodología') THEN RAISE EXCEPTION 'Owner cannot reload reviewer observation'; END IF;
  result := public.act_on_observation(a,'RESPOND',o,'Respuesta inicial');
  IF (result#>>'{observation,is_resolved}')::boolean THEN RAISE EXCEPTION 'Response resolved adjustment'; END IF;
  BEGIN PERFORM public.act_on_observation(a,'VERIFY',o,'Autoaceptación',p_accept=>true,p_expected_response=>'Respuesta inicial');
    RAISE EXCEPTION 'Owner accepted own adjustment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  PERFORM set_config('request.jwt.claims','{"sub":"d0140000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+ IF NOT EXISTS(SELECT 1 FROM public.observations WHERE id=o AND applicant_response='Respuesta inicial') THEN RAISE EXCEPTION 'Reviewer cannot reload owner response'; END IF;
  BEGIN PERFORM public.act_on_observation(a,'VERIFY',o,'Verificado',p_accept=>true,p_expected_response=>'Versión antigua');
    RAISE EXCEPTION 'Stale verification accepted'; EXCEPTION WHEN serialization_failure THEN NULL; END;
  result := public.act_on_observation(a,'VERIFY',o,'Falta evidencia',p_accept=>false,p_expected_response=>'Respuesta inicial');
