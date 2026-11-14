@@ -39,4 +39,4 @@ jsdom se incorpora como dependencia de desarrollo para comprobar eventos y formu
 
 ## Mejoras siguientes
 
-Esta etapa completa las confirmaciones. Continúan pendientes los borradores recuperables, orientación de próxima acción, seguimiento de ajustes obligatorios, correo y recordatorios programados, declaración de conflictos, criterios configurables, compromisos posteriores y comparación de subsanaciones. Los originales anteriores ya se conservan; la interfaz comparativa y la limpieza de cargas abandonadas son trabajos separados.
+Esta etapa completa las confirmaciones. Los [borradores recuperables en el navegador](borradores-recuperables.md) se incorporaron en la etapa siguiente. Continúan pendientes la orientación de próxima acción, seguimiento de ajustes obligatorios, correo y recordatorios programados, declaración de conflictos, criterios configurables, compromisos posteriores y comparación de subsanaciones. Los originales anteriores ya se conservan; la interfaz comparativa y la limpieza de cargas abandonadas son trabajos separados.

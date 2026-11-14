@@ -1,4 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import { useLocalDraft } from '../drafts/useLocalDraft.ts';
+import { DraftNotice } from '../drafts/DraftNotice.tsx';
+import { requestDraftSchema } from '../drafts/draftSchemas.ts';
+import type { RequestDraft } from '../drafts/draftSchemas.ts';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -17,7 +22,7 @@ import {
 import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useGroupsStore } from '../groups/groupsStore.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
-import { useRequestStore, UploadedFilePayload } from './requestStore.ts';
+import { useRequestStore } from './requestStore.ts';
 import { step2GeneralDataSchema } from './requestSchema.ts';
 import { uploadDocumentFile } from '../documents/documentFiles.ts';
 import { createUuid } from '../../lib/uuid.ts';
@@ -30,42 +35,53 @@ const STEPS = [
 ];
 
 export function RequestSubmissionWizard() {
+  const userId = useSessionStore((state) => state.user?.id ?? '');
+  return <RequestSubmissionForm key={userId} />;
+}
+
+function RequestSubmissionForm() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
   const { types, requirements } = useCatalogStore();
   const { groups } = useGroupsStore();
   const { createRequest, isSubmitting } = useRequestStore();
-  const submissionId = useRef<string | null>(null);
 
   const activeTypes = types.filter((t) => t.is_active);
 
-  const [currentStep, setCurrentStep] = useState(1);
-  const [selectedTypeId, setSelectedTypeId] = useState<string>(activeTypes[0]?.id || types[0]?.id || '');
-
-  const [formData, setFormData] = useState({
-    title: '',
-    related_project: '',
-    abstract: '',
-    research_group_id: groups[0]?.id || '',
-    budget_requested: 0,
-    is_tutor_endorsed: false,
+  const { draft: savedDraft, controller: draftController } = useLocalDraft({
+    ownerId: user?.id ?? '', scope: 'request:new', context: 'request:v1', schema: requestDraftSchema,
+    createInitial: (): RequestDraft => ({
+      currentStep: 1, selectedTypeId: activeTypes[0]?.id ?? '', submissionId: createUuid(),
+      formData: { title: '', related_project: '', abstract: '', research_group_id: groups[0]?.id ?? '',
+        budget_requested: 0, is_tutor_endorsed: false }, uploadedFiles: {},
+    }),
+    hasContent: (value) => Boolean(value.selectedTypeId) || value.currentStep > 1 || Boolean(value.formData.title || value.formData.abstract
+      || value.formData.related_project || Object.keys(value.uploadedFiles).length),
   });
+  const { currentStep, selectedTypeId, formData, uploadedFiles } = savedDraft.value;
+  const setCurrentStep = (next: number) => draftController.update((current) => ({ ...current, currentStep: next }));
+  const setSelectedTypeId = (next: string) => draftController.update((current) => ({ ...current, selectedTypeId: next }));
+  const setFormData: Dispatch<SetStateAction<RequestDraft['formData']>> = (next) => draftController.update((current) => ({
+    ...current, formData: typeof next === 'function' ? next(current.formData) : next,
+  }));
+  const setUploadedFiles: Dispatch<SetStateAction<RequestDraft['uploadedFiles']>> = (next) => draftController.update((current) => ({
+    ...current, uploadedFiles: typeof next === 'function' ? next(current.uploadedFiles) : next,
+  }));
 
   useEffect(() => {
-    if (!types.some((type) => type.id === selectedTypeId && type.is_active)) {
+    if (!selectedTypeId) {
       const firstActiveType = types.find((type) => type.is_active);
       if (firstActiveType) setSelectedTypeId(firstActiveType.id);
     }
   }, [types, selectedTypeId]);
 
   useEffect(() => {
-    if (!groups.some((group) => group.id === formData.research_group_id)) {
+    if (!formData.research_group_id && groups[0]) {
       setFormData((current) => ({ ...current, research_group_id: groups[0]?.id || '' }));
     }
   }, [groups, formData.research_group_id]);
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedFilePayload>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
   const uploadLock = useRef(false);
@@ -78,7 +94,7 @@ export function RequestSubmissionWizard() {
   const [copiedRadicado, setCopiedRadicado] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  const selectedType = types.find((t) => t.id === selectedTypeId) || activeTypes[0] || types[0];
+  const selectedType = types.find((t) => t.id === selectedTypeId);
   const typeRequirements = requirements.filter(
     (r) => (r.request_type_id || r.application_type_id) === selectedType?.id
   );
@@ -141,7 +157,7 @@ export function RequestSubmissionWizard() {
     setGeneralError(null);
 
     if (currentStep === 1) {
-      if (!selectedTypeId) {
+      if (!selectedType?.is_active) {
         setGeneralError('Debe seleccionar un tipo de solicitud del catálogo para continuar.');
         return;
       }
@@ -197,6 +213,24 @@ export function RequestSubmissionWizard() {
     if (useRequestStore.getState().isSubmitting || uploadLock.current) return;
     setGeneralError(null);
 
+    if (!selectedType?.is_active) {
+      setGeneralError('El tipo de trámite del borrador ya no está disponible. Seleccione uno activo.');
+      setCurrentStep(1);
+      return;
+    }
+    const checkedData = step2GeneralDataSchema.safeParse(formData);
+    if (!checkedData.success || (formData.research_group_id && !groups.some((group) => group.id === formData.research_group_id))) {
+      setGeneralError('Revise los datos generales recuperados y el grupo de investigación antes de radicar.');
+      setCurrentStep(2);
+      return;
+    }
+    if (mandatoryRequirements.some((requirement) => !uploadedFiles[requirement.id])) {
+      setGeneralError('Los requisitos actuales del trámite cambiaron o faltan soportes. Revise la carga documental.');
+      setCurrentStep(3);
+      return;
+    }
+    draftController.flush();
+
     const docsPayload = typeRequirements.flatMap(({ id }) => uploadedFiles[id] ? [uploadedFiles[id]] : []);
     if (!user?.id) {
       setGeneralError('No se pudo identificar la sesión del investigador. Cierre sesión e ingrese nuevamente.');
@@ -207,7 +241,7 @@ export function RequestSubmissionWizard() {
     const applicantName = user?.fullName || 'Investigador Principal';
 
     const result = await createRequest({
-      submission_id: (submissionId.current ??= createUuid()),
+      submission_id: savedDraft.value.submissionId,
       request_type_id: selectedTypeId,
       application_type_id: selectedTypeId,
       applicant_id: applicantId,
@@ -226,6 +260,7 @@ export function RequestSubmissionWizard() {
       return;
     }
 
+    draftController.complete();
     setSubmittedRequest({
       id: result.request.id,
       filing_number: result.request.filing_number,
@@ -325,6 +360,11 @@ export function RequestSubmissionWizard() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-16">
+      <DraftNotice draft={savedDraft} controller={draftController} label="nueva solicitud" disabled={isSubmitting || Boolean(uploadingReqId)} />
+      {selectedTypeId && types.length > 0 && !selectedType?.is_active && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-950">
+        El tipo de trámite del borrador ya no está disponible. Sus datos se conservan.
+        <button type="button" onClick={() => setCurrentStep(1)} className="ml-2 min-h-11 underline">Revisar tipo de trámite</button>
+      </p>}
       <div className="bg-white rounded-2xl border border-[#E5E3DC] p-3 md:p-4 shadow-xs">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {STEPS.map((s) => (
@@ -572,6 +612,8 @@ export function RequestSubmissionWizard() {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-800"
                   >
                     <option value="">Sin grupo asignado</option>
+                    {formData.research_group_id && !groups.some((group) => group.id === formData.research_group_id)
+                      && <option value={formData.research_group_id} disabled>Grupo del borrador no disponible; seleccione uno actual</option>}
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         [{g.code}] {g.name}
