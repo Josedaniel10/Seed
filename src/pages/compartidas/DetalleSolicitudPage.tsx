@@ -649,6 +649,16 @@ export function DetalleSolicitudPage() {
                                 </div>
                               )}
                               {typeof item.details.session_number === 'string' && <p>Sesión {item.details.session_number}</p>}
+                              {typeof item.details.reviewer_name === 'string' && item.details.reviewer_name.trim() && (
+                                <p><span className="font-semibold text-stone-800">Evaluador asignado:</span> {item.details.reviewer_name}</p>
+                              )}
+                              {typeof item.details.assigner_name === 'string' && item.details.assigner_name.trim() && (
+                                <p><span className="font-semibold text-stone-800">Asignado por:</span> {item.details.assigner_name}</p>
+                              )}
+                              {typeof item.details.deadline_date === 'string' && item.details.deadline_date.trim() && (
+                                <p><span className="font-semibold text-stone-800">Fecha límite de revisión:</span> <time dateTime={item.details.deadline_date}>{item.details.deadline_date}</time></p>
+                              )}
+                              {item.action === 'REASIGNACION_EVALUADOR' && <p>Esta asignación reemplaza la asignación anterior.</p>}
                               {typeof item.details.file_name === 'string' && <p>Archivo: {item.details.file_name}</p>}
                               {typeof item.details.observations === 'string' && item.details.observations.trim() && (
                                 <div>

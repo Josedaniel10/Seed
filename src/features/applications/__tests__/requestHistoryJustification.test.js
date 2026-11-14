@@ -49,3 +49,29 @@ test('observations remain escaped and absent observations do not produce an empt
   assert.doesNotMatch(markup, /<script>/);
   assert.doesNotMatch(renderHistory([{ action: 'DOCUMENTO_RECHAZADO', details: { observations: null } }]), /Justificación del rechazo:/);
 });
+
+test('assignment history shows the evaluator, assigning secretary and original deadline', () => {
+  const markup = renderHistory([{ action: 'ASIGNACION_EVALUADOR', details: {
+    reviewer_name: 'Dra. Primera Evaluadora', assigner_name: 'Secretaría de Investigación', deadline_date: '2026-11-20',
+  } }]);
+  assert.match(markup, /Evaluador asignado:/);
+  assert.match(markup, /Dra\. Primera Evaluadora/);
+  assert.match(markup, /Asignado por:/);
+  assert.match(markup, /Secretaría de Investigación/);
+  assert.match(markup, /Fecha límite de revisión:/);
+  assert.match(markup, /datetime="2026-11-20">2026-11-20/i);
+});
+
+test('reassignment preserves each historical evaluator and deadline without depending on current profiles', () => {
+  const markup = renderHistory([
+    { action: 'ASIGNACION_EVALUADOR', details: { reviewer_name: 'Evaluador anterior', deadline_date: '2026-11-19' } },
+    { action: 'REASIGNACION_EVALUADOR', details: { reviewer_name: 'Nuevo evaluador', assigner_name: 'Secretaria', deadline_date: '2026-11-25' } },
+  ]);
+  assert.match(markup, /Evaluador anterior/);
+  assert.match(markup, /Nuevo evaluador/);
+  assert.match(markup, /2026-11-19/);
+  assert.match(markup, /2026-11-25/);
+  assert.match(markup, /reemplaza la asignación anterior/);
+  const legacy = renderHistory([{ action: 'ASIGNACION_EVALUADOR', details: { reviewer_id: 'internal-id' } }]);
+  assert.doesNotMatch(legacy, /Evaluador asignado:|Asignado por:|Fecha límite de revisión:|internal-id/);
+});
