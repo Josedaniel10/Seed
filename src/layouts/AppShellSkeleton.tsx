@@ -10,9 +10,8 @@ export function AppShellSkeleton(): ReactElement {
       <Skeleton className="h-8 w-8 rounded-full" />
     </div>
     <div className="flex min-h-[calc(100dvh-56px)]">
-      <div className={`${readSidebarCollapsed() ? 'w-20' : 'w-60'} bg-white border-r border-[#E5E3DC] p-3.5 space-y-3 hidden md:block shrink-0`}>
-        <Skeleton className="h-4 w-full max-w-36 my-3" />
-        {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-9 w-full rounded-xl" />)}
+      <div className={`${readSidebarCollapsed() ? 'w-20' : 'w-60'} bg-white border-r border-[#E5E3DC] p-3.5 space-y-1 hidden md:block shrink-0`}>
+        {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-10 w-full rounded-xl" />)}
       </div>
       <div className="min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
         <div className="border-b border-[#E5E3DC] pb-4 space-y-2"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-4 w-1/2" /></div>
