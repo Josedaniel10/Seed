@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppRole, normalizeRole, ROLE_HOME_PATHS } from '../lib/permissions.ts';
 import { getSupabaseClient } from '../lib/supabase.ts';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import type { Profile, UserRole } from '../types/database.ts';
 
 export interface UserSession {
@@ -16,6 +17,16 @@ export interface UserSession {
   activeRole: AppRole;
 }
 
+class SessionAccessError extends Error {}
+class SessionSyncError extends Error {}
+
+function sameUserSession(current: UserSession, next: UserSession): boolean {
+  return current.id === next.id && current.email === next.email && current.fullName === next.fullName
+    && current.academicProgram === next.academicProgram && current.academicLink === next.academicLink
+    && current.researchGroupId === next.researchGroupId && current.activeRole === next.activeRole
+    && current.roles.length === next.roles.length && current.roles.every((role) => next.roles.includes(role));
+}
+
 async function loadAuthenticatedSession(client: SupabaseClient, user: User): Promise<UserSession> {
   const [profile, assignments] = await Promise.all([
     client.from('profiles').select('*').eq('id', user.id).eq('is_active', true)
@@ -24,16 +35,19 @@ async function loadAuthenticatedSession(client: SupabaseClient, user: User): Pro
       .overrideTypes<{ role: UserRole }[], { merge: false }>(),
   ]);
   if (profile.error || assignments.error) {
-    throw new Error('No se pudo consultar el perfil y sus permisos en Supabase.');
+    const denied = [profile.error, assignments.error].some((error) => error
+      && (error.code === '42501' || error.code?.startsWith('PGRST30')));
+    if (denied) throw new SessionAccessError('No se pudo autorizar el acceso al perfil y sus permisos.');
+    throw new SessionSyncError('No se pudo consultar el perfil y sus permisos en Supabase.');
   }
   const record = profile.data?.[0];
-  if (!record) {
-    throw new Error('Su cuenta necesita un perfil activo para ingresar.');
+  if (!record || record.id !== user.id || !record.is_active) {
+    throw new SessionAccessError('Su cuenta necesita un perfil activo para ingresar.');
   }
   const roles = [...new Set([record.role, ...(assignments.data ?? []).map(({ role }) => role)].map(normalizeRole))]
     .filter((role): role is AppRole => Object.hasOwn(ROLE_HOME_PATHS, role));
   const activeRole = roles[0];
-  if (!activeRole) throw new Error('El perfil no tiene un rol válido.');
+  if (!activeRole) throw new SessionAccessError('El perfil no tiene un rol válido.');
   return {
     id: record.id,
     email: record.email,
@@ -134,6 +148,8 @@ interface SessionState {
   user: UserSession | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isRefreshingSession: boolean;
+  sessionSyncError: string | null;
   unreadNotificationsCount: number;
 
   loginWithCredentials: (email: string, password?: string) => Promise<LoginResult>;
@@ -149,10 +165,24 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      let sessionEpoch = 0;
+      let announcedUserId: string | null | undefined;
+      let pendingSync: { epoch: number; promise: Promise<void> } | null = null;
+      let loggingOut = false;
+      const clearSession = () => {
+        sessionEpoch++;
+        announcedUserId = null;
+        pendingSync = null;
+        set({ user: null, isAuthenticated: false, isLoading: false,
+          isRefreshingSession: false, sessionSyncError: null, unreadNotificationsCount: 0 });
+      };
+      return ({
       user: null, // Arranca sin sesión (T7.4)
       isAuthenticated: false,
       isLoading: true,
+      isRefreshingSession: false,
+      sessionSyncError: null,
       unreadNotificationsCount: 0,
 
       /**
@@ -162,29 +192,34 @@ export const useSessionStore = create<SessionState>()(
       setupAuthListener: () => {
         const client = getSupabaseClient();
         if (!client) return () => {};
-
+        let listening = true;
         const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-          if (event === 'INITIAL_SESSION' && !session?.user) {
-            set({ user: null, isAuthenticated: false, isLoading: false });
-          } else if (
-            event === 'INITIAL_SESSION' ||
-            event === 'SIGNED_IN' ||
-            event === 'USER_UPDATED'
-          ) {
-            set({ isLoading: true });
-            queueMicrotask(() => {
-              void get().initializeSession();
-            });
-          } else if (event === 'SIGNED_OUT') {
-            set({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
+          if (!listening) return;
+          if (event === 'SIGNED_OUT') { clearSession(); return; }
+          if (loggingOut) return;
+          if (!['INITIAL_SESSION', 'SIGNED_IN', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event)) return;
+          if (!session?.user) { clearSession(); return; }
+
+          if (announcedUserId !== session.user.id) {
+            sessionEpoch++;
+            pendingSync = null;
+            announcedUserId = session.user.id;
           }
+          // A different identity must never see the previous user's page while permissions load.
+          if (get().user?.id !== session.user.id) {
+            set({ user: null, isAuthenticated: false, isLoading: true,
+              isRefreshingSession: false, sessionSyncError: null, unreadNotificationsCount: 0 });
+          }
+          const epoch = sessionEpoch;
+          queueMicrotask(() => {
+            if (listening && epoch === sessionEpoch && !loggingOut) void get().initializeSession();
+          });
         });
 
         return () => {
+          listening = false;
+          sessionEpoch++;
+          pendingSync = null;
           subscription.unsubscribe();
         };
       },
@@ -192,32 +227,50 @@ export const useSessionStore = create<SessionState>()(
       /**
        * Inicializa y sincroniza la sesión activa desde Supabase Auth
        */
-      initializeSession: async () => {
+      initializeSession: () => {
+        if (loggingOut) return Promise.resolve();
+        if (pendingSync?.epoch === sessionEpoch) return pendingSync.promise;
         const client = getSupabaseClient();
         if (!client) {
-          set({ user: null, isAuthenticated: false, isLoading: false });
-          return;
+          clearSession();
+          return Promise.resolve();
         }
-
-        set({ isLoading: true });
-        try {
-          const { data: { session }, error } = await client.auth.getSession();
-          if (error) throw error;
-
-          if (session?.user) {
-            const restored = await loadAuthenticatedSession(client, session.user);
-            const current = get().user;
-            if (current?.id === restored.id && restored.roles.includes(current.activeRole)) {
-              restored.activeRole = current.activeRole;
+        const epoch = sessionEpoch;
+        const expectedUserId = announcedUserId;
+        const previous = get().isAuthenticated ? get().user : null;
+        set({ isLoading: !previous, isRefreshingSession: Boolean(previous), sessionSyncError: null });
+        const promise: Promise<void> = (async () => {
+          try {
+            const { data: { session }, error } = await client.auth.getSession();
+            if (epoch !== sessionEpoch) return;
+            if (error) throw error;
+            if (!session?.user) { clearSession(); return; }
+            if (expectedUserId && expectedUserId !== session.user.id) { clearSession(); return; }
+            if (previous && previous.id !== session.user.id) {
+              set({ user: null, isAuthenticated: false, isLoading: true, isRefreshingSession: false });
             }
-            set({ user: restored, isAuthenticated: true, isLoading: false });
-          } else {
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            const restored = await loadAuthenticatedSession(client, session.user);
+            if (epoch !== sessionEpoch) return;
+            const current = get().user;
+            const activeRole = current && restored.roles.find((role) => role === normalizeRole(current.activeRole));
+            if (current?.id === restored.id && activeRole) restored.activeRole = activeRole;
+            announcedUserId = restored.id;
+            set({ user: current && sameUserSession(current, restored) ? current : restored,
+              isAuthenticated: true, isLoading: false, isRefreshingSession: false, sessionSyncError: null });
+          } catch (error) {
+            if (epoch !== sessionEpoch) return;
+            if (previous && get().user?.id === previous.id
+              && (error instanceof SessionSyncError || isAuthRetryableFetchError(error))) {
+              // Keep the mounted view through temporary network failures. Backend checks remain authoritative.
+              set({ isLoading: false, isRefreshingSession: false,
+                sessionSyncError: 'No se pudo actualizar la sesión. Revise la conexión y vuelva a intentar.' });
+            } else {
+              clearSession();
+            }
           }
-        } catch (err) {
-          console.error('Error al inicializar sesión:', err);
-          set({ user: null, isAuthenticated: false, isLoading: false });
-        }
+        })().finally(() => { if (pendingSync?.promise === promise) pendingSync = null; });
+        pendingSync = { epoch, promise };
+        return promise;
       },
 
       /**
@@ -528,6 +581,8 @@ export const useSessionStore = create<SessionState>()(
        * Cierre de sesión real con limpieza de Supabase y de estado local
        */
       logout: async () => {
+        loggingOut = true;
+        clearSession();
         try {
           const client = getSupabaseClient();
           if (client) {
@@ -536,17 +591,15 @@ export const useSessionStore = create<SessionState>()(
         } catch (err) {
           console.warn('Error al cerrar sesión en Supabase:', err);
         } finally {
-          set({
-            user: null,
-            isAuthenticated: false,
-            unreadNotificationsCount: 0,
-          });
+          clearSession();
+          loggingOut = false;
           if (typeof window !== 'undefined' && window.localStorage) {
             window.localStorage.removeItem('seed_session_store');
           }
         }
       },
-    }),
+    });
+    },
     {
       name: 'seed_session_store',
       partialize: () => ({}),

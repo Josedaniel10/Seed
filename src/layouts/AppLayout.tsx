@@ -21,6 +21,7 @@ import {
 import { useRouteScrollRestoration } from '../hooks/useRouteScrollRestoration.ts';
 import { MobileNavigation } from './MobileNavigation.tsx';
 import { SeedLogo } from '../components/SeedLogo.tsx';
+import { SessionSyncNotice } from '../features/auth/SessionSyncNotice.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
 import { useNotifications } from '../features/notifications/useNotifications.ts';
 import {
@@ -205,6 +206,7 @@ export function AppLayout() {
 
         {/* Zona de contenido de la página */}
         <main className="app-content min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
+          <SessionSyncNotice />
           <Outlet />
         </main>
       </div>
