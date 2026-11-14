@@ -926,10 +926,13 @@ export const useRequestStore = create<RequestState>()(
           const { data, error } = await client.rpc('finalize_documentary_validation', {
             p_application_id: requestId,
           });
+          if (error) {
+            return { success: false, error: formatUserMessage(error.message, 'No se recibió la confirmación del servidor. Actualice la bandeja para comprobar el resultado antes de reintentar.') };
+          }
           const parsed = documentaryCompletionSchema.safeParse(data);
-          if (error || !parsed.success || parsed.data.application.id !== requestId
+          if (!parsed.success || parsed.data.application.id !== requestId
             || parsed.data.audits.some((audit) => audit.application_id !== requestId)) {
-            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el cierre de la validación documental.') };
+            return { success: false, error: 'El servidor respondió, pero la confirmación recibida no permite actualizar la pantalla. Actualice la bandeja para comprobar el resultado antes de volver a finalizar.' };
           }
           const saved = parsed.data;
           const request = { ...saved.application, request_type_id: saved.application.application_type_id };

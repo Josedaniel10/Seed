@@ -26,6 +26,7 @@ const { useUserStore } = await import('../../users/userStore.ts');
 const { useCatalogStore } = await import('../../catalog/catalogStore.ts');
 const { useMinutesStore } = await import('../../minutes/minutesStore.ts');
 const { useCommitteeSessionsStore } = await import('../../sessions/committeeSessionsStore.ts');
+const { getSupabaseClient } = await import('../../../lib/supabase.ts');
 
 const stores = [useSessionStore, useRequestStore, useUserStore, useCatalogStore, useMinutesStore, useCommitteeSessionsStore];
 const snapshots = stores.map((store) => store.getState());
@@ -143,6 +144,52 @@ test('documentary completion waits for confirmation and preserves a rejected sav
   await click(button('Finalizar validación'));
   assert.equal(calls, 1);
   assert.match(document.querySelector('dialog[data-open="true"]').textContent, /No se pudo cerrar/);
+});
+
+test('a confirmed closure with seeded catalog IDs immediately updates the state and displays the next request', async () => {
+  setup('administrative');
+  const originalFetch = globalThis.fetch;
+  const first = { ...application, id: 'b0fbc100-0000-4000-8000-000000000001',
+    application_type_id: 'a0000000-0000-0000-0000-000000000001',
+    applicant_id: 'b0fbc100-0000-4000-8000-000000000020',
+    research_group_id: 'c0000000-0000-0000-0000-000000000001',
+    current_status: 'RADICADA', budget_requested: 0, is_tutor_endorsed: false, requires_committee: true,
+    created_at: '2026-11-13T12:00:00Z', updated_at: '2026-11-13T12:00:00Z' };
+  const next = { ...first, id: 'b0fbc100-0000-4000-8000-000000000002', title: 'Siguiente expediente de la cola',
+    filing_number: 'Radicado 2026-124', created_at: '2026-11-14T12:00:00Z' };
+  let writes = 0;
+  globalThis.fetch = async (input) => {
+    assert.match(String(input), /rpc\/finalize_documentary_validation/);
+    writes++;
+    return Response.json({ application: { ...first, current_status: 'EN_REVISION' }, audits: [{
+      id: 'b0fbc100-0000-4000-8000-000000000050', application_id: first.id, actor_id: first.applicant_id,
+      action: 'VALIDACION_DOCUMENTAL_FINALIZADA', previous_status: 'EN_REVISION', new_status: 'EN_REVISION',
+      details: { document_versions: {} }, created_at: '2026-11-14T13:00:00Z',
+    }] });
+  };
+  window.localStorage.setItem('seed_supabase_url', 'http://127.0.0.1:54321');
+  window.localStorage.setItem('seed_supabase_anon_key', 'documentary-ui-public-test-key');
+  const client = getSupabaseClient();
+  try {
+    useRequestStore.setState({ requests: [first, next], documents: [], auditHistory: [], isLoading: false,
+      isInitialized: true, finalizeAdministrativeValidation: snapshots[1].finalizeAdministrativeValidation });
+    useCatalogStore.setState({ requirements: [] });
+    await mount(createElement(ValidacionPage));
+    await click(button('Finalizar Validación Documental'));
+    await click(button('Finalizar validación'));
+    assert.equal(writes, 1);
+    assert.equal(useRequestStore.getState().requests.find((item) => item.id === first.id).current_status, 'EN_REVISION');
+    assert.equal(document.querySelector('dialog[data-open="true"]'), null);
+    assert.match(document.body.textContent, /Validación documental aprobada/);
+    assert.match(document.body.textContent, /Siguiente expediente de la cola/);
+    assert.match(document.body.textContent, /Ahora se muestra Radicado 2026-124/);
+    assert.doesNotMatch(document.body.textContent, /No se pudo confirmar el cierre/);
+  } finally {
+    await client?.auth.dispose();
+    globalThis.fetch = originalFetch;
+    window.localStorage.removeItem('seed_supabase_url');
+    window.localStorage.removeItem('seed_supabase_anon_key');
+  }
 });
 
 test('session agenda close is deferred until the secretary confirms', async () => {

@@ -7,8 +7,9 @@ const { useRequestStore } = await import('../../requests/requestStore.ts');
 const { getDocumentaryQueue, getDocumentVersions } = await import('../documentaryQueue.ts');
 const app = {
   id: 'b0fbc100-0000-4000-8000-000000000001', filing_number: 'FIFO-001',
-  application_type_id: 'b0fbc100-0000-4000-8000-000000000010', applicant_id: 'b0fbc100-0000-4000-8000-000000000020',
-  title: 'Proyecto de prueba', abstract: 'Resumen', research_group_id: null, budget_requested: 0,
+  // Use the actual Postgres GUID format in seed.sql, not only generated RFC UUIDs.
+  application_type_id: 'a0000000-0000-0000-0000-000000000001', applicant_id: 'b0fbc100-0000-4000-8000-000000000020',
+  title: 'Proyecto de prueba', abstract: 'Resumen', research_group_id: 'c0000000-0000-0000-0000-000000000001', budget_requested: 0,
   current_status: 'RADICADA', is_tutor_endorsed: false, requires_committee: true,
   created_at: '2026-01-01T12:00:00Z', updated_at: '2026-01-01T12:00:00Z',
 };
@@ -55,6 +56,9 @@ test('only confirmed Supabase completion advances the queue and saved closures s
     invalidResponse = false;
     assert.equal((await initial.finalizeAdministrativeValidation(app.id, 'untrusted-id', 'Name')).success, true);
     let state = useRequestStore.getState();
+    assert.equal(state.requests[0].current_status, 'PENDIENTE_DOCUMENTOS');
+    assert.equal(state.requests[0].application_type_id, app.application_type_id);
+    assert.equal(state.requests[0].research_group_id, app.research_group_id);
     assert.deepEqual(getDocumentaryQueue(state.requests, state.documents, state.auditHistory), []);
     await initial.finalizeAdministrativeValidation(app.id, 'untrusted-id', 'Name');
     assert.equal(useRequestStore.getState().auditHistory.length, 1);
