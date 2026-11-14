@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,6 +25,7 @@ import { StatusBadge } from '../../components/ui/StatusBadge.tsx';
 export function AsignacionesPage() {
   const navigate = useNavigate();
   const { user } = useSessionStore();
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(user?.id ?? 'anonymous');
   const {
     requests,
     assignments,
@@ -44,7 +46,7 @@ export function AsignacionesPage() {
 
   // Solicitudes en estado EN_REVISION (habilitadas para asignación de evaluador, RF-15)
   const applicationsInReview = useMemo(() => {
-    return requests.filter((a) => a.current_status === 'EN_REVISION');
+    return requests.filter((a) => ['EN_REVISION', 'UNDER_REVIEW'].includes(a.current_status));
   }, [requests]);
 
   const committeeMembers = useMemo(() => {
@@ -66,6 +68,7 @@ export function AsignacionesPage() {
   }, [committeeMembers, assignments]);
 
   const handleAssign = async (appId: string, revId: string) => {
+    if (!user) return;
     if (!committeeMembers.some((member) => member.id === revId)) {
       setFeedback({ type: 'error', message: 'Debe seleccionar un evaluador de la lista.' });
       return;
@@ -76,29 +79,49 @@ export function AsignacionesPage() {
     deadline.setDate(deadline.getDate() + (deadlineDays || 8));
     const deadlineStr = deadline.toISOString().split('T')[0];
 
-    const res = await assignReviewer(
-      appId,
-      revId,
-      deadlineStr,
-      user?.id || 'usr-004',
-      user?.fullName || 'Secretaría Técnica'
-    );
+    const application = requests.find((request) => request.id === appId);
+    const reviewer = committeeMembers.find((member) => member.id === revId);
+    const previousAssignment = getActiveAssignment(appId);
+    requestDecision({
+      title: previousAssignment ? 'Confirmar reasignación' : 'Confirmar asignación',
+      target: application?.filing_number ?? appId,
+      confirmLabel: previousAssignment ? 'Reasignar evaluador' : 'Asignar evaluador',
+      details: [...(previousAssignment ? [{ label: 'Evaluador anterior',
+        value: users.find((member) => member.id === previousAssignment.reviewer_id)?.full_name ?? previousAssignment.reviewer_id }] : []),
+        { label: 'Evaluador', value: reviewer?.full_name ?? revId },
+        { label: 'Fecha límite', value: deadlineStr }],
+      consequence: previousAssignment
+        ? 'La asignación anterior quedará como histórica. Su acceso por esa asignación terminará y el nuevo evaluador recibirá la revisión.'
+        : 'El evaluador recibirá la revisión y podrá consultar los documentos del expediente.',
+    }, async () => {
+      if (useApplicationStore.getState().getActiveAssignment(appId)?.id !== previousAssignment?.id) {
+        throw new Error('La asignación cambió. Cierre esta confirmación y revise el expediente.');
+      }
+      const res = await assignReviewer(
+        appId,
+        revId,
+        deadlineStr,
+        user.id,
+        user.fullName
+      );
 
-    if (res.success) {
-      setFeedback({
-        type: 'success',
-        message: 'Evaluador asignado formalmente con plazo institucional establecido.',
-      });
-      setSelectedAppId('');
-      setSelectedReviewerId('');
-      setTimeout(() => setFeedback(null), 4000);
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Error al asignar evaluador.' });
-    }
+      if (res.success) {
+        setFeedback({
+          type: 'success',
+          message: 'Evaluador asignado formalmente con plazo institucional establecido.',
+        });
+        setSelectedAppId('');
+        setSelectedReviewerId('');
+        setTimeout(() => setFeedback(null), 4000);
+      } else {
+        throw new Error(res.error || 'Error al asignar evaluador.');
+      }
+    });
   };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
+      {decisionDialog}
       <div className="border-b border-[#E5E3DC] pb-4">
         <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Asignación y Reasignación de Evaluadores Pares

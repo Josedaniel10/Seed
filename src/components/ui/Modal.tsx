@@ -10,6 +10,7 @@ export interface ModalProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  isDismissible?: boolean;
 }
 
 export function Modal({
@@ -20,6 +21,7 @@ export function Modal({
   icon,
   children,
   maxWidth = 'lg',
+  isDismissible = true,
 }: ModalProps) {
   const maxWidthStyles = {
     sm: 'max-w-sm',
@@ -30,7 +32,7 @@ export function Modal({
   };
 
   return (
-    <ResponsiveOverlay isOpen={isOpen} onClose={onClose} label={title}>
+    <ResponsiveOverlay isOpen={isOpen} onClose={() => { if (isDismissible) onClose(); }} label={title}>
       <div
         className={`bg-white rounded-2xl w-full ${maxWidthStyles[maxWidth]} border border-[#E5E3DC] shadow-xl overflow-hidden`}
       >
@@ -43,6 +45,8 @@ export function Modal({
             </div>
           </div>
           <button
+            type="button"
+            disabled={!isDismissible}
             onClick={onClose}
             className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 transition-colors cursor-pointer"
             aria-label="Cerrar modal"

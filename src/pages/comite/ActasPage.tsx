@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import { useState } from 'react';
@@ -19,10 +20,21 @@ export function ActasPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`${user?.id ?? 'anonymous'}:${selectedId}`);
   const selectedMinute = minutes.find((minute) => minute.id === selectedId);
   const filteredMinutes = search ? searchMinutes(search) : minutes;
   const role = normalizeRole(user?.activeRole);
   const canManage = role === 'secretary' || role === 'admin';
+
+  const handleCloseMinute = () => {
+    if (isSaving) return;
+    if (!hasUnsavedChanges) { setSelectedId(null); return; }
+    requestDecision({
+      title: 'Confirmar descarte de cambios', target: selectedMinute?.minute_number ?? 'Acta',
+      confirmLabel: 'Descartar cambios y cerrar', intent: 'danger',
+      consequence: 'Se perderán los cambios sin guardar. El último borrador guardado se conservará.',
+    }, () => { setSelectedId(null); });
+  };
 
   const handleDownload = async (minute: CommitteeMinutes) => {
     setActionError(null);
@@ -71,18 +83,17 @@ export function ActasPage() {
         </tr>)}</tbody>
       </table>
     </div>
-    <ResponsiveOverlay isOpen={Boolean(selectedMinute)} onClose={() => { if (!isSaving && (!hasUnsavedChanges || window.confirm('Hay cambios sin guardar. ¿Cerrar el acta y descartarlos?'))) setSelectedId(null); }} label="Acta de comité">
+    <ResponsiveOverlay isOpen={Boolean(selectedMinute)} onClose={handleCloseMinute} label="Acta de comité">
       {selectedMinute && (<>
       <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-stone-100 pb-3 shrink-0">
           <h2 id="minute-dialog-title" className="font-bold text-[#14281D]">{selectedMinute.minute_number}</h2>
-          <button type="button" aria-label="Cerrar acta" disabled={isSaving} onClick={() => {
-            if (!hasUnsavedChanges || window.confirm('Hay cambios sin guardar. ¿Cerrar el acta y descartarlos?')) setSelectedId(null);
-          }} className="rounded-xl p-2 hover:bg-stone-100"><X size={18} /></button>
+          <button type="button" aria-label="Cerrar acta" disabled={isSaving} onClick={handleCloseMinute} className="rounded-xl p-2 hover:bg-stone-100"><X size={18} /></button>
         </div>
         <div className="overflow-y-auto pr-1"><MinuteWorkspace minuteId={selectedMinute.id} canManage={canManage} onDirtyChange={setHasUnsavedChanges} /></div>
       </div>
     </>)}
     </ResponsiveOverlay>
+    {decisionDialog}
   </div>;
 }

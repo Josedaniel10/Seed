@@ -1,8 +1,9 @@
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
 import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
-import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
-import React, { useState, useMemo } from 'react';
+import { DecisionConfirmDialog } from '../../components/ui/DecisionConfirmDialog.tsx';
+import { normalizeRole } from '../../lib/permissions.ts';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -111,14 +112,18 @@ export function PanelSeguimientoPage() {
   } | null>(null);
 
   const [modalReason, setModalReason] = useState('');
+  const transitionLock = useRef(false);
+  const [isTransitionPending, setIsTransitionPending] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
+  useEffect(() => { setActionModal(null); }, [user?.id]);
   const [modalDecidedStatus, setModalDecidedStatus] = useState<ApplicationDbStatus>('APROBADA');
   const [toastMessage, setToastMessage] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
 
-  const isInvestigador = user?.activeRole === 'investigador';
-  const isLider = user?.activeRole === 'lider';
+  const isInvestigador = normalizeRole(user?.activeRole) === 'researcher';
+  const isLider = normalizeRole(user?.activeRole) === 'leader';
   const isReadOnly = isInvestigador || isLider;
 
   // Filtrado multidimensional en tiempo real (RF-11)
@@ -236,6 +241,7 @@ export function PanelSeguimientoPage() {
     }
 
     // Abrir Diálogo de Acción Guiada
+    setTransitionError(null);
     setActionModal({
       app,
       targetColumn: targetCol.key,
@@ -248,24 +254,30 @@ export function PanelSeguimientoPage() {
 
   // Confirmar Acción en el Diálogo
   const handleConfirmModalAction = async () => {
-    if (!actionModal) return;
+    if (!actionModal || !user || transitionLock.current) return;
 
     const finalStatus =
       actionModal.targetColumn === 'DECIDIDAS' ? modalDecidedStatus : actionModal.targetStatus;
 
     if (actionModal.requiresReason && !modalReason.trim()) {
-      setToastMessage({
-        type: 'error',
-        text: 'Toda decisión o requerimiento exige fundamentación y justificación escrita.',
-      });
+      setTransitionError('Toda decisión o requerimiento exige fundamentación y justificación escrita.');
       return;
     }
 
+    const current = useApplicationStore.getState().requests.find((request) => request.id === actionModal.app.id);
+    if (!current || current.current_status !== actionModal.app.current_status) {
+      setTransitionError('El estado de la solicitud cambió. Cierre este diálogo y revise el expediente.');
+      return;
+    }
+    transitionLock.current = true;
+    setIsTransitionPending(true);
+    setTransitionError(null);
+    try {
     const res = await transitionApplicationStatus(
       actionModal.app.id,
       finalStatus,
-      user?.id || 'usr-adm-02',
-      user?.fullName || 'Personal Administrativo',
+      user.id,
+      user.fullName,
       modalReason.trim() || undefined,
       {
         channel: 'KANBAN_DRAG_AND_DROP',
@@ -282,10 +294,13 @@ export function PanelSeguimientoPage() {
       setModalReason('');
       setTimeout(() => setToastMessage(null), 4000);
     } else {
-      setToastMessage({
-        type: 'error',
-        text: res.error || 'Error al ejecutar la transición.',
-      });
+      setTransitionError(res.error || 'Error al ejecutar la transición.');
+    }
+    } catch (error) {
+      setTransitionError(error instanceof Error ? error.message : 'No se pudo confirmar la transición.');
+    } finally {
+      transitionLock.current = false;
+      setIsTransitionPending(false);
     }
   };
 
@@ -411,29 +426,19 @@ export function PanelSeguimientoPage() {
       </div>
 
       {/* 4. Diálogo de Acción Guiada (RF-21) */}
-      <ResponsiveOverlay isOpen={Boolean(actionModal)} onClose={() => setActionModal(null)} label="Transición de solicitud">
-        {actionModal && (<>
-          <div className="bg-white rounded-3xl border border-[#E5E3DC] p-6 md:p-7 max-w-lg w-full space-y-4 shadow-xl text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-              <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-lg bg-[#14281D] text-white">
-                {actionModal.app.filing_number}
-              </span>
-              <button aria-label="Cerrar panel"
-                type="button"
-                onClick={() => setActionModal(null)}
-                className="text-stone-400 hover:text-stone-700"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="font-extrabold text-sm md:text-base text-[#14281D]">
-                {actionModal.actionTitle}
-              </h3>
-              <p className="text-stone-600 leading-relaxed">{actionModal.actionDescription}</p>
-            </div>
-
+      <DecisionConfirmDialog
+        decision={actionModal ? {
+          prompt: {
+            title: actionModal.actionTitle, target: actionModal.app.filing_number,
+            confirmLabel: 'Confirmar transición', consequence: actionModal.actionDescription,
+            details: [{ label: 'Estado actual', value: actionModal.app.current_status.replaceAll('_', ' ').toLowerCase() },
+              { label: 'Estado solicitado', value: (actionModal.targetColumn === 'DECIDIDAS' ? modalDecidedStatus : actionModal.targetStatus).replaceAll('_', ' ').toLowerCase() }],
+            intent: modalDecidedStatus === 'RECHAZADA' && actionModal.targetColumn === 'DECIDIDAS' ? 'danger' : 'default',
+          }, isPending: isTransitionPending, error: transitionError,
+        } : null}
+        onCancel={() => { if (!transitionLock.current) setActionModal(null); }}
+        onConfirm={() => { void handleConfirmModalAction(); }}>
+        {actionModal && <>
             {/* Opciones en caso de columna Decididas */}
             {actionModal.targetColumn === 'DECIDIDAS' && (
               <div className="space-y-2 pt-1">
@@ -495,25 +500,8 @@ export function PanelSeguimientoPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
-              <button
-                type="button"
-                onClick={() => setActionModal(null)}
-                className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 font-semibold hover:bg-stone-50 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmModalAction}
-                className="px-5 py-2 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold cursor-pointer transition-colors shadow-xs"
-              >
-                Confirmar Transición
-              </button>
-            </div>
-          </div>
-        </>)}
-      </ResponsiveOverlay>
+        </>}
+      </DecisionConfirmDialog>
 
       {/* 5. VISTA KANBAN CON ARRASTRE CONTROLADO (RF-21) */}
       {viewMode === 'KANBAN' ? (

@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useEffect, useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,6 +24,7 @@ export function MinuteWorkspace({ minuteId, canManage, onDirtyChange }: { minute
 
 function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: CommitteeMinutes; content: MinuteContent; canManage: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const user = useSessionStore((state) => state.user);
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`${user?.id ?? 'anonymous'}:${minute.id}`);
   const { updateStructuredDraft, approveMinutes, isSaving } = useMinutesStore();
   const form = useForm<MinuteEditorial>({ resolver: zodResolver(minuteEditorialSchema), defaultValues: content.editorial });
   const [error, setError] = useState<string | null>(null);
@@ -57,14 +59,22 @@ function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: Com
     if (!user || busy || isSaving || dirty || legacy) return;
     const errors = minuteApprovalErrors(content.editorial);
     if (errors.length) { setError(errors.join(' ')); return; }
-    if (!window.confirm('¿Aprobar el acta? Su contenido quedará bloqueado para edición.')) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const result = await approveMinutes(minute.id, user.id, user.fullName);
-      if (!result.success) setError(result.error || 'No se pudo aprobar el acta.');
-    } catch (error) { setError(error instanceof Error ? error.message : 'No se pudo aprobar el acta.'); }
-    finally { setBusy(false); }
+    requestDecision({
+      title: 'Confirmar aprobación del acta', target: minute.minute_number,
+      confirmLabel: 'Aprobar y bloquear acta',
+      consequence: 'El contenido del acta quedará aprobado y bloqueado para edición.',
+    }, async () => {
+      const current = useMinutesStore.getState().minutes.find((item) => item.id === minute.id);
+      if (!current || current.is_approved || current.draft_content !== minute.draft_content) {
+        throw new Error('El acta cambió. Cierre esta confirmación y revise la versión guardada.');
+      }
+      setError(null);
+      setBusy(true);
+      try {
+        const result = await approveMinutes(minute.id, user.id, user.fullName);
+        if (!result.success) throw new Error(result.error || 'No se pudo aprobar el acta.');
+      } finally { setBusy(false); }
+    });
   };
 
   const handlePdf = async (download: boolean) => {
@@ -88,6 +98,7 @@ function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: Com
 
   return <FormProvider {...form}>
     <form onSubmit={handleSave} className="space-y-5 text-sm">
+      {decisionDialog}
       <p role="status" className="text-stone-600">{minute.is_approved ? 'Aprobada · Contenido bloqueado para edición' : legacy ? 'Borrador pendiente de revisión' : 'Borrador guardado · En revisión'}</p>
       {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-rose-800">{error}</p>}
       <fieldset disabled={!editable || busy || isSaving} className="space-y-6 min-w-0">

@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { ExpedienteDocuments } from '../../features/documents/ExpedienteDocuments.tsx';
 import {
@@ -17,6 +18,7 @@ import { ReviewerConcept, ObservationCategory } from '../../types/database.ts';
 
 export function RevisionesPage() {
   const { user } = useSessionStore();
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(user?.id ?? 'anonymous');
   const {
     requests,
     assignments,
@@ -95,28 +97,42 @@ export function RevisionesPage() {
       return;
     }
 
-    const res = await submitReviewerConcept(
-      appId,
-      user.id,
-      user?.fullName || 'Evaluador Par',
-      concept,
-      conceptJustification.trim()
-    );
+    const target = requests.find((request) => request.id === appId);
+    requestDecision({
+      title: 'Confirmar concepto técnico',
+      target: target?.filing_number ?? appId,
+      confirmLabel: 'Emitir concepto técnico',
+      intent: concept === 'NO_FAVORABLE' || concept === 'UNFAVORABLE' ? 'danger' : 'default',
+      details: [{ label: 'Concepto', value: concept.replaceAll('_', ' ').toLowerCase() },
+        { label: 'Justificación', value: conceptJustification.trim() }],
+      consequence: concept === 'NO_FAVORABLE' || concept === 'UNFAVORABLE'
+        ? 'Con la regla actual, emitir un concepto no favorable rechazará la solicitud. Esta acción quedará registrada en el expediente.'
+        : 'El concepto quedará registrado y la solicitud avanzará a Lista para comité. La aprobación final corresponde al comité.',
+    }, async () => {
+      const res = await submitReviewerConcept(
+        appId,
+        user.id,
+        user?.fullName || 'Evaluador Par',
+        concept,
+        conceptJustification.trim()
+      );
 
-    if (res.success) {
-      setFeedback({
-        type: 'success',
-        message: `Concepto ${concept} emitido formalmente. El trámite avanzó en el flujo institucional.`,
-      });
-      setConceptJustification('');
-      setTimeout(() => setFeedback(null), 4000);
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Error al emitir concepto técnico.' });
-    }
+      if (res.success) {
+        setFeedback({
+          type: 'success',
+          message: `Concepto ${concept} emitido formalmente. El trámite avanzó en el flujo institucional.`,
+        });
+        setConceptJustification('');
+        setTimeout(() => setFeedback(null), 4000);
+      } else {
+        throw new Error(res.error || 'Error al emitir concepto técnico.');
+      }
+    });
   };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
+      {decisionDialog}
       <div className="border-b border-[#E5E3DC] pb-4">
         <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Mis Revisiones Técnicas Asignadas

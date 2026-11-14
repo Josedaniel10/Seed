@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { DocumentFileActions } from '../../features/documents/DocumentFileActions.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
@@ -40,6 +41,7 @@ export function ValidacionPage() {
     return getDocumentaryQueue(requests, documents, auditHistory);
   }, [requests, documents, auditHistory]);
   const selectedExp = expedientesPorValidar[0];
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`${user?.id ?? 'anonymous'}:${selectedExp?.id}`);
   const waitingCount = requests.filter((request) =>
     (request.current_status === 'PENDIENTE_DOCUMENTOS' || request.current_status === 'PENDING_DOCUMENTS')
     && !expedientesPorValidar.some((pending) => pending.id === request.id)).length;
@@ -66,9 +68,12 @@ export function ValidacionPage() {
   }, [user?.id]);
 
   async function runAction<T extends { success: boolean; error?: string }>(
-    operation: () => Promise<T>, onSuccess: (result: T) => void,
+    operation: () => Promise<T>, onSuccess: (result: T) => void, propagate = false,
   ): Promise<void> {
-    if (saving.current || !user || isLoading) return;
+    if (saving.current || !user || isLoading) {
+      if (propagate) throw new Error('Espere a que termine la operación actual y vuelva a confirmar.');
+      return;
+    }
     saving.current = true;
     setIsSaving(true);
     setFeedback(null);
@@ -76,9 +81,15 @@ export function ValidacionPage() {
       const result = await operation();
       if (useSessionStore.getState().user?.id !== user.id) return;
       if (result.success) onSuccess(result);
-      else setFeedback({ type: 'error', message: result.error ?? 'No se pudo guardar la validación. Intente nuevamente.' });
-    } catch {
-      setFeedback({ type: 'error', message: 'No se pudo confirmar el guardado. Intente nuevamente.' });
+      else {
+        const message = result.error ?? 'No se pudo guardar la validación. Intente nuevamente.';
+        if (propagate) throw new Error(message);
+        setFeedback({ type: 'error', message });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo confirmar el guardado. Intente nuevamente.';
+      setFeedback({ type: 'error', message });
+      if (propagate) throw new Error(message);
     } finally {
       saving.current = false;
       setIsSaving(false);
@@ -157,20 +168,32 @@ export function ValidacionPage() {
       return;
     }
 
-    await runAction(() => validateRequirementDocument(
-      selectedExp.id,
-      rejectingDocId.reqId,
-      'RECHAZADO',
-      rejectReason.trim(),
-      user.id,
-      user.fullName
-    ), () => {
-      setFeedback({
-        type: 'success',
-        message: `Requisito "${rejectingDocId.reqName}" marcado como RECHAZADO con justificación asentada.`,
-      });
-      setRejectingDocId(null);
-      setRejectReason('');
+    const reviewedDocument = appDocs.find((document) => document.id === rejectingDocId.docId);
+    requestDecision({
+      title: 'Confirmar rechazo documental', target: selectedExp.filing_number,
+      confirmLabel: 'Rechazar documento', intent: 'danger',
+      details: [{ label: 'Requisito', value: rejectingDocId.reqName }, { label: 'Motivo', value: rejectReason.trim() }],
+      consequence: 'El documento quedará rechazado con su justificación. El resultado del expediente se determinará al finalizar la validación.',
+    }, async () => {
+      const current = useApplicationStore.getState().documents.find((document) => document.id === reviewedDocument?.id);
+      if (!current || current.file_hash_sha256 !== reviewedDocument?.file_hash_sha256 || current.uploaded_at !== reviewedDocument?.uploaded_at) {
+        throw new Error('El documento cambió. Cierre esta confirmación y revise la nueva versión.');
+      }
+      await runAction(() => validateRequirementDocument(
+        selectedExp.id,
+        rejectingDocId.reqId,
+        'RECHAZADO',
+        rejectReason.trim(),
+        user.id,
+        user.fullName
+      ), () => {
+        setFeedback({
+          type: 'success',
+          message: `Requisito "${rejectingDocId.reqName}" marcado como RECHAZADO con justificación asentada.`,
+        });
+        setRejectingDocId(null);
+        setRejectReason('');
+      }, true);
     });
   };
 
@@ -178,32 +201,52 @@ export function ValidacionPage() {
   const handleFinalizar = async () => {
     if (!selectedExp || !user) return;
     const completedNumber = selectedExp.filing_number;
-    await runAction(() => finalizeAdministrativeValidation(
-      selectedExp.id,
-      user.id,
-      user.fullName
-    ), (res) => {
-      if (!res.application) {
-        setFeedback({ type: 'error', message: 'No se recibió la confirmación del cierre documental.' });
-        return;
+    const unmet = mandatoryReqs.filter((requirement) => !appDocs.some((document) =>
+      document.requirement_id === requirement.id && ['VALIDO', 'VALID'].includes(document.validation_status)));
+    const hasEssentialFailure = unmet.some((requirement) => !requirement.is_subsanable);
+    const expectedResult = hasEssentialFailure ? 'Rechazada por requisito esencial no subsanable'
+      : unmet.length ? 'Pendiente por documentos' : 'En revisión técnica';
+    requestDecision({
+      title: 'Confirmar cierre de validación', target: selectedExp.filing_number, confirmLabel: 'Finalizar validación',
+      intent: hasEssentialFailure ? 'danger' : 'default',
+      details: [{ label: 'Requisitos obligatorios revisados', value: `${reviewedCount} de ${mandatoryReqs.length}` },
+        { label: 'Resultado previsto con los dictámenes actuales', value: expectedResult }],
+      consequence: 'Al finalizar se aplicará el resultado documental y se abrirá el siguiente expediente. El servidor volverá a comprobar los requisitos y documentos antes de guardar el cierre.',
+    }, async () => {
+      const currentDocs = useApplicationStore.getState().documents.filter((document) =>
+        (document.application_id ?? document.request_id) === selectedExp.id);
+      if (currentDocs.length !== appDocs.length || appDocs.some((reviewed) => !currentDocs.some((current) =>
+        current.id === reviewed.id && current.file_hash_sha256 === reviewed.file_hash_sha256
+          && current.uploaded_at === reviewed.uploaded_at && current.validation_status === reviewed.validation_status))) {
+        throw new Error('Los documentos o dictámenes cambiaron. Cierre esta confirmación y revise el expediente.');
       }
-      const nuevo = res.application.current_status;
-      const mensaje = nuevo === 'EN_REVISION' || nuevo === 'UNDER_REVIEW'
-          ? 'Validación documental aprobada. La solicitud avanzó a revisión técnica.'
-          : nuevo === 'PENDIENTE_DOCUMENTOS' || nuevo === 'PENDING_DOCUMENTS'
-          ? 'Validación documental finalizada. La solicitud queda esperando correcciones del investigador.'
-          : 'Validación finalizada con rechazo directo por requisito no subsanable.';
-      const state = useApplicationStore.getState();
-      const next = getDocumentaryQueue(state.requests, state.documents, state.auditHistory)[0];
-      setSearchTerm('');
-      setFeedback({ type: 'success', message: `${completedNumber}: ${mensaje} ${next
-        ? `Ahora se muestra ${next.filing_number}, la siguiente solicitud de la cola.`
-        : 'No quedan solicitudes listas para validación.'}` });
+      await runAction(() => finalizeAdministrativeValidation(
+        selectedExp.id,
+        user.id,
+        user.fullName
+      ), (res) => {
+        if (!res.application) {
+          throw new Error('No se recibió la confirmación del cierre documental.');
+        }
+        const nuevo = res.application.current_status;
+        const mensaje = nuevo === 'EN_REVISION' || nuevo === 'UNDER_REVIEW'
+            ? 'Validación documental aprobada. La solicitud avanzó a revisión técnica.'
+            : nuevo === 'PENDIENTE_DOCUMENTOS' || nuevo === 'PENDING_DOCUMENTS'
+            ? 'Validación documental finalizada. La solicitud queda esperando correcciones del investigador.'
+            : 'Validación finalizada con rechazo directo por requisito no subsanable.';
+        const state = useApplicationStore.getState();
+        const next = getDocumentaryQueue(state.requests, state.documents, state.auditHistory)[0];
+        setSearchTerm('');
+        setFeedback({ type: 'success', message: `${completedNumber}: ${mensaje} ${next
+          ? `Ahora se muestra ${next.filing_number}, la siguiente solicitud de la cola.`
+          : 'No quedan solicitudes listas para validación.'}` });
+      }, true);
     });
   };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {decisionDialog}
       <div>
         <h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">
           Bandeja de Validación Documental

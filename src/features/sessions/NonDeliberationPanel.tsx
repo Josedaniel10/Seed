@@ -1,6 +1,8 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useState } from 'react';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { useCommitteeSessionsStore } from './committeeSessionsStore.ts';
+import { useRequestStore } from '../requests/requestStore.ts';
 import type { SessionNonDeliberation } from '../../types/database.ts';
 
 interface NonDeliberationPanelProps {
@@ -13,20 +15,26 @@ interface NonDeliberationPanelProps {
 
 export function NonDeliberationPanel({ sessionId, applicationId, record, canRecord, onRecorded }: NonDeliberationPanelProps) {
   const user = useSessionStore((state) => state.user);
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`${user?.id ?? 'anonymous'}:${sessionId}:${applicationId}`);
   const { recordNonDeliberation, isSaving } = useCommitteeSessionsStore();
+  const filingNumber = useRequestStore((state) => state.requests.find((request) => request.id === applicationId)?.filing_number);
   const [reason, setReason] = useState('No se alcanzó el mínimo de asistentes habilitados para deliberar esta solicitud.');
   const [error, setError] = useState<string | null>(null);
 
   const handleRecord = async () => {
     if (!user || isSaving || !reason.trim()) return;
-    if (!window.confirm('¿Registrar que esta solicitud no pudo deliberarse? Quedará lista para otra sesión y se conservará esta constancia.')) return;
-    setError(null);
-    const result = await recordNonDeliberation(sessionId, applicationId, reason, user.id, user.fullName);
-    if (!result.success) {
-      setError(result.error ?? 'No se pudo guardar la constancia.');
-      return;
-    }
-    onRecorded();
+    requestDecision({
+      title: 'Confirmar constancia de no deliberación', target: filingNumber ?? applicationId,
+      confirmLabel: 'Registrar constancia', details: [{ label: 'Motivo', value: reason.trim() }],
+      consequence: 'Se conservará esta constancia y la solicitud permanecerá lista para una sesión posterior.',
+    }, async () => {
+      setError(null);
+      const result = await recordNonDeliberation(sessionId, applicationId, reason, user.id, user.fullName);
+      if (!result.success) {
+        throw new Error(result.error ?? 'No se pudo guardar la constancia.');
+      }
+      onRecorded();
+    });
   };
 
   if (record) {
@@ -46,6 +54,7 @@ export function NonDeliberationPanel({ sessionId, applicationId, record, canReco
   if (!canRecord) return null;
   return (
     <div className="rounded-xl border border-amber-200 bg-white p-4 space-y-3 text-xs">
+      {decisionDialog}
       <p>Puede dejar constancia de que este punto no pudo deliberarse y llevarlo a otra sesión.</p>
       <label className="block space-y-1">
         <span className="font-semibold">Motivo de la constancia</span>

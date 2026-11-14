@@ -1,3 +1,4 @@
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { NonDeliberationPanel } from '../../features/sessions/NonDeliberationPanel.tsx';
 import { getRequestQuorum } from '../../features/sessions/requestQuorum.ts';
 import { RequestQuorumNotice } from '../../features/sessions/RequestQuorumNotice.tsx';
@@ -37,6 +38,7 @@ export function DetalleSesionPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useSessionStore();
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`${user?.id ?? 'anonymous'}:${id}`);
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
 
@@ -169,17 +171,24 @@ export function DetalleSesionPage() {
   // Manejador: Cerrar agenda formalmente (RF-26)
   const handleCloseAgenda = async () => {
     setActionError(null);
-    const res = await closeAgendaAndSummon(
-      session.id,
-      user?.id || 'usr-sec-04',
-      user?.fullName || 'Secretaria Técnica'
-    );
-    if (!res.success) {
-      setActionError(res.error || 'Error al cerrar la agenda.');
-    } else {
-      setActionSuccess('Agenda cerrada. La sesión está lista para registrar decisiones.');
-      setTimeout(() => setActionSuccess(null), 3500);
-    }
+    if (!user) return;
+    requestDecision({
+      title: 'Confirmar cierre de agenda', target: session.session_number, confirmLabel: 'Cerrar agenda',
+      details: [{ label: 'Puntos de agenda', value: String(agenda.length) }],
+      consequence: 'Se bloqueará la incorporación de expedientes y se registrará la convocatoria de esta agenda.',
+    }, async () => {
+      const res = await closeAgendaAndSummon(
+        session.id,
+        user.id,
+        user.fullName
+      );
+      if (!res.success) {
+        throw new Error(res.error || 'Error al cerrar la agenda.');
+      } else {
+        setActionSuccess('Agenda cerrada. La sesión está lista para registrar decisiones.');
+        setTimeout(() => setActionSuccess(null), 3500);
+      }
+    });
   };
 
   // Manejador: Registrar Decisión Colegiada (RF-28, RN-05, RN-06, RN-07)
@@ -195,41 +204,64 @@ export function DetalleSesionPage() {
       return;
     }
 
-    const res = await registerSessionDecision(
-      session.id,
-      appId,
-      itemData.decision,
-      itemData.justification,
-      user?.id || 'usr-sec-04',
-      user?.fullName || 'Secretaria Técnica'
-    );
+    if (!user) return;
+    requestDecision({
+      title: 'Confirmar decisión del comité', target: getApplicationById(appId)?.filing_number ?? appId,
+      confirmLabel: 'Registrar decisión',
+      intent: ['RECHAZADA', 'REJECTED'].includes(itemData.decision) ? 'danger' : 'default',
+      details: [{ label: 'Sesión', value: session.session_number },
+        { label: 'Decisión', value: itemData.decision.replaceAll('_', ' ').toLowerCase() },
+        { label: 'Justificación', value: itemData.justification.trim() }],
+      consequence: ['APLAZADA', 'POSTPONED'].includes(itemData.decision)
+        ? 'La decisión quedará registrada y la solicitud permanecerá lista para comité para una sesión posterior.'
+        : 'La decisión quedará asentada en la sesión y actualizará el estado de la solicitud.',
+    }, async () => {
+      const res = await registerSessionDecision(
+        session.id,
+        appId,
+        itemData.decision,
+        itemData.justification,
+        user.id,
+        user.fullName
+      );
 
-    if (!res.success) {
-      setActionError(res.error || 'Error al registrar la decisión.');
-    } else {
-      setActionSuccess('Decisión registrada. El estado de la solicitud se actualizó.');
-      setTimeout(() => setActionSuccess(null), 3500);
-    }
+      if (!res.success) {
+        throw new Error(res.error || 'Error al registrar la decisión.');
+      } else {
+        setActionSuccess(['APLAZADA', 'POSTPONED'].includes(itemData.decision)
+          ? 'Aplazamiento registrado. La solicitud permanece lista para comité.'
+          : 'Decisión registrada. El estado de la solicitud se actualizó.');
+        setTimeout(() => setActionSuccess(null), 3500);
+      }
+    });
   };
 
   // Manejador: Finalizar sesión
   const handleFinalizeSession = async () => {
     setActionError(null);
-    const res = await finalizeSession(
-      session.id,
-      user?.id || 'usr-sec-04',
-      user?.fullName || 'Secretaria Técnica'
-    );
-    if (!res.success) {
-      setActionError(res.error || 'Error al finalizar sesión.');
-    } else {
-      setActionSuccess('Sesión finalizada. Puede generar el acta con las decisiones y constancias registradas.');
-      setTimeout(() => setActionSuccess(null), 3500);
-    }
+    if (!user) return;
+    requestDecision({
+      title: 'Confirmar cierre de sesión', target: session.session_number, confirmLabel: 'Finalizar sesión',
+      details: [{ label: 'Puntos atendidos', value: `${resolvedCount} de ${agenda.length}` }],
+      consequence: 'La sesión quedará finalizada y se habilitará la generación del acta con las decisiones y constancias registradas.',
+    }, async () => {
+      const res = await finalizeSession(
+        session.id,
+        user.id,
+        user.fullName
+      );
+      if (!res.success) {
+        throw new Error(res.error || 'Error al finalizar sesión.');
+      } else {
+        setActionSuccess('Sesión finalizada. Puede generar el acta con las decisiones y constancias registradas.');
+        setTimeout(() => setActionSuccess(null), 3500);
+      }
+    });
   };
 
   return (
     <fieldset disabled={isSaving} className="space-y-6 min-w-0">
+      {decisionDialog}
       {isSaving && <p role="status">Guardando cambios…</p>}
       {/* Botón Volver y Encabezado */}
       <div className="space-y-2">
