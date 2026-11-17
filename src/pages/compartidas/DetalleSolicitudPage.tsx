@@ -1,3 +1,4 @@
+import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
 import { getDocumentCorrection } from '../../features/documents/documentCorrection.ts';
 import { DocumentCorrectionNotice } from '../../features/documents/DocumentCorrectionNotice.tsx';
 import { DocumentValidationBadge } from '../../features/documents/DocumentValidationBadge.tsx';
@@ -85,7 +86,7 @@ export function DetalleSolicitudPage() {
   }, [users, application]);
 
   const applicationType = useMemo(() => {
-    return types.find((t) => t.id === application?.application_type_id);
+    return application?.catalog_snapshot?.type ?? types.find((t) => t.id === application?.application_type_id);
   }, [types, application]);
 
   const group = useMemo(() => {
@@ -105,9 +106,9 @@ export function DetalleSolicitudPage() {
   }, [auditHistory, application]);
 
   const typeRequirements = useMemo(() => {
-    if (!applicationType) return [];
-    return requirements.filter((r) => r.application_type_id === applicationType.id);
-  }, [requirements, applicationType]);
+    if (!application) return [];
+    return requirementsForRequest(application, requirements);
+  }, [requirements, application]);
 
   const activeRole = user?.activeRole || 'investigador';
   const appObservations = observations.filter((observation) =>
@@ -144,7 +145,7 @@ export function DetalleSolicitudPage() {
     uploadLock.current = true;
     setIsUploading(true);
     try {
-      const requirement = requirements.find((item) => item.id === requirementId);
+      const requirement = typeRequirements.find((item) => item.id === requirementId);
       const payload = await uploadDocumentFile({
         file, requirementId, userId: user.id,
         maxSizeMb: requirement?.max_size_mb, allowedFormats: requirement?.allowed_formats,
@@ -390,7 +391,7 @@ export function DetalleSolicitudPage() {
               ) : (
                 <div className="space-y-3">
                   {appDocuments.map((doc, idx) => {
-                    const reqObj = requirements.find((r) => r.id === doc.requirement_id);
+                    const reqObj = typeRequirements.find((r) => r.id === doc.requirement_id);
                     const isRejected = doc.validation_status === 'RECHAZADO' || doc.validation_status === 'REJECTED';
                     const isPending = doc.validation_status === 'PENDIENTE' || doc.validation_status === 'PENDING';
                     const correctionReceived = Boolean(getDocumentCorrection(doc, auditHistory));

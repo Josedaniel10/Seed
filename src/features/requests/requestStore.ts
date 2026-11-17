@@ -1,4 +1,5 @@
 import { getNextAction } from './nextAction.ts';
+import { requirementsForRequest } from '../catalog/catalogSnapshot.ts';
 import { observationAction } from '../validation/observationApi.ts';
 import { formatUserMessage } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
@@ -643,7 +644,7 @@ export const useRequestStore = create<RequestState>()(
           }
 
           const typeRequirements = catalog.requirements.filter(
-            (r) => (r.request_type_id || r.application_type_id) === typeId
+            (r) => r.is_active !== false && (r.request_type_id || r.application_type_id) === typeId
           );
           const mandatoryRequirements = typeRequirements.filter((r) => r.is_mandatory);
 
@@ -661,6 +662,7 @@ export const useRequestStore = create<RequestState>()(
           const nowIso = new Date().toISOString();
 
           const newRequest: Request = {
+            catalog_snapshot: { type: { ...targetType }, requirements: typeRequirements.map(requirement => ({ ...requirement })) },
             id: reqId,
             filing_number: filingNumber,
             request_type_id: typeId,
@@ -951,9 +953,7 @@ export const useRequestStore = create<RequestState>()(
 
         const typeId = req.request_type_id || req.application_type_id || '';
         const catalog = useCatalogStore.getState();
-        const typeReqs = catalog.requirements.filter(
-          (r) => (r.request_type_id || r.application_type_id) === typeId
-        );
+        const typeReqs = requirementsForRequest(req, catalog.requirements);
         const mandatoryReqs = typeReqs.filter((r) => r.is_mandatory);
         const docs = get().documents.filter((d) => d.request_id === requestId || d.application_id === requestId);
 
@@ -1071,9 +1071,7 @@ export const useRequestStore = create<RequestState>()(
         if (newStatus === 'EN_REVISION' || newStatus === 'UNDER_REVIEW') {
           const typeId = req.request_type_id || req.application_type_id || '';
           const catalog = useCatalogStore.getState();
-          const mandatoryReqs = catalog.requirements.filter(
-            (r) => (r.request_type_id || r.application_type_id) === typeId && r.is_mandatory
-          );
+          const mandatoryReqs = requirementsForRequest(req, catalog.requirements).filter(requirement => requirement.is_mandatory);
           const docs = get().documents.filter((d) => d.request_id === requestId || d.application_id === requestId);
           const validReqIds = new Set(
             docs.filter((d) => d.validation_status === 'VALIDO' || d.validation_status === 'VALID').map((d) => d.requirement_id)
@@ -1601,6 +1599,7 @@ export const useRequestStore = create<RequestState>()(
           if (appsRes.data && appsRes.data.length > 0) {
             const mappedApps: Request[] = appsRes.data.map((app: any) => ({
               id: app.id,
+              catalog_snapshot: app.catalog_snapshot,
               filing_number: app.filing_number,
               request_type_id: app.application_type_id,
               application_type_id: app.application_type_id,

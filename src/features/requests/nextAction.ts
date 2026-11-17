@@ -1,3 +1,4 @@
+import { requirementsForRequest } from '../catalog/catalogSnapshot.ts';
 import type { Request, RequestDocument, Requirement, Observation, ReviewerAssignment } from '../../types/database.ts';
 import { getDocumentaryQueue } from '../validation/documentaryQueue.ts';
 import type { AuditHistory } from '../../types/database.ts';
@@ -21,7 +22,7 @@ export function getNextAction(request: Request, data: {
   const base: NextAction = { title: 'Consultar resultado del expediente', pending: [], responsible: 'Sin acción pendiente',
     roles: [], href: `${detail}?tab=historial`, button: 'Consultar historial', deadline: null };
   const docs = data.documents.filter(d => (d.application_id ?? d.request_id) === request.id);
-  const requirements = data.requirements.filter(r => (r.application_type_id ?? r.request_type_id) === (request.application_type_id ?? request.request_type_id));
+  const requirements = requirementsForRequest(request, data.requirements);
   const pendingDocs = requirements.filter(r => (r.is_mandatory && !docs.some(d => d.requirement_id === r.id))
     || docs.some(d => d.requirement_id === r.id && ['RECHAZADO', 'REJECTED'].includes(d.validation_status))).map(r => r.name);
   switch (request.current_status) {

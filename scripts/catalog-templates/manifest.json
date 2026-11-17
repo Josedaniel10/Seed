@@ -1,0 +1,10 @@
+[
+  {"code":"SOL-AVAL-01","contains":"Propuesta Técnica","file":"propuesta-tecnica.docx"},
+  {"code":"SOL-AVAL-01","contains":"Presupuesto Detallado","file":"presupuesto-cronograma.xlsx"},
+  {"code":"MOD-RUB-02","contains":"Justificación Técnica","file":"justificacion-presupuestal.docx"},
+  {"code":"MOD-RUB-02","contains":"Cuadro Comparativo","file":"cuadro-rubros.xlsx"},
+  {"code":"PROR-CRON-04","contains":"Informe de Estado","file":"solicitud-prorroga.docx"},
+  {"code":"PROR-CRON-04","contains":"Cronograma de Trabajo","file":"cronograma-actualizado.xlsx"},
+  {"code":"INF-AVAN-08","contains":"Informe de Avance Técnico","file":"informe-avance.docx"},
+  {"code":"INF-CIER-09","contains":"Informe Final Científico","file":"informe-final.docx"}
+]

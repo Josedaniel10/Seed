@@ -141,7 +141,7 @@ VALUES
     false, -- RN-11: No subsanable (documento sustancial del proyecto)
     ARRAY['application/pdf'],
     10,
-    '/templates/formato_propuesta_investigacion.pdf',
+    NULL,
     0
   ),
   (
@@ -153,7 +153,7 @@ VALUES
     true,
     ARRAY['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     10,
-    '/templates/formato_presupuesto_cronograma.xlsx',
+    NULL,
     5
   ),
   (
@@ -165,7 +165,7 @@ VALUES
     true,
     ARRAY['application/pdf'],
     5,
-    '/templates/formato_aval_lider_grupo.pdf',
+    NULL,
     5
   ),
   (
@@ -177,7 +177,7 @@ VALUES
     true,
     ARRAY['application/pdf'],
     5,
-    '/templates/formato_aval_tutor_docente.pdf',
+    NULL,
     5
   ),
   (

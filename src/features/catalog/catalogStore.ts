@@ -1,3 +1,4 @@
+import { manageCatalog } from './catalogApi.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ApplicationType, Requirement } from '../../types/database.ts';
@@ -170,7 +171,7 @@ export const INITIAL_REQUIREMENTS: Requirement[] = [
     is_subsanable: false, // Causal no subsanable (documento sustancial del proyecto)
     allowed_formats: ['application/pdf'],
     max_size_mb: 10,
-    template_url: '/templates/formato_propuesta_investigacion.pdf',
+    template_url: null,
     cure_deadline_days: 0,
     created_at: '2026-01-10T08:30:00Z',
   },
@@ -183,7 +184,7 @@ export const INITIAL_REQUIREMENTS: Requirement[] = [
     is_subsanable: true,
     allowed_formats: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     max_size_mb: 10,
-    template_url: '/templates/formato_presupuesto_cronograma.xlsx',
+    template_url: null,
     cure_deadline_days: 5,
     created_at: '2026-01-10T08:35:00Z',
   },
@@ -196,7 +197,7 @@ export const INITIAL_REQUIREMENTS: Requirement[] = [
     is_subsanable: true,
     allowed_formats: ['application/pdf'],
     max_size_mb: 5,
-    template_url: '/templates/formato_aval_lider_grupo.pdf',
+    template_url: null,
     cure_deadline_days: 5,
     created_at: '2026-01-10T08:40:00Z',
   },
@@ -209,7 +210,7 @@ export const INITIAL_REQUIREMENTS: Requirement[] = [
     is_subsanable: true,
     allowed_formats: ['application/pdf'],
     max_size_mb: 5,
-    template_url: '/templates/formato_aval_tutor_docente.pdf',
+    template_url: null,
     cure_deadline_days: 5,
     created_at: '2026-01-10T08:45:00Z',
   },
@@ -632,16 +633,16 @@ interface CatalogState {
     description?: string;
     requires_committee?: boolean;
     display_order?: number;
-  }) => { success: boolean; type?: ApplicationType; error?: string };
+  }) => Promise<{ success: boolean; type?: ApplicationType; error?: string }>;
 
   updateType: (
     id: string,
     updates: Partial<Omit<ApplicationType, 'id' | 'created_at'>>
-  ) => { success: boolean; error?: string };
+  ) => Promise<{ success: boolean; error?: string }>;
 
-  toggleTypeActive: (id: string) => { success: boolean; is_active?: boolean; error?: string };
+  toggleTypeActive: (id: string) => Promise<{ success: boolean; is_active?: boolean; error?: string }>;
 
-  deleteType: (id: string) => { success: boolean; error?: string };
+  deleteType: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Requirement Actions (RF-06)
   addRequirement: (req: {
@@ -654,14 +655,14 @@ interface CatalogState {
     max_size_mb?: number;
     allowed_formats?: string[];
     template_url?: string;
-  }) => { success: boolean; requirement?: Requirement; error?: string };
+  }) => Promise<{ success: boolean; requirement?: Requirement; error?: string }>;
 
   updateRequirement: (
     id: string,
     updates: Partial<Omit<Requirement, 'id' | 'created_at'>>
-  ) => { success: boolean; requirement?: Requirement; error?: string };
+  ) => Promise<{ success: boolean; requirement?: Requirement; error?: string }>;
 
-  removeRequirement: (id: string) => { success: boolean; error?: string };
+  removeRequirement: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Carga y Sincronización directa con Supabase
   loadFromSupabase: () => Promise<{
@@ -695,243 +696,60 @@ export const useCatalogStore = create<CatalogState>()(
       setSearchQuery: (query) => set({ searchQuery: query }),
       setFilterStatus: (status) => set({ filterStatus: status }),
 
-      createType: (data) => {
-        const cleanCode = data.code.trim().toUpperCase();
-        const existing = get().types.find((t) => t.code.toUpperCase() === cleanCode);
-
-        if (existing) {
-          return { success: false, error: `Ya existe un tipo de trámite con el código "${cleanCode}"` };
-        }
-
-        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : 'a0000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
-
-        const newType: ApplicationType = {
-          id: newId,
-          code: cleanCode,
-          name: data.name.trim(),
-          description: data.description?.trim() || null,
-          requires_committee: data.requires_committee ?? true,
-          is_active: true,
-          display_order: data.display_order ?? get().types.length + 1,
-          created_at: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          types: [...state.types, newType],
-          selectedTypeId: newType.id,
-        }));
-
-        // Sincronización primaria en Supabase
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('application_types')
-            .insert({
-              id: newType.id,
-              code: newType.code,
-              name: newType.name,
-              description: newType.description,
-              requires_committee: newType.requires_committee,
-              is_active: newType.is_active,
-              display_order: newType.display_order,
-            })
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error insertando tipo de trámite en Supabase:', error.message);
-              }
-            });
-        }
-
-        return { success: true, type: newType };
+      createType: async (data) => {
+        const result = await manageCatalog('TYPE_CREATE', null, data);
+        if (!result.success) return result;
+        const saved = result.type;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ types: [...state.types, saved], selectedTypeId: saved.id }));
+        return { success: true, type: saved };
       },
-
-      updateType: (id, updates) => {
-        const currentTypes = get().types;
-        const index = currentTypes.findIndex((t) => t.id === id);
-        if (index === -1) {
-          return { success: false, error: 'Tipo de solicitud no encontrado' };
-        }
-
-        // Si se actualiza el código, verificar que no colisione
-        if (updates.code) {
-          const cleanCode = updates.code.trim().toUpperCase();
-          const collision = currentTypes.find((t) => t.id !== id && t.code.toUpperCase() === cleanCode);
-          if (collision) {
-            return { success: false, error: `El código "${cleanCode}" ya está en uso por otro tipo de solicitud` };
-          }
-          updates.code = cleanCode;
-        }
-
-        const updatedType = { ...currentTypes[index], ...updates };
-        const newTypes = [...currentTypes];
-        newTypes[index] = updatedType;
-
-        set({ types: newTypes });
-
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('application_types')
-            .update(updates)
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error actualizando tipo en Supabase:', error.message);
-              }
-            });
-        }
-
+      updateType: async (id, updates) => {
+        const result = await manageCatalog('TYPE_UPDATE', id, updates);
+        if (!result.success) return result;
+        const saved = result.type;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ types: state.types.map(item => item.id === id ? saved : item) }));
         return { success: true };
       },
-
-      toggleTypeActive: (id) => {
-        const target = get().types.find((t) => t.id === id);
-        if (!target) return { success: false, error: 'Tipo no encontrado' };
-
-        const newStatus = !target.is_active;
-        const res = get().updateType(id, { is_active: newStatus });
-        return { success: res.success, is_active: newStatus, error: res.error };
+      toggleTypeActive: async (id) => {
+        const type = get().types.find(item => item.id === id);
+        if (!type) return { success: false, error: 'Trámite inexistente.' };
+        return get().updateType(id, { is_active: !type.is_active });
       },
-
-      deleteType: (id) => {
-        // En un catálogo institucional, preferir borrado lógico o deshabilitación
-        const hasReqs = get().requirements.some((r) => r.application_type_id === id);
-        if (hasReqs) {
-          return {
-            success: false,
-            error: 'No se puede eliminar un tipo de solicitud que tiene requisitos asociados. Desactívelo en su lugar.',
-          };
-        }
-
-        set((state) => ({
-          types: state.types.filter((t) => t.id !== id),
-          selectedTypeId: state.selectedTypeId === id ? (state.types[0]?.id ?? null) : state.selectedTypeId,
-        }));
-
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('application_types')
-            .delete()
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error eliminando tipo en Supabase:', error.message);
-              }
-            });
-        }
-
+      deleteType: async (id) => {
+        const result = await manageCatalog('TYPE_DELETE', id, {});
+        if (!result.success) return result;
+        const saved = result.type;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ types: result.deleted ? state.types.filter(item => item.id !== id) : state.types.map(item => item.id === id ? saved : item),
+          requirements: result.deleted ? state.requirements.filter(item => item.application_type_id !== id) : state.requirements,
+          selectedTypeId: result.deleted && state.selectedTypeId === id ? null : state.selectedTypeId }));
         return { success: true };
       },
-
-      addRequirement: (data) => {
-        const typeExists = get().types.some((t) => t.id === data.application_type_id);
-        if (!typeExists) {
-          return { success: false, error: 'El tipo de solicitud especificado no existe' };
-        }
-
-        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : 'b0000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
-
-        const newReq: Requirement = {
-          id: newId,
-          application_type_id: data.application_type_id,
-          name: data.name.trim(),
-          description: data.description?.trim() || null,
-          is_mandatory: data.is_mandatory ?? true,
-          is_subsanable: data.is_subsanable ?? true,
-          cure_deadline_days: data.is_subsanable ? (data.cure_deadline_days ?? 5) : 0,
-          max_size_mb: data.max_size_mb ?? 10,
-          allowed_formats: data.allowed_formats ?? ['application/pdf'],
-          template_url: data.template_url?.trim() || null,
-          created_at: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          requirements: [...state.requirements, newReq],
-        }));
-
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('requirements')
-            .insert({
-              id: newReq.id,
-              application_type_id: newReq.application_type_id,
-              name: newReq.name,
-              description: newReq.description,
-              is_mandatory: newReq.is_mandatory,
-              is_subsanable: newReq.is_subsanable,
-              cure_deadline_days: newReq.cure_deadline_days,
-              max_size_mb: newReq.max_size_mb,
-              allowed_formats: newReq.allowed_formats,
-              template_url: newReq.template_url,
-            })
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error insertando requisito en Supabase:', error.message);
-              }
-            });
-        }
-
-        return { success: true, requirement: newReq };
+      addRequirement: async (data) => {
+        const result = await manageCatalog('REQUIREMENT_CREATE', null, data);
+        if (!result.success) return result;
+        const saved = result.requirement;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ requirements: [...state.requirements, saved] }));
+        return { success: true, requirement: saved };
       },
-
-      updateRequirement: (id, updates) => {
-        const reqs = get().requirements;
-        const index = reqs.findIndex((r) => r.id === id);
-        if (index === -1) {
-          return { success: false, error: 'Requisito no encontrado' };
-        }
-
-        // Si pasa a no subsanable, fijar días en 0
-        if (updates.is_subsanable === false) {
-          updates.cure_deadline_days = 0;
-        }
-
-        const updatedReq = { ...reqs[index], ...updates };
-        const newReqs = [...reqs];
-        newReqs[index] = updatedReq;
-
-        set({ requirements: newReqs });
-
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('requirements')
-            .update(updates)
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error actualizando requisito en Supabase:', error.message);
-              }
-            });
-        }
-
-        return { success: true, requirement: updatedReq };
+      updateRequirement: async (id, updates) => {
+        const result = await manageCatalog('REQUIREMENT_UPDATE', id, updates);
+        if (!result.success) return result;
+        const saved = result.requirement;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ requirements: state.requirements.map(item => item.id === id ? saved : item) }));
+        return { success: true, requirement: saved };
       },
-
-      removeRequirement: (id) => {
-        set((state) => ({
-          requirements: state.requirements.filter((r) => r.id !== id),
-        }));
-
-        const client = getSupabaseClient();
-        if (client) {
-          client
-            .from('requirements')
-            .delete()
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) {
-                console.error('Error eliminando requisito en Supabase:', error.message);
-              }
-            });
-        }
-
+      removeRequirement: async (id) => {
+        const result = await manageCatalog('REQUIREMENT_DELETE', id, {});
+        if (!result.success) return result;
+        const saved = result.requirement;
+        if (!saved) return { success: false, error: 'Respuesta incompleta del catálogo.' };
+        set(state => ({ requirements: result.deleted ? state.requirements.filter(item => item.id !== id)
+          : state.requirements.map(item => item.id === id ? saved : item) }));
         return { success: true };
       },
 
@@ -970,7 +788,7 @@ export const useCatalogStore = create<CatalogState>()(
               error: null,
             });
           } else {
-            set({ isInitialized: true, isLoading: false, error: null });
+            set({ types: [], requirements: [], selectedTypeId: null, isInitialized: true, isLoading: false, error: null });
           }
 
           return {

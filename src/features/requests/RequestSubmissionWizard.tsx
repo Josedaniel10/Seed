@@ -1,3 +1,4 @@
+import { TemplateDownload } from '../catalog/TemplateDownload.tsx';
 import { FundingFields } from '../calls/FundingFields.tsx';
 import { financingError, useCalls } from '../calls/callsApi.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
@@ -103,7 +104,7 @@ function RequestSubmissionForm() {
 
   const selectedType = types.find((t) => t.id === selectedTypeId);
   const typeRequirements = requirements.filter(
-    (r) => (r.request_type_id || r.application_type_id) === selectedType?.id
+    (r) => r.is_active !== false && (r.request_type_id || r.application_type_id) === selectedType?.id
   );
   const mandatoryRequirements = typeRequirements.filter((r) => r.is_mandatory);
 
@@ -148,16 +149,6 @@ function RequestSubmissionForm() {
     setUploadErrors((prev) => ({ ...prev, [requirementId]: '' }));
   };
 
-  const handleDownloadTemplate = (reqName: string) => {
-    const content = `PLANTILLA OFICIAL INSTITUCIONAL\nCOMITÉ DE INVESTIGACIONES\nRequisito: ${reqName}\n\nPor favor diligencie este documento según la normativa institucional.`;
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Plantilla_${reqName.replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
 
   const checkFunding = () => {
     const mode = formData.funding_mode ?? (formData.budget_requested > 0 ? 'funded' : 'academic');
@@ -437,7 +428,7 @@ function RequestSubmissionForm() {
               {isCatalogLoading && !isCatalogInitialized ? <div className="md:col-span-2"><TypeOptionsSkeleton count={activeTypes.length || 4} /></div> : activeTypes.map((type) => {
                 const isSelected = selectedTypeId === type.id;
                 const reqCount = requirements.filter(
-                  (r) => (r.request_type_id || r.application_type_id) === type.id
+                  (r) => r.is_active !== false && (r.request_type_id || r.application_type_id) === type.id
                 ).length;
                 return (
                   <div
@@ -547,16 +538,7 @@ function RequestSubmissionForm() {
                           <span className="text-[10px] text-stone-400 font-mono">
                             PDF/DOCX · Máx {req.max_size_mb} MB
                           </span>
-                          {req.template_url && (
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadTemplate(req.name)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#14281D] hover:underline px-2 py-1 bg-stone-50 rounded-lg border border-stone-200"
-                            >
-                              <Download size={11} />
-                              <span>Plantilla</span>
-                            </button>
-                          )}
+                          {req.template_url && <TemplateDownload path={req.template_url} />}
                         </div>
                       </div>
                     ))}
@@ -736,16 +718,7 @@ function RequestSubmissionForm() {
                         )}
                       </div>
 
-                      {req.template_url && (
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadTemplate(req.name)}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-stone-700 hover:text-[#14281D] cursor-pointer"
-                        >
-                          <Download size={12} />
-                          <span>Descargar Plantilla Oficial</span>
-                        </button>
-                      )}
+                      {req.template_url && <TemplateDownload path={req.template_url} />}
                     </div>
 
                     {req.description && (

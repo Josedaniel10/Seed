@@ -1,3 +1,4 @@
+import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
@@ -103,13 +104,12 @@ export function ValidacionPage() {
   }, [users, selectedExp]);
 
   const appType = useMemo(() => {
-    return types.find((t) => t.id === (selectedExp?.application_type_id ?? selectedExp?.request_type_id));
+    return selectedExp?.catalog_snapshot?.type ?? types.find((t) => t.id === (selectedExp?.application_type_id ?? selectedExp?.request_type_id));
   }, [types, selectedExp]);
 
   const typeReqs = useMemo(() => {
     if (!selectedExp) return [];
-    return requirements.filter((r) => (r.application_type_id ?? r.request_type_id)
-      === (selectedExp.application_type_id ?? selectedExp.request_type_id));
+    return requirementsForRequest(selectedExp, requirements);
   }, [requirements, selectedExp]);
 
   const appDocs = useMemo(() => {
@@ -350,11 +350,12 @@ export function ValidacionPage() {
                 const isSelected = exp.id === selectedExp?.id;
                 const tName = types.find((t) => t.id === exp.application_type_id)?.name;
                 const expDocs = documents.filter((d) => (d.application_id ?? d.request_id) === exp.id);
-                const validCount = requirements.filter((requirement) => requirement.is_mandatory
+                const expRequirements = requirementsForRequest(exp, requirements);
+                const validCount = expRequirements.filter((requirement) => requirement.is_mandatory
                   && (requirement.application_type_id ?? requirement.request_type_id) === (exp.application_type_id ?? exp.request_type_id)
                   && expDocs.some((document) => document.requirement_id === requirement.id
                     && (document.validation_status === 'VALIDO' || document.validation_status === 'VALID'))).length;
-                const totalMandatory = requirements.filter(
+                const totalMandatory = expRequirements.filter(
                   (r) => (r.application_type_id ?? r.request_type_id) === (exp.application_type_id ?? exp.request_type_id) && r.is_mandatory
                 ).length;
 

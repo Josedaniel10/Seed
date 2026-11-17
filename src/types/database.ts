@@ -55,6 +55,9 @@ export interface RequestType {
 export type ApplicationType = RequestType;
 
 export interface Requirement {
+  template_revision?: number;
+  template_updated_at?: string | null;
+  is_active?: boolean;
   id: string;
   request_type_id?: string;
   application_type_id?: string; // Legacy alias
@@ -91,6 +94,7 @@ export type RequestDbStatus =
 export type ApplicationDbStatus = RequestDbStatus;
 
 export interface Request {
+  catalog_snapshot?: { type: RequestType; requirements: Requirement[] };
   id: string;
   filing_number: string;
   request_type_id: string;

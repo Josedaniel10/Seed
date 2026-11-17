@@ -1,7 +1,10 @@
+import { uploadTemplate } from './templateFiles.ts';
+import { TemplateDownload } from './TemplateDownload.tsx';
+import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   FileText,
   Plus,
@@ -23,6 +26,7 @@ import {
 import { useCatalogStore } from './catalogStore.ts';
 import { ApplicationType, Requirement } from '../../types/database.ts';
 import { isSupabaseConfigured } from '../../lib/supabase.ts';
+import { useSessionStore } from '../../stores/session.store.ts';
 
 export function CatalogManagement() {
   const {
@@ -52,6 +56,18 @@ export function CatalogManagement() {
     loadFromSupabase();
   }, [loadFromSupabase]);
 
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const userId = useSessionStore(state => state.user?.id);
+  const { requestDecision, decisionDialog } = useDecisionConfirmation(`catalog-management:${userId}`);
+  const confirmChange = (title: string, name: string, operation: () => Promise<{ success: boolean; error?: string }>) => {
+    requestDecision({ title, target: name, confirmLabel: title, consequence: 'Los expedientes radicados conservan sus condiciones. Los elementos vinculados se archivan en lugar de borrarse.' }, async () => {
+      const result = await operation();
+      if (!result.success) throw new Error(result.error ?? 'No se pudo confirmar el cambio.');
+      setSyncFeedback({ success: true, message: 'Cambio guardado en Supabase.' });
+    });
+  };
   // Modals state
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
   const [editingType, setEditingType] = useState<ApplicationType | null>(null);
@@ -101,7 +117,7 @@ export function CatalogManagement() {
 
   const selectedType = types.find((t) => t.id === selectedTypeId) || filteredTypes[0] || null;
   const currentReqs = selectedType
-    ? requirements.filter((r) => r.application_type_id === selectedType.id)
+    ? requirements.filter((r) => r.application_type_id === selectedType.id && r.is_active !== false)
     : [];
 
   // Handlers
@@ -129,12 +145,15 @@ export function CatalogManagement() {
     setTypeError('');
   };
 
-  const handleSaveType = (e: React.FormEvent) => {
+  const handleSaveType = async (e: React.FormEvent) => {
     e.preventDefault();
     setTypeError('');
-
+    if (saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
     if (editingType) {
-      const res = updateType(editingType.id, {
+      const res = await updateType(editingType.id, {
         code: typeForm.code.trim().toUpperCase(),
         name: typeForm.name.trim(),
         description: typeForm.description.trim() || null,
@@ -143,9 +162,9 @@ export function CatalogManagement() {
       });
       if (res.success) {
         setEditingType(null);
-      }
+      } else { setTypeError(res.error ?? 'No se pudo guardar.'); }
     } else {
-      const res = createType({
+      const res = await createType({
         code: typeForm.code,
         name: typeForm.name,
         description: typeForm.description,
@@ -158,6 +177,7 @@ export function CatalogManagement() {
       }
       setIsCreateTypeOpen(false);
     }
+    } finally { saveLock.current = false; setSaving(false); }
   };
 
   const handleOpenAddReq = () => {
@@ -173,6 +193,7 @@ export function CatalogManagement() {
       template_url: '',
     });
     setReqError('');
+    setTemplateFile(null);
     setIsAddReqOpen(true);
   };
 
@@ -189,16 +210,22 @@ export function CatalogManagement() {
       template_url: req.template_url || '',
     });
     setReqError('');
+    setTemplateFile(null);
   };
 
-  const handleSaveReq = (e: React.FormEvent) => {
+  const handleSaveReq = async (e: React.FormEvent) => {
     e.preventDefault();
     setReqError('');
 
-    if (!selectedType) return;
+    if (!selectedType || saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
+    const templatePath = templateFile ? await uploadTemplate(templateFile) : reqForm.template_url;
+    if (templateFile) { setReqForm(current => ({ ...current, template_url: templatePath })); setTemplateFile(null); }
 
     if (editingReq) {
-      const res = updateRequirement(editingReq.id, {
+      const res = await updateRequirement(editingReq.id, {
         name: reqForm.name.trim(),
         description: reqForm.description.trim() || null,
         is_mandatory: reqForm.is_mandatory,
@@ -206,13 +233,13 @@ export function CatalogManagement() {
         cure_deadline_days: reqForm.is_subsanable ? Number(reqForm.cure_deadline_days) : 0,
         max_size_mb: Number(reqForm.max_size_mb),
         allowed_formats: reqForm.allowed_formats,
-        template_url: reqForm.template_url.trim() || null,
+        template_url: templatePath || null,
       });
       if (res.success) {
         setEditingReq(null);
-      }
+      } else { setReqError(res.error ?? 'No se pudo guardar.'); }
     } else {
-      const res = addRequirement({
+      const res = await addRequirement({
         application_type_id: selectedType.id,
         name: reqForm.name,
         description: reqForm.description,
@@ -221,7 +248,7 @@ export function CatalogManagement() {
         cure_deadline_days: Number(reqForm.cure_deadline_days),
         max_size_mb: Number(reqForm.max_size_mb),
         allowed_formats: reqForm.allowed_formats,
-        template_url: reqForm.template_url,
+        template_url: templatePath,
       });
       if (!res.success) {
         setReqError(res.error || 'Error al agregar requisito');
@@ -229,6 +256,8 @@ export function CatalogManagement() {
       }
       setIsAddReqOpen(false);
     }
+    } catch (cause) { setReqError(cause instanceof Error ? cause.message : 'No se pudo guardar la plantilla.'); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
   const handleSyncSupabase = async () => {
@@ -252,6 +281,7 @@ export function CatalogManagement() {
 
   return (
     <div className="space-y-6">
+      {decisionDialog}
       {/* Top Banner & Context Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-stone-100">
         <div>
@@ -362,7 +392,7 @@ export function CatalogManagement() {
           <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
             {filteredTypes.map((type) => {
               const isSelected = selectedType?.id === type.id;
-              const typeReqs = requirements.filter((r) => r.application_type_id === type.id);
+              const typeReqs = requirements.filter((r) => r.application_type_id === type.id && r.is_active !== false);
               const mandatoryCount = typeReqs.filter((r) => r.is_mandatory).length;
               const subsanableCount = typeReqs.filter((r) => r.is_subsanable).length;
 
@@ -398,15 +428,16 @@ export function CatalogManagement() {
                     </div>
 
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" title="Eliminar trámite" aria-label={`Eliminar ${type.name}`} onClick={() => confirmChange('Eliminar o archivar trámite', type.name, () => deleteType(type.id))} className="min-h-12 px-2 text-rose-700"><Trash2 size={15} /></button>
                       <button
                         onClick={() => handleOpenEditType(type)}
-                        title="Editar tipo"
+                        aria-label={`Editar ${type.name}`} title="Editar tipo"
                         className="p-1 text-stone-400 hover:text-[#14281D] hover:bg-stone-100 rounded transition-colors cursor-pointer"
                       >
                         <Edit2 size={13} />
                       </button>
                       <button
-                        onClick={() => toggleTypeActive(type.id)}
+                        onClick={() => confirmChange(type.is_active ? 'Desactivar trámite' : 'Activar trámite', type.name, () => toggleTypeActive(type.id))}
                         title={type.is_active ? 'Desactivar trámite' : 'Activar trámite'}
                         className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
                           type.is_active
@@ -520,7 +551,7 @@ export function CatalogManagement() {
                           <Edit2 size={13} />
                         </button>
                         <button
-                          onClick={() => removeRequirement(req.id)}
+                          onClick={() => confirmChange('Eliminar o archivar requisito', req.name, () => removeRequirement(req.id))}
                           title="Eliminar requisito"
                           className="p-1 text-stone-400 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                         >
@@ -571,12 +602,7 @@ export function CatalogManagement() {
                       </span>
 
                       {/* Template Link */}
-                      {req.template_url && (
-                        <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                          <ExternalLink size={10} />
-                          <span>Plantilla oficial disponible</span>
-                        </span>
-                      )}
+                      {req.template_url && <div className="space-y-1"><p className="text-xs">{req.template_url.split('/').pop()} · Versión {req.template_revision ?? 1}{req.template_updated_at ? ` · ${new Date(req.template_updated_at).toLocaleDateString('es-CO')}` : ''}</p><TemplateDownload path={req.template_url} /></div>}
                     </div>
                   </div>
                 ))}
@@ -605,7 +631,7 @@ export function CatalogManagement() {
       </div>}
 
       {/* Modal: Crear / Editar Tipo de Trámite */}
-      <ResponsiveOverlay isOpen={Boolean((isCreateTypeOpen || editingType))} onClose={() => { setIsCreateTypeOpen(false); setEditingType(null); }} label="Tipo de trámite">
+      <ResponsiveOverlay isOpen={Boolean((isCreateTypeOpen || editingType))} onClose={() => { if (!saving) { setIsCreateTypeOpen(false); setEditingType(null); } }} label="Tipo de trámite">
         {(isCreateTypeOpen || editingType) && (<>
           <div className="bg-white rounded-2xl max-w-lg w-full border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
@@ -615,7 +641,7 @@ export function CatalogManagement() {
                   {editingType ? 'Editar Tipo de Trámite' : 'Registrar Nuevo Tipo de Trámite'}
                 </h3>
               </div>
-              <button aria-label="Cerrar panel"
+              <button disabled={saving} aria-label="Cerrar panel"
                 onClick={() => {
                   setIsCreateTypeOpen(false);
                   setEditingType(null);
@@ -627,6 +653,7 @@ export function CatalogManagement() {
             </div>
 
             <form onSubmit={handleSaveType} className="p-6 space-y-4 text-xs">
+              <fieldset disabled={saving} className="contents"><legend className="sr-only">Datos del catálogo institucional</legend>
               {typeError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2">
                   <AlertCircle size={15} />
@@ -711,19 +738,19 @@ export function CatalogManagement() {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={saving}
                   className="px-4 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold rounded-lg cursor-pointer"
                 >
-                  {editingType ? 'Guardar Cambios' : 'Crear Tipo de Trámite'}
+                  {saving ? 'Guardando…' : editingType ? 'Guardar Cambios' : 'Crear Tipo de Trámite'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </>)}
       </ResponsiveOverlay>
 
       {/* Modal: Agregar / Editar Requisito */}
-      <ResponsiveOverlay isOpen={Boolean((isAddReqOpen || editingReq))} onClose={() => { setIsAddReqOpen(false); setEditingReq(null); }} label="Requisito documental">
+      <ResponsiveOverlay isOpen={Boolean((isAddReqOpen || editingReq))} onClose={() => { if (!saving) { setIsAddReqOpen(false); setEditingReq(null); } }} label="Requisito documental">
         {(isAddReqOpen || editingReq) && (<>
           <div className="bg-white rounded-2xl max-w-lg w-full border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
@@ -733,7 +760,7 @@ export function CatalogManagement() {
                   {editingReq ? 'Editar Requisito' : `Nuevo Requisito para [${selectedType?.code}]`}
                 </h3>
               </div>
-              <button aria-label="Cerrar panel"
+              <button disabled={saving} aria-label="Cerrar panel"
                 onClick={() => {
                   setIsAddReqOpen(false);
                   setEditingReq(null);
@@ -745,6 +772,7 @@ export function CatalogManagement() {
             </div>
 
             <form onSubmit={handleSaveReq} className="p-6 space-y-4 text-xs">
+              <fieldset disabled={saving} className="contents"><legend className="sr-only">Datos del catálogo institucional</legend>
               {reqError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2">
                   <AlertCircle size={15} />
@@ -842,15 +870,11 @@ export function CatalogManagement() {
               </div>
 
               {/* Plantilla oficial descargable */}
-              <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Ruta o Enlace a Plantilla Oficial (Opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Ej. /templates/formato_presupuesto.xlsx"
-                  value={reqForm.template_url}
-                  onChange={(e) => setReqForm({ ...reqForm, template_url: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs font-mono focus:ring-1 focus:ring-[#14281D] focus:outline-none"
-                />
+              <div className="space-y-2">
+                <label htmlFor="catalog-template" className="block font-semibold">Plantilla documental opcional</label>
+                <p id="catalog-template-help" className="text-stone-600">PDF, Word DOCX o Excel XLSX. Máximo 10 MB. Reemplazar una plantilla conserva la versión de las solicitudes radicadas.</p>
+                <input id="catalog-template" name="template" type="file" accept=".pdf,.docx,.xlsx" aria-describedby="catalog-template-help" disabled={saving} onChange={e => setTemplateFile(e.target.files?.[0] ?? null)} className="block min-h-12 w-full rounded border p-2" />
+                {reqForm.template_url && <div className="flex flex-wrap gap-3"><TemplateDownload path={reqForm.template_url} /><button type="button" disabled={saving} onClick={() => { setReqForm(current => ({ ...current, template_url: '' })); setTemplateFile(null); }} className="min-h-12 text-rose-700">Retirar plantilla al guardar</button></div>}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
@@ -865,13 +889,13 @@ export function CatalogManagement() {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={saving}
                   className="px-4 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold rounded-lg cursor-pointer"
                 >
-                  {editingReq ? 'Guardar Cambios' : 'Guardar Requisito'}
+                  {saving ? 'Guardando…' : editingReq ? 'Guardar Cambios' : 'Guardar Requisito'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </>)}
       </ResponsiveOverlay>

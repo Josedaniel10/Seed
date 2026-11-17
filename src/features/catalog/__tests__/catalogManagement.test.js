@@ -13,6 +13,22 @@ globalThis.localStorage = {
   },
 };
 
+process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:54321';
+process.env.VITE_SUPABASE_ANON_KEY = 'catalog-test-key';
+const remoteTypes = [];
+const remoteRequirements = [];
+let sequence = 0;
+globalThis.fetch = async (input, options) => {
+  const { p_action: action, p_id: id, p_data: data } = JSON.parse(options.body);
+  if (action === 'TYPE_CREATE' && remoteTypes.some(type => type.code === data.code)) return Response.json({ message: 'Código duplicado' }, { status: 409 });
+  let type = remoteTypes.find(item => item.id === id) ?? null;
+  let requirement = remoteRequirements.find(item => item.id === id) ?? null;
+  if (action === 'TYPE_CREATE') { type = { ...data, id: 'type-' + (++sequence), is_active: true, created_at: '2026-11-16' }; remoteTypes.push(type); }
+  if (action === 'TYPE_UPDATE') Object.assign(type, data);
+  if (action === 'REQUIREMENT_CREATE') { requirement = { description: null, template_url: null, ...data, id: 'req-' + (++sequence), is_active: true, created_at: '2026-11-16' }; remoteRequirements.push(requirement); }
+  if (action === 'REQUIREMENT_UPDATE') Object.assign(requirement, data);
+  return Response.json({ type, requirement, deleted: action.endsWith('DELETE') });
+};
 const { useCatalogStore } = await import('../catalogStore.ts');
 
 console.log('--- Iniciando prueba automática de catálogo de trámites y requisitos (T1.7 / RF-05, RF-06, RN-10, RN-11) ---');
@@ -42,7 +58,7 @@ const newTypeData = {
   display_order: 6,
 };
 
-const createTypeRes = useCatalogStore.getState().createType(newTypeData);
+const createTypeRes = await useCatalogStore.getState().createType(newTypeData);
 if (!createTypeRes.success || !createTypeRes.type) {
   console.error('ERROR al crear tipo de trámite:', createTypeRes.error);
   process.exit(1);
@@ -51,7 +67,7 @@ const createdType = createTypeRes.type;
 console.log(`2. Tipo de trámite creado exitosamente: [${createdType.code}] ${createdType.name}`);
 
 // 3. Validar rechazo de código duplicado
-const dupRes = useCatalogStore.getState().createType({
+const dupRes = await useCatalogStore.getState().createType({
   code: 'CONV-INT-06',
   name: 'Tipo Duplicado',
   description: 'Debe fallar',
@@ -64,7 +80,7 @@ console.log('3. Validación de código único verificada (Rechazado duplicado co
 
 // 4. Agregar requisitos: Obligatorio no subsanable vs Subsanable (RN-10, RN-11)
 // 4a. Requisito obligatorio NO subsanable (ej. Propuesta estructurada original)
-const req1Res = useCatalogStore.getState().addRequirement({
+const req1Res = await useCatalogStore.getState().addRequirement({
   application_type_id: createdType.id,
   name: 'Propuesta de Semillero en Formato Oficial',
   description: 'Documento original con formulación del semillero (causal no subsanable si no se presenta).',
@@ -82,7 +98,7 @@ if (!req1Res.success || !req1Res.requirement) {
 console.log('4a. Requisito obligatorio NO subsanable agregado correctamente:', req1Res.requirement.name, '| Subsanable:', req1Res.requirement.is_subsanable, '| Días subsanación:', req1Res.requirement.cure_deadline_days);
 
 // 4b. Requisito obligatorio SUBSANABLE (ej. Carta de aval de tutor docente RN-09)
-const req2Res = useCatalogStore.getState().addRequirement({
+const req2Res = await useCatalogStore.getState().addRequirement({
   application_type_id: createdType.id,
   name: 'Carta de Aval del Docente Tutor de Semillero (RN-09)',
   description: 'Certificado firmado por el tutor garantizando acompañamiento pedagógico.',
@@ -100,7 +116,7 @@ if (!req2Res.success || !req2Res.requirement) {
 console.log('4b. Requisito obligatorio SUBSANABLE agregado correctamente:', req2Res.requirement.name, '| Plazo subsanación:', req2Res.requirement.cure_deadline_days, 'días.');
 
 // 5. Actualizar requisito y verificar reglas
-const updateReqRes = useCatalogStore.getState().updateRequirement(req2Res.requirement.id, {
+const updateReqRes = await useCatalogStore.getState().updateRequirement(req2Res.requirement.id, {
   cure_deadline_days: 7,
   max_size_mb: 8,
 });
@@ -111,7 +127,7 @@ if (!updateReqRes.success || !updateReqRes.requirement || updateReqRes.requireme
 console.log('5. Parámetros del requisito actualizados exitosamente (cure_deadline_days = 7).');
 
 // 6. Conmutar estado activo/inactivo del tipo de trámite
-const toggleRes = useCatalogStore.getState().toggleTypeActive(createdType.id);
+const toggleRes = await useCatalogStore.getState().toggleTypeActive(createdType.id);
 const toggledType = useCatalogStore.getState().types.find((t) => t.id === createdType.id);
 if (!toggleRes.success || toggledType?.is_active !== false) {
   console.error('ERROR al alternar estado activo/inactivo');
@@ -120,7 +136,7 @@ if (!toggleRes.success || toggledType?.is_active !== false) {
 console.log('6. Conmutación de estado activo/inactivo verificada:', toggledType.is_active);
 
 // 7. Eliminar requisito individual
-const removeReqRes = useCatalogStore.getState().removeRequirement(req1Res.requirement.id);
+const removeReqRes = await useCatalogStore.getState().removeRequirement(req1Res.requirement.id);
 const remainingReqs = useCatalogStore.getState().requirements.filter((r) => r.application_type_id === createdType.id);
 if (!removeReqRes.success || remainingReqs.length !== 1) {
   console.error('ERROR al eliminar requisito:', remainingReqs);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { typeSchema, requirementSchema } from '../catalog/catalogApi.ts';
 
 // Postgres UUID columns also accept the fixed IDs in seed.sql, which do not
 // encode an RFC UUID version/variant. Validate their full GUID shape instead.
@@ -10,6 +11,7 @@ const status = z.enum(['SUBMITTED', 'PENDING_DOCUMENTS', 'UNDER_REVIEW', 'COMMIT
 
 export const documentaryCompletionSchema = z.object({
   application: z.object({
+    catalog_snapshot: z.object({ type: typeSchema, requirements: z.array(requirementSchema) }).optional(),
     id: databaseId, filing_number: z.string(), application_type_id: databaseId,
     applicant_id: databaseId, title: z.string(), abstract: z.string().nullable(),
     research_group_id: databaseId.nullable(), budget_requested: z.coerce.number(),

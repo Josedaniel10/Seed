@@ -1,3 +1,4 @@
+import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { ReviewCardsSkeleton } from '../../features/loading/ReviewCardsSkeleton.tsx';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -85,7 +86,7 @@ export function RevisionesPage() {
           {myAssignedApps.map((app) => {
             const isExpanded = expandedAppId === app.id;
             const deadline = getDeadlineStatus(app.id);
-            const appType = types.find((t) => t.id === app.application_type_id);
+            const appType = app.catalog_snapshot?.type ?? types.find((t) => t.id === app.application_type_id);
             const applicant = users.find((u) => u.id === app.applicant_id);
             const appDocs = documents.filter((d) => (d.application_id ?? d.request_id) === app.id);
             const appObs = observations.filter((o) => (o.application_id ?? o.request_id) === app.id);
@@ -156,7 +157,7 @@ export function RevisionesPage() {
                     key={`${currentUserId}:${app.id}:${assignmentId}`}
                     app={app}
                     assignmentId={assignmentId}
-                    appDocs={appDocs} appObs={appObs} requirements={requirements}
+                    appDocs={appDocs} appObs={appObs} requirements={requirementsForRequest(app, requirements)}
                     onConceptSubmitted={handleConceptSubmitted}
                   />}
                 </div>
