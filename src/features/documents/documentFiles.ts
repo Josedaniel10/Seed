@@ -15,7 +15,7 @@ export interface UploadedDocumentFile {
 
 function requireClient(): SupabaseClient {
   const client = getSupabaseClient();
-  if (!client) throw new Error('Conecte Supabase para cargar y consultar documentos reales.');
+  if (!client) throw new Error('No pudimos acceder a los documentos. Inténtalo nuevamente más tarde.');
   return client;
 }
 

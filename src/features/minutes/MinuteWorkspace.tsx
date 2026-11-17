@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
 import { useEffect, useState } from 'react';
@@ -19,7 +20,7 @@ export function MinuteWorkspace({ minuteId, canManage, onDirtyChange }: { minute
   if (!minute) return <p role="alert">Acta no encontrada.</p>;
   let content: MinuteContent;
   try { content = createMinuteContent(minute, { session: sessions.find((session) => session.id === minute.session_id), attendance }); }
-  catch (error) { return <p role="alert">{error instanceof Error ? error.message : 'No se pudo abrir el acta.'}</p>; }
+  catch (error) { return <p role="alert">{getUserError(error, 'No se pudo abrir el acta.')}</p>; }
   return <MinuteForm key={`${minute.draft_content}-${minute.is_approved}`} minute={minute} content={content} canManage={canManage} onDirtyChange={onDirtyChange} />;
 }
 
@@ -52,7 +53,7 @@ function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: Com
     try {
       const result = await updateStructuredDraft(minute.id, editorial, user.id, user.fullName);
       if (!result.success) setError(result.error || 'No se pudo guardar el borrador.');
-    } catch (error) { setError(error instanceof Error ? error.message : 'No se pudo guardar el borrador.'); }
+    } catch (error) { setError(getUserError(error, 'No se pudo guardar el borrador.')); }
     finally { setBusy(false); }
   }, () => setError('Revise la hora y la longitud de los campos del formulario.'));
 
@@ -93,7 +94,7 @@ function MinuteForm({ minute, content, canManage, onDirtyChange }: { minute: Com
       anchor.download = `${minute.minute_number.replace(/\s+/g, '_')}${minute.is_approved ? '' : '_borrador'}.pdf`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) { setError(error instanceof Error ? error.message : 'No se pudo generar el PDF.'); }
+    } catch (error) { setError(getUserError(error, 'No se pudo generar el PDF.')); }
     finally { setBusy(false); }
   };
 

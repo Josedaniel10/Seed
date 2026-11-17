@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 export interface DecisionPrompt {
   title: string;
   target: string;
@@ -58,7 +59,7 @@ export function createDecisionConfirmation(): DecisionConfirmationController {
         action = null;
       } catch (error) {
         if (state !== pending) return;
-        state = { ...pending, isPending: false, error: error instanceof Error ? error.message : 'No se pudo confirmar el guardado. Intente nuevamente.' };
+        state = { ...pending, isPending: false, error: getUserError(error, 'No se pudo confirmar el guardado. Intente nuevamente.') };
       }
       emit();
     },

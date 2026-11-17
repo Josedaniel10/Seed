@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
 import { getTypeAppearance } from '../../features/catalog/typeAppearance.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
@@ -301,7 +302,7 @@ export function PanelSeguimientoPage() {
       setTransitionError(res.error || 'Error al ejecutar la transición.');
     }
     } catch (error) {
-      setTransitionError(error instanceof Error ? error.message : 'No se pudo confirmar la transición.');
+      setTransitionError(getUserError(error, 'No se pudo confirmar la transición.'));
     } finally {
       transitionLock.current = false;
       setIsTransitionPending(false);

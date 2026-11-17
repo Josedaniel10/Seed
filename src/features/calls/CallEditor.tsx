@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { IdentityPicker } from '../../components/ui/IdentityPicker.tsx';
 import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
 import { getTypeAppearance } from '../catalog/typeAppearance.ts';
@@ -92,7 +93,7 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
         opens_at: new Date(values.opens_at + '-05:00').toISOString(),
         closes_at: new Date(values.closes_at + '-05:00').toISOString(),
         max_amount: values.max_amount ? Number(values.max_amount) : null });
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo guardar el borrador. Intenta de nuevo.'); }
+    } catch (failure) { setError(getUserError(failure, 'No se pudo guardar el borrador. Intenta de nuevo.')); }
     finally { saving.current = false; setBusy(false); }
   };
   const availableTypes = types.filter((type) => type.is_active || values.type_ids.includes(type.id));
@@ -125,7 +126,7 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
                       const file = event.target.files?.[0]; event.target.value = '';
                       if (!file) return;
                       try { validateCoverFile(file); setCoverFile(file); setDirty(true); setError(''); }
-                      catch (failure) { setError(failure instanceof Error ? failure.message : 'Imagen inválida.'); }
+                      catch (failure) { setError(getUserError(failure, 'Imagen inválida.')); }
                     }} />
                 </label>
                 <p id="call-cover-help" className="text-xs text-stone-500">JPG, PNG o WebP · Máximo 3 MB. Usa una imagen horizontal; se recortará para llenar la cabecera.</p>

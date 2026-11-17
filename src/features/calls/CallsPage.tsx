@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { StoredCallCover } from './CallCover.tsx';
 import { uploadCallCover } from './coverFiles.ts';
 import { useState } from 'react';
@@ -33,7 +34,7 @@ export function CallsPage(): ReactElement {
   const admin = user?.roles.includes('admin') ?? false;
   const managers = useQuery({ queryKey: ['call-managers', user?.id], queryFn: async () => {
     const { data, error } = await callsClient().from('funding_call_managers').select('*');
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(getUserError(error));
     return z.array(managerSchema).parse(data);
   } });
   const faculties = [...new Set(groups.map((g) => g.faculty))];
@@ -64,7 +65,7 @@ export function CallsPage(): ReactElement {
       consequence: 'Se actualizará la recepción de postulaciones. Las solicitudes ya radicadas conservarán su historial.',
     }, async () => {
       const { error: failure } = await callsClient().rpc('change_funding_call_status', { p_id: call.id, p_status: status, p_reason: explanation });
-      if (failure) throw new Error(failure.message);
+      if (failure) throw new Error(getUserError(failure));
       await refresh(); setReason(''); setStatusAction(null);
       setSuccess('El estado de la convocatoria se actualizó correctamente.');
     });
@@ -73,18 +74,18 @@ export function CallsPage(): ReactElement {
     const { cover_file, ...data } = input;
     const cover_image_path = cover_file ? await uploadCallCover(cover_file) : data.cover_image_path;
     const { error: failure } = await callsClient().rpc('create_funding_call', { p_data: { ...data, cover_image_path } });
-    if (failure) throw new Error(failure.message);
+    if (failure) throw new Error(getUserError(failure));
     await refresh(); setEditor(null);
     setSuccess('Borrador guardado. Revisa la convocatoria en el listado y pulsa Publicar cuando esté lista.');
   };
   const assign = async (manager: CallManager): Promise<void> => {
     const { error: failure } = await callsClient().from('funding_call_managers').upsert(manager);
-    if (failure) throw new Error(failure.message);
+    if (failure) throw new Error(getUserError(failure));
     await refresh(); setSuccess('Responsable asignado correctamente.');
   };
   const remove = async (manager: CallManager): Promise<void> => {
     const { error: failure } = await callsClient().from('funding_call_managers').delete().eq('user_id', manager.user_id).eq('faculty', manager.faculty);
-    if (failure) throw new Error(failure.message);
+    if (failure) throw new Error(getUserError(failure));
     await refresh(); setSuccess('Se retiró el permiso de gestión.');
   };
   const detail = calls.data?.find((call) => call.id === params.get('convocatoria'));
@@ -115,8 +116,8 @@ export function CallsPage(): ReactElement {
       {managers.isSuccess && <CallManagersPanel key={user?.id} managers={managers.data} users={users} faculties={faculties} onAssign={assign} onRemove={remove} />}
     </> : <>
     {calls.isPending && <p role="status" className="text-xs text-stone-500">Cargando convocatorias…</p>}
-    {calls.error && <p role="alert" className="text-xs text-red-700">No se pudieron consultar las convocatorias: {calls.error.message} <button className="underline cursor-pointer" onClick={() => void calls.refetch()}>Reintentar</button></p>}
-    {managers.error && <p role="alert" className="text-xs text-red-700">No se pudieron consultar los permisos de gestión: {managers.error.message}</p>}
+    {calls.error && <p role="alert" className="text-xs text-red-700">{getUserError(calls.error, 'No pudimos consultar las convocatorias. Inténtalo nuevamente.')} <button className="underline cursor-pointer" onClick={() => void calls.refetch()}>Reintentar</button></p>}
+    {managers.error && <p role="alert" className="text-xs text-red-700">{getUserError(managers.error, 'No pudimos comprobar tus permisos. Inténtalo nuevamente.')}</p>}
     {sections.filter((section) => section.items.length).map((section) => <section key={section.title} aria-label={section.title} className="space-y-3">
       <div><h2 className="text-sm font-bold text-[#14281D]">{section.title} <span className="ml-1 rounded-full bg-stone-200/60 px-2 py-0.5 text-[10px] text-stone-500">{section.items.length}</span></h2><p className="text-xs text-stone-500 mt-1">{section.description}</p></div>
       <div className="grid md:grid-cols-2 gap-4">{section.items.map((call) => <article key={call.id} className="flex flex-col rounded-2xl border border-[#E5E3DC] bg-white shadow-xs overflow-hidden">

@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
@@ -90,7 +91,7 @@ export function ValidacionPage() {
         setFeedback({ type: 'error', message });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo confirmar el guardado. Intente nuevamente.';
+      const message = getUserError(error, 'No se pudo confirmar el guardado. Intente nuevamente.');
       setFeedback({ type: 'error', message });
       if (propagate) throw new Error(message);
     } finally {

@@ -30,6 +30,16 @@ afterEach(async () => {
 });
 after(() => dom.window.close());
 
+test('alerts hide technical diagnostics and retain helpful validation messages', async () => {
+  await mount(createElement('div', null,
+    createElement(FloatingAlert, { message: 'PostgREST: relation "profiles" does not exist' }),
+    createElement(FloatingAlert, { message: 'El archivo supera el máximo de 10 MB.' })));
+  const messages = [...document.querySelectorAll('.alert-message')].map((element) => element.textContent);
+  assert.match(messages[0], /No pudimos completar esta acción/);
+  assert.doesNotMatch(document.querySelector('.alert-viewport').textContent, /PostgREST|profiles|relation/);
+  assert.equal(messages[1], 'El archivo supera el máximo de 10 MB.');
+});
+
 test('multiple notices share one viewport outside the page flow and keep the current focus', async () => {
   const main = await mount(createElement('div', null,
     createElement('input', { 'aria-label': 'Trabajo en curso' }),

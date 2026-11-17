@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { getRequestQuorum } from './requestQuorum.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -297,7 +298,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
 
           return { success: true, session: newSession };
         } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Error al programar sesión.';
+          const msg = getUserError(err, 'Error al programar sesión.');
           return { success: false, error: msg };
         }
       },
@@ -830,7 +831,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             client.from('session_non_deliberations').select('*'),
           ]);
           for (const response of responses) {
-            if (response.error) throw new Error(response.error.message);
+            if (response.error) throw new Error(getUserError(response.error));
           }
           const sessions = sessionSchema.array().parse(responses[0].data);
           const agendaItems = agendaSchema.array().parse(responses[1].data);
@@ -840,7 +841,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           set({ sessions, agendaItems, attendances, decisions, nonDeliberations, isLoading: false });
           return { success: true, count: sessions.length };
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Error al cargar sesiones.';
+          const message = getUserError(error, 'Error al cargar sesiones.');
           set({ isLoading: false, error: message });
           return { success: false, error: message };
         }
@@ -890,7 +891,7 @@ async function performRemoteSessionMutation(action: SessionAction, payload: Reco
     }
     return { ...result, agendaItem: result.agendaItem ?? undefined };
   } catch (error) {
-    return { success: false as const, error: error instanceof Error ? error.message : 'Error al guardar la sesión.' };
+    return { success: false as const, error: getUserError(error, 'Error al guardar la sesión.') };
   } finally {
     useCommitteeSessionsStore.setState({ isSaving: false });
   }

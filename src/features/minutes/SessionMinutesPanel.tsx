@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useState } from 'react';
 import { useMinutesStore } from './minutesStore.ts';
@@ -25,7 +26,7 @@ export function SessionMinutesPanel({ sessionId, isCompleted, canManage }: Sessi
       const result = await generateDraftFromSession(sessionId, user.id, user.fullName);
       if (result && !result.success) throw new Error(result.error || 'No se pudo guardar el acta.');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Error al procesar el acta.');
+      setError(getUserError(error, 'Error al procesar el acta.'));
     } finally {
       setIsSaving(false);
     }

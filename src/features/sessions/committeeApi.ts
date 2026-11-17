@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { z } from 'zod';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 
@@ -59,7 +60,7 @@ export async function mutateSession(
   const { data, error } = await client.rpc('manage_committee_session', {
     p_action: action, p_payload: payload,
   });
-  if (error) return { success: false as const, error: error.message };
+  if (error) return { success: false as const, error: getUserError(error) };
   const result = sessionResultSchema.safeParse(data);
   if (!result.success) return { success: false as const, error: 'La respuesta de la sesión es inválida.' };
   const expectedFields = {
@@ -82,7 +83,7 @@ export async function mutateMinutes(
   const { data, error } = await client.rpc('manage_committee_minutes', {
     p_action: action, p_payload: payload,
   });
-  if (error) return { success: false as const, error: error.message };
+  if (error) return { success: false as const, error: getUserError(error) };
   const result = minuteSchema.safeParse(data);
   if (!result.success) return { success: false as const, error: 'La respuesta del acta es inválida.' };
   return { success: true as const, minute: result.data };

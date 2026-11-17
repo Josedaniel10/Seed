@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -27,7 +28,7 @@ export function DocumentFileActions({ document }: { document: RequestDocument })
       if (action === 'download') saveDocumentBlob(blob, document.file_name);
       else setPreview(URL.createObjectURL(blob));
     } catch (failure) {
-      if (mounted.current) setError(failure instanceof Error ? failure.message : 'No se pudo consultar el documento.');
+      if (mounted.current) setError(getUserError(failure, 'No se pudo consultar el documento.'));
     } finally {
       inFlight.current = false;
       if (mounted.current) setBusy(false);

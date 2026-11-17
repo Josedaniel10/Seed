@@ -1,3 +1,4 @@
+import { getUserError } from './userMessages.ts';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Claves de almacenamiento local para configuración dinámica en navegador
@@ -85,7 +86,7 @@ export function saveSupabaseCredentials(url: string, anonKey: string): { success
   }
 
   if (trimmedKey.length < 20) {
-    return { success: false, error: 'La Anon Key de Supabase parece inválida (demasiado corta).' };
+    return { success: false, error: 'La clave de conexión parece incompleta. Revisa el valor e inténtalo nuevamente.' };
   }
 
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -155,7 +156,7 @@ export async function testSupabaseConnection(): Promise<{
       connected: false,
       latencyMs: 0,
       url: 'Sin configurar',
-      message: 'Pendiente conectar: Ingrese la URL y Anon Key de su proyecto de Supabase para activar la autenticación y base de datos relacional real.',
+      message: 'El servicio todavía no está disponible. Contacta al administrador.',
     };
   }
 
@@ -181,7 +182,7 @@ export async function testSupabaseConnection(): Promise<{
         connected: false,
         latencyMs: latency,
         url: creds.url,
-        message: `Error al conectar con Supabase: ${error.message}`,
+        message: getUserError(error, 'No pudimos comprobar la conexión. Inténtalo nuevamente.'),
       };
     }
 
@@ -190,11 +191,11 @@ export async function testSupabaseConnection(): Promise<{
       connected: true,
       latencyMs: latency,
       url: creds.url,
-      message: `Conexión activa y verificada con Supabase (${latency}ms). Base de datos relacional y autenticación en tiempo real disponibles.`,
+      message: `La conexión está disponible. Tiempo de respuesta: ${latency} ms.`,
     };
   } catch (err: unknown) {
     const latency = Math.round(performance.now() - start);
-    const msg = err instanceof Error ? err.message : 'Error desconocido al conectar con Supabase';
+    const msg = getUserError(err, 'Error desconocido al conectar con Supabase');
     return {
       configured: true,
       connected: false,

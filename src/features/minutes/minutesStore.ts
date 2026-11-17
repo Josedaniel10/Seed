@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { CommitteeMinutes } from '../../types/database.ts';
@@ -294,7 +295,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
           }), editorial);
           return await get().updateDraftContent(minuteId, draftContent, actorId, actorName);
         } catch (error) {
-          return { success: false, error: error instanceof Error ? error.message : 'Revise los campos del acta.' };
+          return { success: false, error: getUserError(error, 'Revise los campos del acta.') };
         }
       },
 
@@ -307,7 +308,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
             return { success: false, error: 'Los datos de la sesión se conservan sin cambios. Edite las observaciones, compromisos o firmantes.' };
           }
         } catch (error) {
-          return { success: false, error: error instanceof Error ? error.message : 'No se pudo leer el acta.' };
+          return { success: false, error: getUserError(error, 'No se pudo leer el acta.') };
         }
         const remote = await performRemoteMinutesMutation('update', { minute_id: minuteId, draft_content: draftContent });
         if (remote) return remote;
@@ -343,7 +344,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
           const errors = content ? minuteApprovalErrors(content.editorial) : [];
           if (errors.length) return { success: false, error: errors.join(' ') };
         } catch (error) {
-          return { success: false, error: error instanceof Error ? error.message : 'No se pudo leer el acta.' };
+          return { success: false, error: getUserError(error, 'No se pudo leer el acta.') };
         }
         const remote = await performRemoteMinutesMutation('approve', { minute_id: minuteId });
         if (remote) return remote;
@@ -395,7 +396,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
             fileName: `${minute.minute_number.replace(/\s+/g, '_')}${minute.is_approved ? '' : '_borrador'}.pdf`,
           };
         } catch (error) {
-          return { success: false, error: error instanceof Error ? error.message : 'Error al generar PDF.' };
+          return { success: false, error: getUserError(error, 'Error al generar PDF.') };
         }
       },
 
@@ -431,11 +432,11 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
         set({ isLoading: true, error: null });
         try {
           const { data, error } = await client.from('committee_minutes').select('*').order('created_at', { ascending: false });
-          if (error) throw new Error(error.message);
+          if (error) throw new Error(getUserError(error));
           set({ minutes: minuteSchema.array().parse(data), isLoading: false });
           return { success: true };
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Error al cargar actas.';
+          const message = getUserError(error, 'Error al cargar actas.');
           set({ isLoading: false, error: message });
           return { success: false, error: message };
         }
@@ -480,7 +481,7 @@ async function performRemoteMinutesMutation(action: MinutesAction, payload: Reco
     }));
     return result;
   } catch (error) {
-    return { success: false as const, error: error instanceof Error ? error.message : 'Error al guardar el acta.' };
+    return { success: false as const, error: getUserError(error, 'Error al guardar el acta.') };
   } finally {
     useMinutesStore.setState({ isSaving: false });
   }

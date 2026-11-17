@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { downloadTemplate } from './templateFiles.ts';
@@ -8,7 +9,7 @@ export function TemplateDownload({ path }: { path: string }): ReactElement {
   const handleDownload = async () => {
     setBusy(true); setError('');
     try { await downloadTemplate(path); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo descargar.'); }
+    catch (cause) { setError(getUserError(cause, 'No se pudo descargar.')); }
     finally { setBusy(false); }
   };
   return <span className="inline-flex flex-col gap-1">

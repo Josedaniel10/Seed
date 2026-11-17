@@ -33,5 +33,6 @@ test('offline filing cannot claim successful financing without checking the serv
   const result = await useRequestStore.getState().createRequest({ request_type_id: 'type', applicant_id: 'owner',
     title: 'Proyecto', abstract: 'Justificación', budget_requested: 100, documents: [] });
   assert.equal(result.success, false);
-  assert.match(result.error, /Supabase/);
+  assert.match(result.error, /No pudimos validar la convocatoria/);
+  assert.doesNotMatch(result.error, /Supabase/);
 });

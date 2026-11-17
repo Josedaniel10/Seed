@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
 import { getTypeAppearance } from '../../features/catalog/typeAppearance.ts';
 import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
@@ -169,7 +170,7 @@ export function DetalleSolicitudPage() {
         setSubsanarError(res.error || 'Error al subsanar documento.');
       }
     } catch (error) {
-      setSubsanarError(error instanceof Error ? error.message : 'Error al procesar el archivo subsanado.');
+      setSubsanarError(getUserError(error, 'Error al procesar el archivo subsanado.'));
     } finally {
       uploadLock.current = false;
       setIsUploading(false);

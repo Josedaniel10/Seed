@@ -1,3 +1,4 @@
+import { getAuthError, USER_MESSAGES } from '../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppRole, normalizeRole, ROLE_HOME_PATHS } from '../lib/permissions.ts';
@@ -38,16 +39,16 @@ async function loadAuthenticatedSession(client: SupabaseClient, user: User): Pro
     const denied = [profile.error, assignments.error].some((error) => error
       && (error.code === '42501' || error.code?.startsWith('PGRST30')));
     if (denied) throw new SessionAccessError('No se pudo autorizar el acceso al perfil y sus permisos.');
-    throw new SessionSyncError('No se pudo consultar el perfil y sus permisos en Supabase.');
+    throw new SessionSyncError('No pudimos actualizar tu acceso. Revisa tu conexión e inténtalo nuevamente.');
   }
   const record = profile.data?.[0];
   if (!record || record.id !== user.id || !record.is_active) {
-    throw new SessionAccessError('Su cuenta necesita un perfil activo para ingresar.');
+    throw new SessionAccessError('No pudimos completar el acceso a tu cuenta. Contacta al administrador si el problema continúa.');
   }
   const roles = [...new Set([record.role, ...(assignments.data ?? []).map(({ role }) => role)].map(normalizeRole))]
     .filter((role): role is AppRole => Object.hasOwn(ROLE_HOME_PATHS, role));
   const activeRole = roles[0];
-  if (!activeRole) throw new SessionAccessError('El perfil no tiene un rol válido.');
+  if (!activeRole) throw new SessionAccessError('No pudimos completar el acceso a tu cuenta. Contacta al administrador si el problema continúa.');
   return {
     id: record.id,
     email: record.email,
@@ -298,20 +299,20 @@ export const useSessionStore = create<SessionState>()(
             set({ isLoading: false });
             return {
               success: false,
-              error: 'Código inválido o expirado. Verifique el código de 6 dígitos enviado a su correo.',
+              error: getAuthError(error, 'verify'),
             };
           }
 
           if (!data.session || !data.user) {
             set({ isLoading: false });
-            return { success: false, error: 'Supabase no inició una sesión tras verificar el código.' };
+            return { success: false, error: 'No pudimos completar la verificación. Intenta iniciar sesión nuevamente.' };
           }
 
           const verified = await loadAuthenticatedSession(client, data.user);
           set({ user: verified, isAuthenticated: true, isLoading: false });
           return { success: true };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al verificar código OTP.';
+          const msg = getAuthError(err, 'verify');
           set({ isLoading: false });
           return { success: false, error: msg };
         }
@@ -345,7 +346,7 @@ export const useSessionStore = create<SessionState>()(
         const cleanEmail = email.trim().toLowerCase();
         const client = getSupabaseClient();
         if (!client) {
-          return { success: false, error: 'No se detecta conexión activa con Supabase.' };
+          return { success: false, error: USER_MESSAGES.connection };
         }
 
         try {
@@ -357,18 +358,16 @@ export const useSessionStore = create<SessionState>()(
           if (error) {
             return {
               success: false,
-              error: error.message.includes('rate')
-                ? 'Por favor espere unos momentos antes de solicitar otro reenvío.'
-                : error.message,
+              error: getAuthError(error, 'resend'),
             };
           }
 
           return {
             success: true,
-            message: `Correo de verificación reenviado con éxito a ${cleanEmail}. Por favor revise su bandeja de entrada y spam.`,
+            message: 'Si corresponde enviar una verificación, recibirás un correo con las instrucciones. Revisa también la carpeta de spam.',
           };
         } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Error inesperado al reenviar correo de confirmación.';
+          const msg = getAuthError(err, 'resend');
           return { success: false, error: msg };
         }
       },
@@ -392,7 +391,7 @@ export const useSessionStore = create<SessionState>()(
               const errMsg = authErr.message.toLowerCase();
 
               // Caso 1: Correo sin confirmar en Supabase Auth
-              if (errMsg.includes('email not confirmed') || errMsg.includes('not confirmed') || errMsg.includes('unconfirmed')) {
+              if (authErr.code === 'email_not_confirmed' || errMsg.includes('email not confirmed') || errMsg.includes('not confirmed') || errMsg.includes('unconfirmed')) {
                 set({ isLoading: false });
                 return {
                   success: false,
@@ -402,22 +401,8 @@ export const useSessionStore = create<SessionState>()(
                 };
               }
 
-              // Las cuentas de demostración no son usuarios autenticados de Supabase.
-              const demoMatch = DEMO_ACCOUNTS_BY_EMAIL[cleanEmail];
-              if (demoMatch) {
-                set({ isLoading: false });
-                return {
-                  success: false,
-                  error: `La cuenta de demostración (${demoMatch.email}) no existe necesariamente en Supabase Auth. Registre esa cuenta en Supabase y use su contraseña real, o quite la configuración de Supabase para usar el modo demostración.`,
-                };
-              }
-
-              // Caso 3: Credenciales inválidas estándar
               set({ isLoading: false });
-              return {
-                success: false,
-                error: 'Credenciales no válidas. Verifique su correo institucional y contraseña.',
-              };
+              return { success: false, error: getAuthError(authErr, 'login') };
             }
 
             if (authData.user) {
@@ -425,14 +410,14 @@ export const useSessionStore = create<SessionState>()(
               set({ user: loggedIn, isAuthenticated: true, isLoading: false });
               return { success: true };
             }
+            set({ isLoading: false });
+            return { success: false, error: getAuthError(null, 'login') };
           } catch (err: unknown) {
             console.warn('Error durante autenticación con Supabase Auth:', err);
             set({ isLoading: false });
             return {
               success: false,
-              error: err instanceof Error
-                ? `No se pudo completar el inicio de sesión con Supabase: ${err.message}`
-                : 'No se pudo completar el inicio de sesión con Supabase.',
+              error: err instanceof SessionAccessError || err instanceof SessionSyncError ? err.message : getAuthError(err, 'login'),
             };
           }
         }
@@ -464,7 +449,7 @@ export const useSessionStore = create<SessionState>()(
         set({ isLoading: false });
         return {
           success: false,
-          error: 'Credenciales no válidas. Verifique su correo institucional y contraseña.',
+          error: USER_MESSAGES.credentials,
         };
       },
 
@@ -503,7 +488,7 @@ export const useSessionStore = create<SessionState>()(
 
             if (authErr) {
               set({ isLoading: false });
-              return { success: false, error: authErr.message };
+              return { success: false, error: getAuthError(authErr, 'register') };
             }
 
             if (authData.user) {
@@ -534,8 +519,10 @@ export const useSessionStore = create<SessionState>()(
                 email: cleanEmail,
               };
             }
+            set({ isLoading: false });
+            return { success: false, error: getAuthError(null, 'register') };
           } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Error al registrar el usuario en Supabase';
+            const msg = getAuthError(err, 'register');
             set({ isLoading: false });
             return { success: false, error: msg };
           }

@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 import { createUuid } from '../../lib/uuid.ts';
 import { saveDocumentBlob } from '../documents/documentFiles.ts';
@@ -13,19 +14,19 @@ export async function uploadTemplate(file: File): Promise<string> {
   const validSignature = extension === 'pdf' ? new TextDecoder().decode(bytes) === '%PDF-' : bytes[0] === 0x50 && bytes[1] === 0x4b;
   if (!validSignature) throw new Error('El contenido del archivo no corresponde al formato seleccionado.');
   const client = getSupabaseClient();
-  if (!client) throw new Error('Conecte Supabase para cargar plantillas.');
+  if (!client) throw new Error('No pudimos cargar la plantilla. Inténtalo nuevamente más tarde.');
   const { data } = await client.auth.getSession();
   if (!data.session) throw new Error('Inicie sesión para cargar la plantilla.');
   const name = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120);
   const path = `${data.session.user.id}/${createUuid()}/${name}`;
   const result = await client.storage.from('catalog-templates').upload(path, file, { contentType: mimeTypes[extension], upsert: false });
-  if (result.error) throw new Error(result.error.message);
+  if (result.error) throw new Error(getUserError(result.error));
   return path;
 }
 
 export async function downloadTemplate(path: string): Promise<void> {
   const client = getSupabaseClient();
-  if (!client) throw new Error('Conecte Supabase para descargar la plantilla.');
+  if (!client) throw new Error('No pudimos descargar la plantilla. Inténtalo nuevamente más tarde.');
   if (!path || path.startsWith('/') || path.includes('..') || path.includes('://')) throw new Error('Esta plantilla debe actualizarse desde el catálogo institucional.');
   const result = await client.storage.from('catalog-templates').download(path);
   if (result.error || !result.data) throw new Error('No se pudo descargar la plantilla. Reintente o consulte al administrador.');

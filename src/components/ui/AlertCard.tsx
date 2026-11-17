@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import type { AlertTone } from './alertContext.ts';
+import { getUserError } from '../../lib/userMessages.ts';
 
 const appearance = {
   success: { icon: CheckCircle2, title: 'Acción completada' },
@@ -64,7 +65,7 @@ export function AlertCard({ message, tone, duration, dismissible, onDismiss, chi
     <div className="min-w-0 flex-1">
       <div role={tone === 'error' ? 'alert' : 'status'} aria-atomic="true">
         <p className="alert-title">{title}</p>
-        <p className="alert-message">{message}</p>
+        <p className="alert-message">{getUserError(message, tone === 'success' ? 'La acción se completó correctamente.' : tone === 'info' ? 'Consulta la información actualizada en esta página.' : undefined)}</p>
       </div>
       {children && <div className="mt-3">{children}</div>}
     </div>

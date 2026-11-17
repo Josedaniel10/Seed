@@ -1,3 +1,4 @@
+import { getUserError } from '../../../lib/userMessages.ts';
 import React, { useState, useEffect } from 'react';
 import { Database, FileText, Check, AlertTriangle, RefreshCw, UploadCloud, Download, ShieldCheck } from 'lucide-react';
 import { testSupabaseConnection } from '../../../lib/supabase.ts';
@@ -78,7 +79,7 @@ export function ServiceStatusWidget() {
         match: hashesMatch,
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al procesar archivo';
+      const msg = getUserError(err, 'Error al procesar archivo');
       setFileTestResult({ status: 'error', error: msg });
     }
   };

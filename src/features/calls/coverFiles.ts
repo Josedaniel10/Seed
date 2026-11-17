@@ -15,7 +15,7 @@ export async function uploadCallCover(file: File): Promise<string> {
     : new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
   if (!signature) throw new Error('El contenido de la imagen no corresponde al formato seleccionado.');
   const client = getSupabaseClient();
-  if (!client) throw new Error('Conecte Supabase para cargar la portada.');
+  if (!client) throw new Error('No pudimos cargar la portada. Inténtalo nuevamente más tarde.');
   const { data, error } = await client.auth.getSession();
   if (error || !data.session) throw new Error('Inicie sesión para cargar la portada.');
   const path = `${data.session.user.id}/${createUuid()}.${formats[file.type]}`;

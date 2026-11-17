@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { z } from 'zod';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 import type { ApplicationType, Requirement } from '../../types/database.ts';
@@ -16,9 +17,9 @@ export async function manageCatalog(action: CatalogAction, id: string | null, da
 > {
   try {
     const client = getSupabaseClient();
-    if (!client) return { success: false, error: 'Conecte Supabase para guardar el catálogo.' };
+    if (!client) return { success: false, error: 'No pudimos guardar el catálogo. Inténtalo nuevamente más tarde.' };
     const result = await client.rpc('manage_catalog', { p_action: action, p_id: id, p_data: data });
-    if (result.error) return { success: false, error: result.error.code === '23505' ? 'Ya existe un trámite con ese código.' : result.error.message };
+    if (result.error) return { success: false, error: result.error.code === '23505' ? 'Ya existe un trámite con ese código.' : getUserError(result.error) };
     const parsed = responseSchema.safeParse(result.data);
     if (!parsed.success || (action.startsWith('TYPE_') && !parsed.data.type) || (action.startsWith('REQUIREMENT_') && !parsed.data.requirement)) {
       return { success: false, error: 'No se pudo confirmar el cambio del catálogo.' };

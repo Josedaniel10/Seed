@@ -12,7 +12,7 @@ export type AppNotification = z.infer<typeof notificationSchema>;
 
 function requireClient() {
   const client = getSupabaseClient();
-  if (!client) throw new Error('Configure Supabase para consultar sus notificaciones.');
+  if (!client) throw new Error('No pudimos consultar tus notificaciones. Inténtalo nuevamente más tarde.');
   return client;
 }
 

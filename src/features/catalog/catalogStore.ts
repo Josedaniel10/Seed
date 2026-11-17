@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { manageCatalog } from './catalogApi.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -760,8 +761,8 @@ export const useCatalogStore = create<CatalogState>()(
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
-          set({ isLoading: false, error: 'Supabase no está configurado (falta VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY)' });
-          return { success: false, error: 'Supabase no está configurado' };
+          set({ isLoading: false, error: 'El servicio no está disponible en este momento. Inténtalo más tarde.' });
+          return { success: false, error: 'El servicio no está disponible en este momento. Inténtalo más tarde.' };
         }
 
         try {
@@ -800,7 +801,7 @@ export const useCatalogStore = create<CatalogState>()(
             reqsCount: reqsData.length,
           };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al cargar catálogo desde Supabase';
+          const msg = getUserError(err, 'Error al cargar catálogo desde Supabase');
           console.error('Error loadFromSupabase:', msg);
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };

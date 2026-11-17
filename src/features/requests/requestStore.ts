@@ -1,7 +1,7 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { getNextAction } from './nextAction.ts';
 import { requirementsForRequest } from '../catalog/catalogSnapshot.ts';
 import { observationAction } from '../validation/observationApi.ts';
-import { formatUserMessage } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
@@ -611,7 +611,7 @@ export const useRequestStore = create<RequestState>()(
             if (error || !data || typeof data !== 'object' || !('application' in data)) {
               return {
                 success: false,
-                error: `No se pudo confirmar el envío de la solicitud: ${formatUserMessage(error?.message, 'respuesta inválida')}`,
+                error: getUserError(error, 'No recibimos una confirmación del envío. Consulta tus solicitudes antes de intentar enviarla nuevamente.'),
               };
             }
 
@@ -631,7 +631,7 @@ export const useRequestStore = create<RequestState>()(
           }
 
           if ((payload.budget_requested ?? 0) > 0 || payload.funding_call_id) {
-            return { success: false, error: 'Debe conectar Supabase para validar la convocatoria y radicar con financiamiento.' };
+            return { success: false, error: 'No pudimos validar la convocatoria. Inténtalo nuevamente antes de enviar la solicitud.' };
           }
           const catalog = useCatalogStore.getState();
           const targetType = catalog.types.find((t) => t.id === typeId);
@@ -728,7 +728,7 @@ export const useRequestStore = create<RequestState>()(
             application: newRequest,
           };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error interno al radicar solicitud.';
+          const msg = getUserError(err, 'Error interno al radicar solicitud.');
           return { success: false, error: msg };
         } finally {
           set({ isSubmitting: false });
@@ -771,7 +771,7 @@ export const useRequestStore = create<RequestState>()(
             }).overrideTypes<{ document: RequestDocument; audit: AuditHistory }, { merge: false }>();
             if (error || !data || typeof data !== 'object' || !('document' in data) || !('audit' in data)
               || !data.document?.id || !data.audit?.id) {
-              return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la subsanación. Intente nuevamente.') };
+              return { success: false, error: getUserError(error, 'No se pudo confirmar la subsanación. Intente nuevamente.') };
             }
             const document = { ...data.document, request_id: requestId };
             set((state) => ({
@@ -872,7 +872,7 @@ export const useRequestStore = create<RequestState>()(
             p_observations: observations,
           }).overrideTypes<Pick<FiledApplication, 'audit'> & { document: RequestDocument }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('document' in data)) {
-            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la validación del documento.') };
+            return { success: false, error: getUserError(error, 'No se pudo confirmar la validación del documento.') };
           }
 
           const document = { ...data.document, request_id: requestId };
@@ -934,7 +934,7 @@ export const useRequestStore = create<RequestState>()(
             p_application_id: requestId,
           });
           if (error) {
-            return { success: false, error: formatUserMessage(error.message, 'No se recibió la confirmación del servidor. Actualice la bandeja para comprobar el resultado antes de reintentar.') };
+            return { success: false, error: getUserError(error, 'No se recibió la confirmación del servidor. Actualice la bandeja para comprobar el resultado antes de reintentar.') };
           }
           const parsed = documentaryCompletionSchema.safeParse(data);
           if (!parsed.success || parsed.data.application.id !== requestId
@@ -1096,7 +1096,7 @@ export const useRequestStore = create<RequestState>()(
             p_details: details ?? {},
           }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'>, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('application' in data)) {
-            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el cambio de estado.') };
+            return { success: false, error: getUserError(error, 'No se pudo confirmar el cambio de estado.') };
           }
 
           const request = { ...data.application, request_type_id: data.application.application_type_id };
@@ -1200,7 +1200,7 @@ export const useRequestStore = create<RequestState>()(
             p_deadline: deadlineDate,
           }).overrideTypes<Pick<FiledApplication, 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
-            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar la asignación.') };
+            return { success: false, error: getUserError(error, 'No se pudo confirmar la asignación.') };
           }
 
           const assignment = { ...data.assignment, request_id: requestId };
@@ -1363,7 +1363,7 @@ export const useRequestStore = create<RequestState>()(
             p_justification: justification,
           }).overrideTypes<Pick<FiledApplication, 'application' | 'audit'> & { assignment: ReviewerAssignment }, { merge: false }>();
           if (error || !data || typeof data !== 'object' || !('assignment' in data)) {
-            return { success: false, error: formatUserMessage(error?.message, 'No se pudo confirmar el concepto técnico.') };
+            return { success: false, error: getUserError(error, 'No se pudo confirmar el concepto técnico.') };
           }
 
           const request = { ...data.application, request_type_id: data.application.application_type_id };
@@ -1593,7 +1593,7 @@ export const useRequestStore = create<RequestState>()(
           const queryError = appsRes.error ?? docsRes.error ?? audRes.error ?? asgRes.error ?? obsRes.error;
           if (queryError) {
             set({ isLoading: false });
-            return { success: false, error: queryError.message };
+            return { success: false, error: getUserError(queryError) };
           }
 
           if (appsRes.data && appsRes.data.length > 0) {
@@ -1697,7 +1697,7 @@ export const useRequestStore = create<RequestState>()(
           });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'No se pudieron actualizar las solicitudes.';
+          const msg = getUserError(err, 'No se pudieron actualizar las solicitudes.');
           set({ isLoading: false });
           return { success: false, error: msg };
         }

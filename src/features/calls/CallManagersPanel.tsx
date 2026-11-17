@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { PlusCircle, Users, Trash2 } from 'lucide-react';
@@ -34,7 +35,7 @@ export function CallManagersPanel({ managers, users, faculties, onAssign, onRemo
     if (!manager.user_id || !manager.faculty) { setError('Selecciona una persona y una facultad o área.'); return; }
     saving.current = true; setBusy(true); setError('');
     try { await onAssign(manager); setOpen(false); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo asignar el responsable.'); }
+    catch (failure) { setError(getUserError(failure, 'No se pudo asignar el responsable.')); }
     finally { saving.current = false; setBusy(false); }
   };
   const remove = (manager: CallManager): void => {

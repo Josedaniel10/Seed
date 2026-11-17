@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
@@ -84,7 +85,7 @@ export const UserManagementTable: React.FC = () => {
       const result = await loadFromSupabase();
       showFeedback(result.success ? `Lista actualizada. ${result.count ?? 0} usuarios.` : result.error ?? 'No se pudieron cargar los perfiles.', result.success ? 'success' : 'error');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al sincronizar';
+      const msg = getUserError(err, 'Error al sincronizar');
       showFeedback(`Fallo de sincronización: ${msg}`, 'error');
     } finally {
       setIsSyncing(false);

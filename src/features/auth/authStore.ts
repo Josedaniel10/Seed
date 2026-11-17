@@ -1,3 +1,4 @@
+import { getAuthError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Profile, UserRole } from '../../types/database.ts';
@@ -132,12 +133,13 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (authErr) {
-            set({ isLoading: false, error: authErr.message });
-            return { success: false, error: authErr.message };
+            const message = getAuthError(authErr, 'register');
+            set({ isLoading: false, error: message });
+            return { success: false, error: message };
           }
 
           if (!authData.user) {
-            const msg = 'No se recibió el identificador de usuario desde Supabase.';
+            const msg = 'No pudimos completar el registro. Inténtalo nuevamente más tarde.';
             set({ isLoading: false, error: msg });
             return { success: false, error: msg };
           }
@@ -152,12 +154,12 @@ export const useAuthStore = create<AuthState>()(
             .overrideTypes<Profile[], { merge: false }>();
           const profile = profiles?.[0];
           if (profileError || !profile) {
-            throw new Error('Su cuenta necesita un perfil activo para ingresar.');
+            throw new Error('No pudimos completar el acceso a tu cuenta. Contacta al administrador si el problema continúa.');
           }
           set({ profile, token: authData.session.access_token, isAuthenticated: true, isLoading: false, error: null });
           return { success: true, profile, requiresConfirmation: false };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error inesperado al registrar usuario en Supabase';
+          const msg = getAuthError(err, 'register');
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }
@@ -176,12 +178,12 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: getAuthError(error, 'resend') };
           }
 
-          return { success: true, message: `Correo de verificación reenviado exitosamente a ${email}.` };
+          return { success: true, message: 'Si corresponde enviar una verificación, recibirás un correo con las instrucciones. Revisa también la carpeta de spam.' };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al reenviar correo de confirmación';
+          const msg = getAuthError(err, 'resend');
           return { success: false, error: msg };
         }
       },
@@ -231,8 +233,9 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (authErr) {
-            set({ isLoading: false, error: `No se pudo iniciar sesión: ${authErr.message}` });
-            return { success: false, error: authErr.message };
+            const message = getAuthError(authErr, 'login');
+            set({ isLoading: false, error: message });
+            return { success: false, error: message };
           }
 
           const user = authData.user;
@@ -243,7 +246,7 @@ export const useAuthStore = create<AuthState>()(
             .overrideTypes<Profile[], { merge: false }>();
           const userProfile = profiles?.[0];
           if (profileError || !userProfile) {
-            const msg = 'Su cuenta necesita un perfil activo para ingresar.';
+            const msg = 'No pudimos completar el acceso a tu cuenta. Contacta al administrador si el problema continúa.';
             set({ isLoading: false, error: msg, isAuthenticated: false, profile: null, token: null });
             return { success: false, error: msg };
           }
@@ -257,7 +260,7 @@ export const useAuthStore = create<AuthState>()(
 
           return { success: true };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'No se pudo iniciar sesión. Intente nuevamente.';
+          const msg = getAuthError(err, 'login');
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

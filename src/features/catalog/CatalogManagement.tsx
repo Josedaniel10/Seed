@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { CatalogTypeEditor } from './CatalogTypeEditor.tsx';
 import type { CatalogTypeInput } from './CatalogTypeEditor.tsx';
 import { CatalogRequirements } from './CatalogRequirements.tsx';
@@ -52,7 +53,7 @@ export function CatalogManagement() {
     requestDecision({ title, target: name, confirmLabel: title, consequence: 'Los expedientes radicados conservan sus condiciones. Los elementos vinculados se archivan en lugar de borrarse.' }, async () => {
       const result = await operation();
       if (!result.success) throw new Error(result.error ?? 'No se pudo confirmar el cambio.');
-      setSyncFeedback({ success: true, message: 'Cambio guardado en Supabase.' });
+      setSyncFeedback({ success: true, message: 'Cambio guardado correctamente.' });
     });
   };
   // Modals state
@@ -154,7 +155,7 @@ export function CatalogManagement() {
         handleOpenEditType(result.type);
         setSyncFeedback({ success: true, message: 'Tipo creado. Ahora puede agregar sus requisitos y plantillas.' });
       }
-    } catch (cause) { setTypeError(cause instanceof Error ? cause.message : 'No se pudo guardar el tipo de solicitud.'); }
+    } catch (cause) { setTypeError(getUserError(cause, 'No se pudo guardar el tipo de solicitud.')); }
     finally { saveLock.current = false; setSaving(false); }
   };
 
@@ -234,7 +235,7 @@ export function CatalogManagement() {
       }
       setIsAddReqOpen(false);
     }
-    } catch (cause) { setReqError(cause instanceof Error ? cause.message : 'No se pudo guardar la plantilla.'); }
+    } catch (cause) { setReqError(getUserError(cause, 'No se pudo guardar la plantilla.')); }
     finally { saveLock.current = false; setSaving(false); }
   };
 

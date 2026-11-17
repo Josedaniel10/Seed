@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { getSupabaseClient } from '../../lib/supabase.ts';
@@ -15,13 +16,13 @@ export const managerSchema = z.object({ user_id: z.string(), faculty: z.string()
 
 export function callsClient() {
   const client = getSupabaseClient();
-  if (!client) throw new Error('Conecte Supabase para consultar o gestionar convocatorias.');
+  if (!client) throw new Error('No pudimos consultar las convocatorias. Inténtalo nuevamente más tarde.');
   return client;
 }
 
 export async function loadCalls(): Promise<FundingCall[]> {
   const { data, error } = await callsClient().from('funding_calls').select('*').order('opens_at', { ascending: false });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(getUserError(error));
   return z.array(callSchema).parse(data);
 }
 

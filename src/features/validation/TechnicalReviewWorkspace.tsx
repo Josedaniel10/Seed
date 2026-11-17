@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { ObservationThread } from './ObservationThread.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import React, { useRef, useState } from 'react';
@@ -70,7 +71,7 @@ export function TechnicalReviewWorkspace({ app, assignmentId, appDocs, appObs, r
         setFeedback({ type: 'error', message: res.error || 'Error al guardar observación.' });
       }
     } catch (error) {
-      setFeedback({ type: 'error', message: error instanceof Error ? error.message : 'No se pudo guardar la observación.' });
+      setFeedback({ type: 'error', message: getUserError(error, 'No se pudo guardar la observación.') });
     } finally {
       observationLock.current = false;
       setIsSendingObservation(false);

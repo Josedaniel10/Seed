@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ResearchGroup, UserRole, Profile } from '../../types/database.ts';
@@ -145,7 +146,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         const client = getSupabaseClient();
         if (client) {
           if (!isUuid(newGroup.id) || !isUuid(data.leader_id)) {
-            return { success: false, error: 'El grupo y el líder deben tener identificadores válidos de Supabase.' };
+            return { success: false, error: 'Actualiza el listado y selecciona nuevamente el grupo y su líder.' };
           }
 
           const { error } = await client.from('research_groups').insert({
@@ -157,7 +158,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
               is_active: newGroup.is_active,
             });
           if (error) {
-            return { success: false, error: `No se pudo guardar el grupo: ${error.message}` };
+            return { success: false, error: getUserError(error, 'No pudimos guardar los cambios. Inténtalo nuevamente.') };
           }
         }
 
@@ -210,7 +211,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
         const client = getSupabaseClient();
         if (client) {
           if (!isUuid(groupId) || !isUuid(leaderId)) {
-            return { success: false, error: 'El grupo y el líder deben tener identificadores válidos de Supabase.' };
+            return { success: false, error: 'Actualiza el listado y selecciona nuevamente el grupo y su líder.' };
           }
 
           const { error } = await client
@@ -218,7 +219,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
             .update({ leader_id: leaderId })
             .eq('id', groupId);
           if (error) {
-            return { success: false, error: `No se pudo guardar el líder: ${error.message}` };
+            return { success: false, error: getUserError(error, 'No pudimos guardar los cambios. Inténtalo nuevamente.') };
           }
         }
 
@@ -270,8 +271,8 @@ export const useGroupsStore = create<ResearchGroupsState>()(
             .order('name', { ascending: true });
 
           if (error) {
-            set({ isLoading: false, error: error.message });
-            return { success: false, error: error.message };
+            set({ isLoading: false, error: getUserError(error) });
+            return { success: false, error: getUserError(error) };
           }
 
           if (data && data.length > 0) {
@@ -287,7 +288,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
           set({ groups: [], isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Error al sincronizar grupos desde Supabase';
+          const msg = getUserError(err, 'Error al sincronizar grupos desde Supabase');
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

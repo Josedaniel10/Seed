@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { z } from 'zod';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 import type { Observation, AuditHistory } from '../../types/database.ts';
@@ -16,12 +17,12 @@ const resultSchema = z.object({ observation: observationSchema, audit: auditSche
 
 export async function fetchObservationSnapshot(signal: AbortSignal): Promise<{ observations: Observation[]; audit: AuditHistory[] }> {
   const client = getSupabaseClient();
-  if (!client) throw new Error('No se pudo conectar con Supabase.');
+  if (!client) throw new Error('No pudimos conectar. Revisa tu conexión e inténtalo nuevamente.');
   const [observations, audit] = await Promise.all([
     client.from('observations').select('*').order('created_at').abortSignal(signal),
     client.from('audit_history').select('*').in('action', ['AJUSTE_ADD', 'AJUSTE_RESPOND', 'AJUSTE_VERIFY']).order('created_at').abortSignal(signal),
   ]);
-  if (observations.error || audit.error) throw new Error(observations.error?.message ?? audit.error?.message);
+  if (observations.error || audit.error) throw new Error(getUserError(observations.error ?? audit.error, 'No pudimos cargar las observaciones. Inténtalo nuevamente.'));
   return {
     observations: z.array(observationSchema).parse(observations.data),
     audit: z.array(auditSchema).parse(audit.data).map(event => ({ ...event, previous_status: null, new_status: null })),
@@ -43,10 +44,10 @@ export async function observationAction(args: ObservationAction): Promise<
 > {
   try {
     const client = getSupabaseClient();
-    if (!client) return { success: false, error: 'No se pudo guardar en Supabase. Revise la conexión y vuelva a intentarlo; el texto sigue en el formulario.' };
+    if (!client) return { success: false, error: 'No pudimos guardar los cambios. Revisa tu conexión e inténtalo nuevamente; el texto sigue en el formulario.' };
     const { data, error } = await client.rpc('act_on_observation', args);
     const parsed = resultSchema.safeParse(data);
-    if (error || !parsed.success) return { success: false, error: error?.message ?? 'No se pudo confirmar el guardado.' };
+    if (error || !parsed.success) return { success: false, error: getUserError(error, 'No se pudo confirmar el guardado.') };
     const { observation, audit } = parsed.data;
     if (observation.application_id !== args.p_application_id || audit.application_id !== args.p_application_id
       || (args.p_observation_id && observation.id !== args.p_observation_id)) {

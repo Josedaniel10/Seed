@@ -45,7 +45,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     if (testRes.connected) {
       setStatusMessage({
         type: 'success',
-        text: `¡Conexión exitosa con Supabase! Latencia: ${testRes.latencyMs}ms. Ahora el registro y login crearán usuarios reales en la nube.`,
+        text: 'La conexión está disponible. Ya puedes continuar.',
       });
       setTimeout(() => {
         onConfigured();
@@ -54,7 +54,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     } else {
       setStatusMessage({
         type: 'error',
-        text: `Fallo al verificar: ${testRes.message}. Asegúrate de que el proyecto no esté pausado y que la Anon Key sea correcta.`,
+        text: 'No pudimos comprobar la conexión. Revisa los datos e inténtalo nuevamente.',
       });
     }
   };

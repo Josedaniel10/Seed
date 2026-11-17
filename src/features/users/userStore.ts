@@ -1,3 +1,4 @@
+import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Profile, UserRole } from '../../types/database.ts';
@@ -219,8 +220,8 @@ export const useUserStore = create<UserManagementState>()(
 
           const error = profilesResult.error ?? rolesResult.error;
           if (error) {
-            set({ isLoading: false, error: error.message });
-            return { success: false, error: error.message };
+            set({ isLoading: false, error: getUserError(error) });
+            return { success: false, error: getUserError(error) };
           }
 
           if (profilesResult.data && profilesResult.data.length > 0) {
@@ -247,7 +248,7 @@ export const useUserStore = create<UserManagementState>()(
           set({ users: [], isInitialized: true, isLoading: false, error: null });
           return { success: true, count: 0 };
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
+          const msg = getUserError(err, 'No se pudieron cargar los usuarios.');
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }
