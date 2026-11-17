@@ -50,3 +50,28 @@ test('only open calls are announced and the notice disappears when the last one 
   await act(async () => { cache.setQueryData(key, []); await new Promise((resolve) => setTimeout(resolve, 10)); });
   assert.equal(document.querySelector('section'), null);
 });
+
+test('announcement leads to requirements and manually browses opportunities in closing order', async () => {
+  const later = { ...open, id: 'later', title: 'Segunda oportunidad', closes_at: new Date(Date.now() + 172800000).toISOString() };
+  await mount([later, open]);
+  assert.equal(document.querySelector('h3').textContent, open.title);
+  assert.equal(document.querySelector('time').dateTime, open.closes_at);
+  const next = document.querySelector('[aria-label="Siguiente convocatoria"]');
+  await act(async () => next.click());
+  assert.equal(document.querySelector('h3').textContent, later.title);
+  assert.equal(document.querySelector('a[href*="convocatoria="]').getAttribute('href'), '/convocatorias?convocatoria=later');
+  assert.ok(document.querySelector('[aria-label="Convocatoria 2 de 2"]'));
+  await act(async () => document.querySelector('[aria-label="Convocatoria anterior"]').click());
+  assert.equal(document.querySelector('h3').textContent, open.title);
+});
+
+test('refresh keeps the selected announcement and falls back when it closes', async () => {
+  const later = { ...open, id: 'later', title: 'Segunda oportunidad', closes_at: new Date(Date.now() + 172800000).toISOString() };
+  await mount([open, later]);
+  await act(async () => document.querySelector('[aria-label="Siguiente convocatoria"]').click());
+  await act(async () => { cache.setQueryData(key, [later, open]); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  assert.equal(document.querySelector('h3').textContent, later.title);
+  await act(async () => { cache.setQueryData(key, [open, { ...later, status: 'closed' }]); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  assert.equal(document.querySelector('h3').textContent, open.title);
+  assert.equal(document.querySelector('[aria-label="Siguiente convocatoria"]'), null);
+});
