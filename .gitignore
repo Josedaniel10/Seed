@@ -1,4 +1,6 @@
 node_modules/
+/trailer
+/my-video
 build/
 dist/
 coverage/
