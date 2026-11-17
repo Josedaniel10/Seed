@@ -108,10 +108,27 @@ test('filing keeps its stepper and prevents advancing while the initial catalog 
   await mount(RequestSubmissionWizard);
   assert.match(document.body.textContent, /Cargando tipos de trámite y requisitos/);
   assert.match(document.body.textContent, /Datos Generales/);
-  const next = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Continuar al Paso'));
+  const next = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Continuar');
   assert.ok(next.disabled);
   await act(async () => { useCatalogStore.setState({ isLoading: false, isInitialized: true }); });
   assert.equal(document.querySelector('.skeleton'), null);
-  assert.equal([...document.querySelectorAll('button')].find((button) => button.textContent.includes('Continuar al Paso')), next);
+  assert.equal([...document.querySelectorAll('button')].find((button) => button.textContent === 'Continuar'), next);
   assert.equal(next.disabled, false);
+});
+
+
+test('the request list keeps the full title and metadata together with keyboard-accessible links', async () => {
+  useRequestStore.setState({ requests: [application], isLoading: false, isInitialized: true });
+  await mount(MisSolicitudesPage);
+  const table = document.querySelector('.request-list-table');
+  assert.equal(table.querySelectorAll('thead th').length, 4);
+  const row = table.querySelector('tbody tr');
+  assert.match(row.cells[0].textContent, /Investigación cargada desde el servicio/);
+  assert.match(row.cells[0].textContent, /RAD-2026-123/);
+  assert.ok(row.cells[0].querySelector('.request-secondary').textContent);
+  assert.ok(row.cells[2].querySelector('time[datetime]'));
+  const link = row.querySelector('.request-open-link');
+  assert.equal(link.getAttribute('href'), '/solicitudes/loading-request');
+  link.focus();
+  assert.equal(document.activeElement, link);
 });

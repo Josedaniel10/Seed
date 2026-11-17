@@ -13,8 +13,8 @@ export function NextActionCell({ request }: { request: Request }): ReactElement 
   return <div onClick={(event) => event.stopPropagation()}>
     <button type="button" onClick={() => setIsOpen(true)} aria-haspopup="dialog"
       aria-label={`Ver próxima acción de ${request.filing_number}`} title={`Ver detalles: ${action.title}`}
-      className="flex w-full min-w-0 items-center gap-1.5 rounded-lg py-1 text-left text-[11px] font-medium text-stone-600 hover:text-[#14281D] focus-visible:outline-2 focus-visible:outline-[#4d7c0f] cursor-pointer">
-      <span className="min-w-0 flex-1 truncate">{action.title}</span>
+      className="flex w-full min-w-0 items-center gap-1.5 rounded-lg py-1 text-left text-sm font-semibold text-stone-600 hover:text-[#14281D] focus-visible:outline-2 focus-visible:outline-[#4d7c0f] cursor-pointer">
+      <span className="min-w-0 flex-1 whitespace-normal">{action.title}</span>
       <Info size={13} aria-hidden="true" className="shrink-0 text-stone-400" />
     </button>
     <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Seguimiento de la solicitud" subtitle={request.filing_number} maxWidth="md">

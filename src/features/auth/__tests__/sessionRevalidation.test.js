@@ -261,7 +261,7 @@ test('the real request wizard keeps its unsaved step while a same-user session i
   useGroupsStore.setState({ groups: [] });
   useRequestStore.setState({ isSubmitting: false });
   await mount(RequestSubmissionWizard, ['researcher']);
-  const next = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Continuar al Paso 2'));
+  const next = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Continuar'));
   await act(async () => next.click());
   const input = document.querySelector('input[placeholder^="Ej: Evaluación"]');
   await change(input, 'Mi solicitud en preparación');

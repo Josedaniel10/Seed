@@ -7,7 +7,7 @@ import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
 import { DecisionConfirmDialog } from '../../components/ui/DecisionConfirmDialog.tsx';
 import { normalizeRole } from '../../lib/permissions.ts';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Table as TableIcon,
@@ -594,22 +594,21 @@ export function PanelSeguimientoPage() {
       ) : (
         /* 6. VISTA TABLA ESTRUCTURADA (RF-11) */
         <div className="bg-white rounded-3xl border border-[#E5E3DC] overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="mobile-data-table w-full md:min-w-[760px] table-fixed text-left text-xs">
-          <colgroup className="hidden md:table-column-group"><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} /></colgroup>
-              <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
+          <div className="request-list-container">
+            <table className="request-list-table w-full table-fixed text-left text-sm">
+              <caption className="sr-only">Seguimiento de solicitudes de investigación</caption>
+              <colgroup><col style={{ width: '36%' }} /><col style={{ width: '21%' }} /><col style={{ width: '21%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /></colgroup>
+              <thead>
                 <tr>
-                  <th className="py-3 px-4">Radicado</th>
-                  <th className="py-3 px-4">Tipo de Trámite</th>
-                  <th className="py-3 px-4">Título del Proyecto</th>
-                  <th className="py-3 px-4">Investigador</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4">Días en Etapa</th>
-                  <th className="py-3 px-4 text-right">Acción</th>
+                  <th scope="col">Solicitud</th>
+                  <th scope="col">Investigador</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">En etapa</th>
+                  <th scope="col">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E3DC]">
-                {isLoading && !isInitialized && <SkeletonRows labels={['Radicado', 'Tipo de Trámite', 'Título del Proyecto', 'Investigador', 'Estado', 'Días en etapa', 'Acción']} cellClassName="py-3 px-4" />}
+                {isLoading && !isInitialized && <SkeletonRows labels={['Solicitud', 'Investigador', 'Estado', 'En etapa', 'Acción']} cellClassName="py-3 px-4" />}
                 {(!isLoading || isInitialized) && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
                   const applicant = users.find((u) => u.id === app.applicant_id);
@@ -622,35 +621,19 @@ export function PanelSeguimientoPage() {
                   );
 
                   return (
-                    <tr
-                      key={app.id}
-                      onClick={() => navigate(`/solicitudes/${app.id}`, { state: { fromList: '/panel' } })}
-                      className="hover:bg-[#FAF9F6] transition-colors cursor-pointer group"
-                    >
-                      <td data-label="Radicado" className="py-3 px-4 font-mono font-bold text-[#14281D] whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-stone-100 border border-stone-200">
-                          {app.filing_number}
-                        </span>
+                    <tr key={app.id}>
+                      <td data-label="Solicitud">
+                        <Link to={`/solicitudes/${app.id}`} state={{ fromList: '/panel' }} className="request-title-link">{app.title}</Link>
+                        <span className="request-record-id">{app.filing_number}</span>
+                        <p className="request-secondary">{typeObj?.name || 'Trámite Institucional'}</p>
                       </td>
-                      <td data-label="Tipo de trámite" className="py-3 px-4 text-stone-700 whitespace-nowrap">
-                        {typeObj?.name}
-                      </td>
-                      <td data-label="Proyecto" className="py-3 px-4 font-semibold text-[#14281D] max-w-xs truncate">
-                        {app.title}
-                      </td>
-                      <td data-label="Investigador" className="py-3 px-4 text-stone-600 whitespace-nowrap">
-                        {applicant?.full_name}
-                      </td>
-                      <td data-label="Estado" className="py-3 px-4 whitespace-nowrap">
-                        <StatusBadge status={app.current_status} size="sm" />
-                      </td>
-                      <td data-label="Días en etapa" className="py-3 px-4 text-stone-500 whitespace-nowrap">
-                        {diffDays} días
-                      </td>
-                      <td data-label="Acción" className="py-3 px-4 text-right whitespace-nowrap">
-                        <span className="p-1.5 rounded-lg text-stone-400 group-hover:text-[#14281D] inline-flex items-center gap-1">
-                          <Eye size={14} />
-                        </span>
+                      <td data-label="Investigador">{applicant?.full_name || 'Sin investigador registrado'}</td>
+                      <td data-label="Estado"><StatusBadge status={app.current_status} size="md" /></td>
+                      <td data-label="En etapa"><span className="font-semibold">{diffDays}</span> días</td>
+                      <td data-label="Acción">
+                        <Link to={`/solicitudes/${app.id}`} state={{ fromList: '/panel' }} className="request-open-link" aria-label={`Ver solicitud ${app.filing_number}`}>
+                          <Eye size={16} aria-hidden="true" /><span>Ver</span>
+                        </Link>
                       </td>
                     </tr>
                   );

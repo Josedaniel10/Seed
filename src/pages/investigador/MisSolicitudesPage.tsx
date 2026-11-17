@@ -1,8 +1,6 @@
 import { NextActionCell } from '../../features/requests/NextActionCell.tsx';
 import { CallsNotice } from '../../features/calls/CallsNotice.tsx';
-import { NextActionCard } from '../../features/requests/NextActionCard.tsx';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
-import { RequestCardsSkeleton } from '../../features/loading/RequestCardsSkeleton.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
 import { ResponsiveFilters } from '../../components/ui/ResponsiveFilters.tsx';
@@ -10,13 +8,10 @@ import { ResponsiveSelect } from '../../components/ui/ResponsiveSelect.tsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  FileText,
   PlusCircle,
   Search,
   Filter,
   Eye,
-  Calendar,
-  AlertCircle,
   FolderOpen,
 } from 'lucide-react';
 import { useSessionStore } from '../../stores/session.store.ts';
@@ -189,91 +184,41 @@ export function MisSolicitudesPage() {
           </div>
         ) : (
           <>
-          <div className="mobile-record-list md:hidden">
-            {isInitialLoading && <RequestCardsSkeleton />}
-            {!isInitialLoading && filteredApplications.map((app) => (
-              <Link key={app.id} to={`/solicitudes/${app.id}`} state={{ fromList: '/mis-solicitudes' }} className="mobile-record space-y-3">
-                <StatusBadge status={app.current_status} size="sm" />
-                <h2 className="text-base font-bold break-words line-clamp-2">{app.title}</h2>
-                <div className="rounded-xl bg-[#F7F6F2] px-3 py-2.5">
-                  <span className="block text-[10px] font-semibold text-stone-500 mb-1">Próxima acción</span>
-                  <div className="text-sm text-[#14281D]"><NextActionCard request={app} compact /></div>
-                </div>
-                <div className="flex items-center justify-between gap-2 pt-1 text-xs">
-                  <span className="font-mono text-stone-500">{app.filing_number}</span>
-                  <span className="inline-flex items-center gap-2 font-semibold">Ver solicitud<Eye size={16} /></span>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[1100px] table-fixed text-left text-xs">
-          <colgroup className="hidden md:table-column-group"><col style={{ width: '15%' }} /><col style={{ width: '18%' }} /><col style={{ width: '19%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '16%' }} /><col style={{ width: '6%' }} /></colgroup>
-              <thead className="bg-[#F7F6F2] border-b border-[#E5E3DC] text-[11px] font-bold uppercase tracking-wider text-stone-600">
+          <div className="request-list-container">
+            <table className="request-list-table w-full table-fixed text-left text-sm">
+              <caption className="sr-only">Solicitudes de investigación y próxima acción</caption>
+              <colgroup><col style={{ width: '42%' }} /><col style={{ width: '20%' }} /><col style={{ width: '27%' }} /><col style={{ width: '11%' }} /></colgroup>
+              <thead>
                 <tr>
-                  <th className="py-3 px-4">Radicado</th>
-                  <th className="py-3 px-4">Tipo de Solicitud</th>
-                  <th className="py-3 px-4">Título del Proyecto</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4">Última Actualización</th>
-                  <th className="py-3 px-4">Próxima acción</th>
-                  <th className="py-3 px-4 text-right">Acción</th>
+                  <th scope="col">Solicitud</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Seguimiento</th>
+                  <th scope="col">Acción</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E3DC]">
-                {isInitialLoading && <SkeletonRows labels={['Radicado', 'Tipo de Solicitud', 'Título del Proyecto', 'Estado', 'Última Actualización', 'Próxima acción', 'Acción']} label="Cargando sus solicitudes…" />}
+              <tbody>
+                {isInitialLoading && <SkeletonRows labels={['Solicitud', 'Estado', 'Seguimiento', 'Acción']} label="Cargando sus solicitudes…" />}
                 {!isInitialLoading && filteredApplications.map((app) => {
                   const typeObj = types.find((t) => t.id === app.application_type_id);
-                  const formattedDate = new Date(app.updated_at || app.created_at).toLocaleDateString(
-                    'es-CO',
-                    {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    }
-                  );
-
+                  const updatedAt = app.updated_at || app.created_at;
                   return (
-                    <tr
-                      key={app.id}
-                      onClick={() => navigate(`/solicitudes/${app.id}`, { state: { fromList: '/mis-solicitudes' } })}
-                      className="hover:bg-[#FAF9F6] transition-colors cursor-pointer group"
-                    >
-                      <td className="py-3.5 px-4 font-mono font-bold text-[#14281D] whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-stone-100 border border-stone-200">
-                          {app.filing_number}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-stone-700 whitespace-nowrap font-medium">
-                        <div className="max-w-[220px] truncate" title={typeObj?.name}>
-                          {typeObj?.name || 'Trámite Institucional'}
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 font-semibold text-[#14281D]">
-                        <div className="max-w-xs truncate" title={app.title}>
+                    <tr key={app.id}>
+                      <td data-label="Solicitud">
+                        <Link to={`/solicitudes/${app.id}`} state={{ fromList: '/mis-solicitudes' }} className="request-title-link">
                           {app.title}
-                        </div>
+                        </Link>
+                        <span className="request-record-id">{app.filing_number}</span>
+                        <p className="request-secondary">{typeObj?.name || 'Trámite Institucional'}</p>
                       </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <StatusBadge status={app.current_status} size="sm" />
-                      </td>
-
-                      <td className="py-3.5 px-4 text-stone-500 whitespace-nowrap">
-                        {formattedDate}
-                      </td>
-
-                      <td className="py-3.5 px-4">
+                      <td data-label="Estado"><StatusBadge status={app.current_status} size="md" /></td>
+                      <td data-label="Seguimiento">
                         <NextActionCell request={app} />
+                        <p className="request-secondary mt-2">Actualizada el <time dateTime={updatedAt}>{new Date(updatedAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}</time></p>
                       </td>
-
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <span className="p-1.5 rounded-lg text-stone-400 group-hover:text-[#14281D] inline-flex items-center gap-1 font-semibold text-[11px]">
-                          <Eye size={14} />
-                          <span className="hidden sm:inline">Ver</span>
-                        </span>
+                      <td data-label="Acción">
+                        <Link to={`/solicitudes/${app.id}`} state={{ fromList: '/mis-solicitudes' }} className="request-open-link" aria-label={`Ver solicitud ${app.filing_number}`}>
+                          <Eye size={16} aria-hidden="true" /><span>Ver</span>
+                        </Link>
                       </td>
                     </tr>
                   );

@@ -63,7 +63,7 @@ after(() => dom.window.close());
 test('new request restores its step and general data after leaving and reopening the form', async () => {
   setup();
   await mount(RequestSubmissionWizard);
-  await click(button('Continuar al Paso 2'));
+  await click(button('Continuar'));
   await change(document.querySelector('input[placeholder^="Ej: Evaluación"]'), 'Proyecto recuperable');
   await change(document.querySelector('textarea'), 'Resumen técnico que debe recuperarse después de cerrar.');
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
@@ -78,11 +78,11 @@ test('new request restores its step and general data after leaving and reopening
 
 test('switching account never displays or saves another user draft', async () => {
   setup(); await mount(RequestSubmissionWizard);
-  await click(button('Continuar al Paso 2'));
+  await click(button('Continuar'));
   await change(document.querySelector('input[placeholder^="Ej: Evaluación"]'), 'Contenido privado de A');
   await act(async () => useSessionStore.setState({ user: { ...user, id: 'user-b' } }));
   assert.doesNotMatch(document.body.textContent, /Contenido privado de A/);
-  await click(button('Continuar al Paso 2'));
+  await click(button('Continuar'));
   assert.equal(document.querySelector('input[placeholder^="Ej: Evaluación"]').value, '');
   await act(async () => useSessionStore.setState({ user }));
   assert.equal(document.querySelector('input[placeholder^="Ej: Evaluación"]').value, 'Contenido privado de A');
@@ -102,10 +102,10 @@ test('request retry retains its submission id and removes the draft only after c
     return ++calls === 1 ? { success: false, error: 'No se pudo confirmar el envío' } : { success: true, request: { id: 'filed', filing_number: 'Radicado 2026-099' } };
   } });
   await mount(RequestSubmissionWizard);
-  await click(button('Confirmar y Radicar Solicitud'));
+  await click(button('Radicar solicitud'));
   assert.ok(window.localStorage.getItem(local.key));
   await unmount(); await mount(RequestSubmissionWizard);
-  await click(button('Confirmar y Radicar Solicitud'));
+  await click(button('Radicar solicitud'));
   assert.equal(calls, 2);
   assert.equal(window.localStorage.getItem(local.key), null);
   assert.match(document.body.textContent, /Radicado 2026-099/);
@@ -171,7 +171,7 @@ test('editing an observation while its previous text is being saved never clears
 });
 
 test('discarding a draft requires confirmation and cancellation preserves the form', async () => {
-  setup(); await mount(RequestSubmissionWizard); await click(button('Continuar al Paso 2'));
+  setup(); await mount(RequestSubmissionWizard); await click(button('Continuar'));
   await change(document.querySelector('input[placeholder^="Ej: Evaluación"]'), 'Conservar hasta confirmar');
   await click(button('Descartar borrador'));
   await click(button('Volver a revisar', document.querySelector('dialog[data-open="true"]')));
@@ -180,7 +180,7 @@ test('discarding a draft requires confirmation and cancellation preserves the fo
   await click(button('Descartar borrador', document.querySelector('dialog[data-open="true"]')));
   await pagehide();
   assert.equal(draftKeys().length, 0);
-  assert.ok(button('Continuar al Paso 2'));
+  assert.ok(button('Continuar'));
 });
 
 test('failed concepts remain recoverable and confirmed concepts remove their saved draft', async () => {
@@ -201,7 +201,7 @@ test('failed concepts remain recoverable and confirmed concepts remove their sav
 });
 
 test('blocked browser storage reports the error and warns before closing unsaved work', async () => {
-  setup(); await mount(RequestSubmissionWizard); await click(button('Continuar al Paso 2'));
+  setup(); await mount(RequestSubmissionWizard); await click(button('Continuar'));
   const prototype = Object.getPrototypeOf(window.localStorage);
   const original = prototype.setItem;
   prototype.setItem = function (key, value) { if (key.startsWith('seed:draft:v1:')) throw new Error('Quota exceeded'); return original.call(this, key, value); };
@@ -214,4 +214,29 @@ test('blocked browser storage reports the error and warns before closing unsaved
     assert.equal(unload.defaultPrevented, true);
     assert.equal(document.querySelector('input[placeholder^="Ej: Evaluación"]').value, 'Texto sin perder');
   } finally { prototype.setItem = original; }
+});
+
+
+test('request step navigation focuses the heading and validation focuses the first invalid field', async () => {
+  setup();
+  await mount(RequestSubmissionWizard);
+  const type = document.querySelector('input[name="request-type"]');
+  assert.equal(type.type, 'radio');
+  assert.equal(type.getAttribute('aria-label'), 'Trámite de prueba');
+  await click(button('Continuar'));
+  assert.equal(document.activeElement, document.querySelector('.request-wizard-content h2'));
+  await click(button('Continuar'));
+  const title = document.getElementById('request-title');
+  const abstract = document.getElementById('request-abstract');
+  assert.equal(document.activeElement, title);
+  assert.equal(title.getAttribute('aria-invalid'), 'true');
+  assert.equal(abstract.getAttribute('aria-invalid'), 'true');
+  assert.ok(document.getElementById(title.getAttribute('aria-describedby')));
+  assert.ok(document.querySelector('label[for="request-title"]'));
+  await change(title, 'Solicitud de investigación válida');
+  await change(abstract, 'Justificación válida de la solicitud para la revisión institucional.');
+  await click(button('Continuar'));
+  assert.equal(document.activeElement, document.querySelector('.request-wizard-content h2'));
+  assert.match(document.activeElement.textContent, /Carga de Archivos/);
+  assert.equal(document.querySelector('progress').value, 3);
 });

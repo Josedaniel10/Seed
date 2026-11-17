@@ -39,6 +39,12 @@ const STEPS = [
   { num: 4, title: 'Revisión y Envío' },
 ];
 
+const DOCUMENT_FORMAT_LABELS: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'application/msword': 'Word (.doc)',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word (.docx)',
+};
+
 export function RequestSubmissionWizard() {
   const userId = useSessionStore((state) => state.user?.id ?? '');
   return <RequestSubmissionForm key={userId} />;
@@ -90,6 +96,19 @@ function RequestSubmissionForm() {
   }, [groups, formData.research_group_id]);
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const contentRef = useRef<HTMLDivElement>(null);
+  const previousStep = useRef(currentStep);
+  useEffect(() => {
+    if (previousStep.current !== currentStep) {
+      previousStep.current = currentStep;
+      contentRef.current?.querySelector<HTMLElement>('h2')?.focus();
+    }
+  }, [currentStep]);
+  useEffect(() => {
+    if (Object.keys(formErrors).length) {
+      contentRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }
+  }, [formErrors]);
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
   const uploadLock = useRef(false);
@@ -204,6 +223,7 @@ function RequestSubmissionForm() {
         setGeneralError(
           `Debe adjuntar todos los requisitos obligatorios (${missing.length} pendiente(s)) antes de continuar al paso de revisión.`
         );
+        document.getElementById(`file-input-${missing[0]?.id}`)?.focus();
         return;
       }
       setCurrentStep(4);
@@ -304,7 +324,7 @@ function RequestSubmissionForm() {
           </p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] inline-flex flex-col items-center gap-2 max-w-md w-full">
+        <div className="p-3 sm:p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] inline-flex flex-col items-center gap-2 max-w-md w-full">
           <span className="text-[11px] text-stone-500 uppercase tracking-wider font-bold">
             Número Oficial de Radicado Consecutivo
           </span>
@@ -370,17 +390,22 @@ function RequestSubmissionForm() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-16">
+    <div className="request-wizard space-y-5 max-w-5xl mx-auto pb-4">
       <DraftNotice draft={savedDraft} controller={draftController} label="nueva solicitud" disabled={isSubmitting || Boolean(uploadingReqId)} />
       {selectedTypeId && types.length > 0 && !selectedType?.is_active && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-950">
         El tipo de trámite del borrador ya no está disponible. Sus datos se conservan.
         <button type="button" onClick={() => setCurrentStep(1)} className="ml-2 min-h-11 underline">Revisar tipo de trámite</button>
       </p>}
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-3 md:p-4 shadow-xs">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-4 shadow-xs" aria-label="Progreso de la solicitud">
+        <div className="md:hidden space-y-3">
+          <p className="text-sm font-semibold text-[#14281D]" aria-live="polite">Paso {currentStep} de 4 · {STEPS[currentStep - 1]?.title}</p>
+          <progress className="request-progress" value={currentStep} max={4} aria-label={`Paso ${currentStep} de 4`} />
+        </div>
+        <ol className="hidden md:grid md:grid-cols-4 gap-2">
           {STEPS.map((s) => (
-            <div
+            <li
               key={s.num}
+              aria-current={currentStep === s.num ? 'step' : undefined}
               className={`flex items-center gap-2.5 p-2.5 rounded-xl text-xs transition-all ${
                 currentStep === s.num
                   ? 'bg-[#14281D] text-white font-bold shadow-xs'
@@ -400,22 +425,22 @@ function RequestSubmissionForm() {
               >
                 {currentStep > s.num ? '✓' : s.num}
               </span>
-              <span className="truncate">{s.title}</span>
-            </div>
+              <span>{s.title}</span>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
 
       <FloatingAlert message={generalError} onDismiss={() => setGeneralError(null)} />
 
-      <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 md:p-8 shadow-xs">
+      <div ref={contentRef} className="request-wizard-content bg-white rounded-2xl border border-[#E5E3DC] p-4 sm:p-6 md:p-8 shadow-xs">
         {currentStep === 1 && (
           <div className="space-y-6">
             <div>
               <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">
                 Paso 1 de 4 · Catálogo Institucional
               </span>
-              <h2 className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
+              <h2 tabIndex={-1} className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
                 Seleccione el Tipo de Trámite o Solicitud
               </h2>
               <p className="text-xs text-stone-500 mt-1">
@@ -424,24 +449,40 @@ function RequestSubmissionForm() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div className="md:hidden space-y-3">
+              <label htmlFor="request-type-mobile" className="block font-semibold text-[#14281D]">Tipo de solicitud</label>
+              <select id="request-type-mobile" value={selectedTypeId} onChange={(event) => setSelectedTypeId(event.target.value)}
+                disabled={isCatalogLoading && !isCatalogInitialized}
+                className="w-full rounded-xl border border-[#E5E3DC] bg-white px-3 py-3 text-base">
+                <option value="" disabled>Seleccione un trámite</option>
+                {activeTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+              </select>
+              {isCatalogLoading && !isCatalogInitialized && <p role="status" className="text-sm text-stone-600">Consultando tipos de solicitud…</p>}
+              {selectedType && (!isCatalogLoading || isCatalogInitialized) && <div className="rounded-xl bg-[#F7F6F2] p-3 space-y-2">
+                <h3 className="text-base font-semibold text-[#14281D]">{selectedType.name}</h3>
+                <p className="text-sm text-stone-600">{selectedType.description}</p>
+              </div>}
+            </div>
+
+            <div className="hidden md:grid md:grid-cols-2 gap-3.5" role="group" aria-label="Tipo de solicitud">
               {isCatalogLoading && !isCatalogInitialized ? <div className="md:col-span-2"><TypeOptionsSkeleton count={activeTypes.length || 4} /></div> : activeTypes.map((type) => {
                 const isSelected = selectedTypeId === type.id;
                 const reqCount = requirements.filter(
                   (r) => r.is_active !== false && (r.request_type_id || r.application_type_id) === type.id
                 ).length;
                 return (
-                  <div
+                  <label
                     key={type.id}
-                    onClick={() => setSelectedTypeId(type.id)}
                     className={`p-4 rounded-2xl border text-xs cursor-pointer transition-all space-y-2.5 flex flex-col justify-between ${
                       isSelected
                         ? 'border-[#14281D] bg-[#F7F6F2] ring-2 ring-[#14281D] shadow-xs'
                         : 'border-[#E5E3DC] hover:border-stone-400 bg-white'
-                    }`}
+                    } focus-within:ring-2 focus-within:ring-[#4d7c0f] focus-within:ring-offset-2`}
                   >
+                    <input type="radio" name="request-type" aria-label={type.name} value={type.id} checked={isSelected}
+                      onChange={() => setSelectedTypeId(type.id)} className="sr-only" />
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                         <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 border border-stone-200">
                           {type.code}
                         </span>
@@ -467,15 +508,15 @@ function RequestSubmissionForm() {
                         {isSelected ? '✓ Seleccionado' : 'Elegir tipo'}
                       </span>
                     </div>
-                  </div>
+                  </label>
                 );
               })}
             </div>
 
             {selectedType && (!isCatalogLoading || isCatalogInitialized) && (
-              <div className="p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-3 mt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+              <div className="p-3 sm:p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-3 mt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <FileCheck size={18} className="text-[#14281D]" />
                     <h4 className="font-bold text-xs md:text-sm text-[#14281D]">
                       Requisitos Documentales Exigidos para: {selectedType.name}
@@ -555,7 +596,7 @@ function RequestSubmissionForm() {
               <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">
                 Paso 2 de 4 · Información Técnica
               </span>
-              <h2 className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
+              <h2 tabIndex={-1} className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
                 Datos Generales de la Solicitud
               </h2>
               <p className="text-xs text-stone-500 mt-1">
@@ -566,11 +607,15 @@ function RequestSubmissionForm() {
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-stone-800 mb-1">
-                  Título de la Solicitud o Proyecto de Investigación *
+                <label htmlFor="request-title" className="block font-bold text-stone-800 mb-1">
+                  Título de la solicitud *
                 </label>
                 <input
                   type="text"
+                  id="request-title"
+                  aria-invalid={Boolean(formErrors.title)}
+                  aria-describedby={formErrors.title ? 'request-title-error' : undefined}
+                  maxLength={300}
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Ej: Evaluación biológica de metabolitos secundarios en biocontrol de plagas..."
@@ -579,16 +624,17 @@ function RequestSubmissionForm() {
                   } focus:border-[#14281D] outline-none text-xs text-stone-800`}
                 />
                 {formErrors.title && (
-                  <p className="text-[11px] text-rose-600 mt-1">{formErrors.title}</p>
+                  <p id="request-title-error" role="alert" className="text-sm text-rose-700 mt-1">{formErrors.title}</p>
                 )}
               </div>
 
               <div>
-                <label className="block font-bold text-stone-800 mb-1">
-                  Código o Título de Proyecto Institucional Previo (Opcional)
+                <label htmlFor="request-related-project" className="block font-bold text-stone-800 mb-1">
+                  Proyecto previo (opcional)
                 </label>
                 <input
                   type="text"
+                  id="request-related-project"
                   value={formData.related_project}
                   onChange={(e) => setFormData({ ...formData, related_project: e.target.value })}
                   placeholder="Ej: INV-2024-0042 / Convocatoria Interna 2024"
@@ -598,10 +644,10 @@ function RequestSubmissionForm() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-stone-800 mb-1">
-                    Grupo de Investigación Adscrito
+                  <label htmlFor="request-group" className="block font-bold text-stone-800 mb-1">
+                    Grupo de investigación
                   </label>
-                  <select
+                  <select id="request-group"
                     value={formData.research_group_id}
                     onChange={(e) =>
                       setFormData({ ...formData, research_group_id: e.target.value })
@@ -624,11 +670,15 @@ function RequestSubmissionForm() {
               </div>
 
               <div>
-                <label className="block font-bold text-stone-800 mb-1">
-                  Resumen Ejecutivo y Justificación Motivada *
+                <label htmlFor="request-abstract" className="block font-bold text-stone-800 mb-1">
+                  Resumen y justificación *
                 </label>
                 <textarea
-                  rows={4}
+                  id="request-abstract"
+                  aria-invalid={Boolean(formErrors.abstract)}
+                  aria-describedby={`request-abstract-help${formErrors.abstract ? ' request-abstract-error' : ''}`}
+                  maxLength={3000}
+                  rows={6}
                   value={formData.abstract}
                   onChange={(e) => setFormData({ ...formData, abstract: e.target.value })}
                   placeholder="Detalle los antecedentes, objetivos específicos, impacto esperado y justificación técnica de la solicitud..."
@@ -639,9 +689,9 @@ function RequestSubmissionForm() {
                   } focus:border-[#14281D] outline-none text-xs text-stone-800 leading-relaxed`}
                 />
                 {formErrors.abstract && (
-                  <p className="text-[11px] text-rose-600 mt-1">{formErrors.abstract}</p>
+                  <p id="request-abstract-error" role="alert" className="text-sm text-rose-700 mt-1">{formErrors.abstract}</p>
                 )}
-                <span className="text-[10px] text-stone-400 block text-right mt-0.5">
+                <span id="request-abstract-help" className="text-xs text-stone-500 block mt-1">
                   Mínimo 20 caracteres ({formData.abstract.length}/3000)
                 </span>
               </div>
@@ -677,11 +727,11 @@ function RequestSubmissionForm() {
               <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">
                 Paso 3 de 4 · Carga Documental
               </span>
-              <h2 className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
+              <h2 tabIndex={-1} className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
                 Carga de Archivos y Requisitos Obligatorios
               </h2>
               <p className="text-xs text-stone-500 mt-1">
-                Adjunte los documentos requeridos en PDF o DOCX. El tamaño máximo por archivo es de 10 MB.
+                Adjunte cada soporte según los formatos y el tamaño indicados en su requisito.
               </p>
             </div>
 
@@ -703,8 +753,8 @@ function RequestSubmissionForm() {
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-[#14281D]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-sm text-[#14281D]">
                           {idx + 1}. {req.name}
                         </span>
                         {req.is_mandatory ? (
@@ -727,10 +777,10 @@ function RequestSubmissionForm() {
 
                     {uploaded ? (
                       <div className="p-3.5 rounded-xl bg-white border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 overflow-hidden">
+                        <div className="flex min-w-0 items-center gap-2.5">
                           <CheckCircle2 size={18} className="text-emerald-700 shrink-0" />
-                          <div className="truncate">
-                            <span className="font-bold text-[#14281D] block truncate">
+                          <div className="min-w-0">
+                            <span className="font-bold text-[#14281D] block break-words [overflow-wrap:anywhere]">
                               {uploaded.file_name}
                             </span>
                             <span className="text-[10px] text-stone-500 block font-mono">
@@ -748,6 +798,7 @@ function RequestSubmissionForm() {
                             onClick={() => handleRemoveFile(req.id)}
                             className="p-1.5 rounded-lg border border-stone-200 text-stone-500 hover:text-rose-600 hover:border-rose-300 transition-colors cursor-pointer"
                             title="Quitar archivo"
+                            aria-label={`Quitar ${uploaded.file_name}`}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -757,7 +808,7 @@ function RequestSubmissionForm() {
                       <div>
                         <label
                           htmlFor={`file-input-${req.id}`}
-                          className={`border-2 border-dashed rounded-xl p-5 block text-center cursor-pointer transition-all ${
+                          className={`relative focus-within:ring-2 focus-within:ring-[#4d7c0f] border-2 border-dashed rounded-xl p-4 block text-center cursor-pointer transition-all ${
                             isUploading
                               ? 'border-stone-400 bg-stone-100 animate-pulse'
                               : 'border-stone-300 bg-white hover:border-[#14281D] hover:bg-stone-50'
@@ -766,26 +817,29 @@ function RequestSubmissionForm() {
                           <input
                             type="file"
                             id={`file-input-${req.id}`}
-                            accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            accept={req.allowed_formats?.length ? req.allowed_formats.map((format) => format.includes('/') || format.startsWith('.') ? format : `.${format}`).join(',') : '.pdf,.docx,.doc'}
+                            aria-label={`Adjuntar ${req.name}`}
+                            aria-describedby={`file-help-${req.id}`}
+                            aria-invalid={Boolean(error)}
                             disabled={Boolean(uploadingReqId) || (isCatalogLoading && !isCatalogInitialized)}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               e.target.value = '';
                               if (f) void handleFileUpload(req.id, f);
                             }}
-                            className="hidden"
+                            className="sr-only"
                           />
                           <Upload size={20} className="mx-auto text-stone-400 mb-1.5" />
                           <span className="text-xs font-semibold text-[#14281D] block">
-                            Haga clic o arrastre su archivo aquí
+                            {isUploading ? 'Subiendo archivo…' : 'Seleccionar archivo'}
                           </span>
-                          <span className="text-[10px] text-stone-500 block mt-0.5">
-                            Formatos autorizados: PDF (.pdf) y Word (.docx) · Tamaño máx: {req.max_size_mb} MB
+                          <span id={`file-help-${req.id}`} className="text-xs text-stone-600 block mt-1">
+                            {req.allowed_formats?.map((format) => DOCUMENT_FORMAT_LABELS[format.toLowerCase()] ?? format.replace(/^\./, '').toUpperCase()).join(', ') || 'PDF, DOCX, DOC'} · Máximo {Math.min(10, req.max_size_mb ?? 10)} MB
                           </span>
                         </label>
 
                         {error && (
-                          <div className="mt-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center gap-2">
+                          <div role="alert" className="mt-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center gap-2">
                             <ShieldAlert size={14} className="text-rose-600 shrink-0" />
                             <span>{error}</span>
                           </div>
@@ -805,7 +859,7 @@ function RequestSubmissionForm() {
               <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">
                 Paso 4 de 4 · Verificación Integral
               </span>
-              <h2 className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
+              <h2 tabIndex={-1} className="text-lg md:text-xl font-extrabold text-[#14281D] mt-0.5">
                 Revisión Final y Generación de Radicado
               </h2>
               <p className="text-xs text-stone-500 mt-1">
@@ -814,7 +868,7 @@ function RequestSubmissionForm() {
               </p>
             </div>
 
-            <div className="p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-4 text-xs">
+            <div className="p-3 sm:p-5 rounded-2xl bg-[#F7F6F2] border border-[#E5E3DC] space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-stone-200 pb-3">
                 <div>
                   <span className="text-stone-400 block text-[11px]">Tipo de Trámite:</span>
@@ -873,7 +927,7 @@ function RequestSubmissionForm() {
                     return (
                       <div
                         key={req.id}
-                        className="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between text-xs"
+                        className="p-3 rounded-xl bg-white border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm"
                       >
                         <div className="flex items-center gap-2">
                           {up ? (
@@ -884,7 +938,7 @@ function RequestSubmissionForm() {
                           <span className="font-medium text-stone-800">{req.name}</span>
                         </div>
                         {up ? (
-                          <span className="font-mono text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          <span className="break-words [overflow-wrap:anywhere] min-w-0 font-mono text-xs text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             {up.file_name}
                           </span>
                         ) : (
@@ -907,7 +961,7 @@ function RequestSubmissionForm() {
         )}
       </div>
 
-      <div className="mobile-wizard-actions flex items-center justify-between gap-2 pt-2">
+      <div role="group" aria-label="Navegación de la solicitud" className="mobile-wizard-actions flex items-center justify-between gap-2 pt-2">
         <button
           type="button"
           onClick={handlePrevStep}
@@ -925,7 +979,7 @@ function RequestSubmissionForm() {
             disabled={Boolean(uploadingReqId) || (isCatalogLoading && !isCatalogInitialized)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
           >
-            <span>Continuar al Paso {currentStep + 1}</span>
+            <span>Continuar</span>
             <ArrowRight size={14} />
           </button>
         ) : (
@@ -936,7 +990,7 @@ function RequestSubmissionForm() {
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#84CC16] hover:bg-[#74b810] text-[#14281D] text-xs font-extrabold cursor-pointer transition-colors shadow-xs disabled:opacity-50"
           >
             <CheckCircle2 size={16} />
-            <span>{isSubmitting ? 'Radicando...' : 'Confirmar y Radicar Solicitud'}</span>
+            <span>{isSubmitting ? 'Radicando...' : 'Radicar solicitud'}</span>
           </button>
         )}
       </div>
