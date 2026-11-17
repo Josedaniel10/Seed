@@ -21,6 +21,11 @@ export function isPresentationEnabled(): boolean {
     || (env?.DEV === true && env.VITE_PRESENTATION_MODE !== 'false');
 }
 
+export function getPresentationPassword(): string {
+  const env = import.meta.env ?? (typeof process !== 'undefined' ? process.env : {});
+  return env.VITE_PRESENTATION_PASSWORD ?? '';
+}
+
 export function isPresentationShortcut(event: KeyboardEvent): boolean {
   return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey
     && !event.repeat && !event.isComposing && event.code === 'Period';

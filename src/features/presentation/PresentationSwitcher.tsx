@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSupabaseClient } from '../../lib/supabase.ts';
 import { hasPendingAccountWrites } from '../../lib/accountDataScope.ts';
@@ -12,7 +12,7 @@ import { useCommitteeSessionsStore } from '../sessions/committeeSessionsStore.ts
 import { useMinutesStore } from '../minutes/minutesStore.ts';
 import { clearPresentationData, loadPresentationData } from './presentationData.ts';
 import {
-  PRESENTATION_EMAILS, clearPresentationSessions, hasPresentationSession,
+  PRESENTATION_EMAILS, clearPresentationSessions, getPresentationPassword, hasPresentationSession,
   isPresentationShortcut, preparePresentationSession, rememberPresentationSession,
 } from './presentationAccounts.ts';
 
@@ -27,7 +27,8 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
   const helpId = useId();
   const passwordId = useId();
   const [selectedEmail, setSelectedEmail] = useState<string>(PRESENTATION_EMAILS[0]);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(getPresentationPassword);
+  const [pendingDestination, setPendingDestination] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -35,6 +36,15 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
   const user = useSessionStore(state => state.user);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (pendingDestination === null || location.pathname !== pendingDestination) return;
+    // Router navigation runs in a transition. Keep the old route unmounted until
+    // its replacement commits, so its role guard cannot reject the new identity.
+    onSwitchingChange(false);
+    setPendingDestination(null);
+  }, [pendingDestination, location.pathname, onSwitchingChange]);
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -52,7 +62,7 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
       if (!dialog || (document.querySelector('dialog[open]') && !dialog.open)) return;
       event.preventDefault();
       if (dialog.open) { dialog.close(); return; }
-      setError(null); setNotice(null); setPassword('');
+      setError(null); setNotice(null); setPassword(getPresentationPassword());
       refreshReady();
       dialog.showModal();
     };
@@ -70,13 +80,15 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
     if (!client) { setError('No se pudo conectar con el servicio.'); return; }
     busyRef.current = true; setBusy(true); setError(null); setNotice(null);
     let identityChanged = false;
+    let navigatingToAccount = false;
     let previousSession: Session | null = null;
     try {
       const current = await client.auth.getSession();
       if (current.error) throw current.error;
       previousSession = current.data.session;
       rememberPresentationSession(previousSession);
-      const prepared = await preparePresentationSession(selectedEmail, password || undefined);
+      const prepared = await preparePresentationSession(selectedEmail,
+        hasPresentationSession(selectedEmail) ? undefined : password || undefined);
       setPassword('');
       setReadyEmails(PRESENTATION_EMAILS.filter(hasPresentationSession));
       if (isSaving()) throw new Error('Hay un guardado en curso. Espera a que termine y vuelve a intentar.');
@@ -91,7 +103,10 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
       const loaded = await loadPresentationData();
       const nextUser = useSessionStore.getState().user;
       if (!nextUser) throw new Error('No se pudo completar el cambio de cuenta.');
-      navigate(ROLE_HOME_PATHS[nextUser.activeRole], { replace: true });
+      const destination = ROLE_HOME_PATHS[nextUser.activeRole];
+      navigate(destination, { replace: true });
+      setPendingDestination(destination);
+      navigatingToAccount = true;
       if (loaded) dialogRef.current?.close();
       else setNotice('La cuenta cambió, pero algunos datos no pudieron actualizarse. Puedes reintentar la carga o cerrar el modal para continuar.');
     } catch (cause) {
@@ -103,13 +118,14 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
           await loadPresentationData();
         } catch { /* The session store fails closed if restoration is denied. */ }
       }
-      setPassword('');
+      setPassword(getPresentationPassword());
       setReadyEmails(PRESENTATION_EMAILS.filter(hasPresentationSession));
       setError(identityChanged || (cause instanceof Error && !('code' in cause))
         ? getUserError(cause, 'No se pudo completar el cambio de cuenta. Vuelve a intentar.')
         : getAuthError(cause, 'login'));
     } finally {
-      busyRef.current = false; setBusy(false); onSwitchingChange(false);
+      busyRef.current = false; setBusy(false);
+      if (!navigatingToAccount) onSwitchingChange(false);
     }
   };
 
@@ -131,7 +147,7 @@ export function PresentationSwitcher({ onSwitchingChange }: PresentationSwitcher
           {PRESENTATION_EMAILS.map(email => (
             <label key={email} className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer ${selectedEmail === email ? 'border-green-800 bg-green-50' : 'border-stone-200'}`}>
               <input type="radio" name="presentation-account" value={email} checked={selectedEmail === email}
-                onChange={() => { setSelectedEmail(email); setPassword(''); setError(null); setNotice(null); }} />
+                onChange={() => { setSelectedEmail(email); setPassword(getPresentationPassword()); setError(null); setNotice(null); }} />
               <span className="min-w-0"><span className="block text-sm break-all">{email}</span>
                 <span className="block text-xs text-stone-500">{user?.email === email ? 'Activa' : readyEmails.includes(email) ? 'Preparada' : 'Requiere contraseña una vez'}</span></span>
             </label>

@@ -10,10 +10,12 @@ dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = tru
 dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new dom.window.Event('close')); };
 process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:54321';
 process.env.VITE_SUPABASE_ANON_KEY = 'presentation-public-test-key';
+process.env.VITE_PRESENTATION_PASSWORD = 'presentation-test-default';
 const originalFetch = globalThis.fetch;
-const { act, createElement } = await import('react');
+const { act, createElement, useEffect, useState } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { MemoryRouter } = await import('react-router-dom');
+const { MemoryRouter, Routes, Route, useLocation } = await import('react-router-dom');
+const { RutaProtegida } = await import('../../../routes/RutaProtegida.tsx');
 const { PresentationSwitcher } = await import('../PresentationSwitcher.tsx');
 const accounts = await import('../presentationAccounts.ts');
 const { clearPresentationData } = await import('../presentationData.ts');
@@ -37,6 +39,7 @@ let denyProfile;
 let root;
 let cache;
 let switching;
+let deniedVisits;
 
 function session(email) {
   const index = accounts.PRESENTATION_EMAILS.indexOf(email);
@@ -50,14 +53,31 @@ function userForToken(token) {
   return accounts.PRESENTATION_EMAILS.map(session).find(item => `Bearer ${item.access_token}` === token)?.user ?? activeSession.user;
 }
 function profile(user) {
-  return { id: user.id, email: user.email, full_name: user.email, role: 'researcher', is_active: true };
+  return { id: user.id, email: user.email, full_name: user.email, role: user.email === accounts.PRESENTATION_EMAILS[1] ? 'secretary' : 'researcher', is_active: true };
 }
-async function mount() {
+function DeniedPage() {
+  useEffect(() => { deniedVisits++; }, []);
+  return createElement('p', null, 'Acceso no autorizado');
+}
+function RouteHarness() {
+  const [hidden, setHidden] = useState(false);
+  const location = useLocation();
+  return createElement('div', null,
+    createElement('output', { 'data-path': true }, location.pathname),
+    !hidden && createElement(Routes, null,
+      createElement(Route, { path: '/mis-solicitudes', element: createElement(RutaProtegida, { rolesPermitidos: ['researcher'] }, createElement('p', null, 'Solicitudes')) }),
+      createElement(Route, { path: '/panel', element: createElement(RutaProtegida, { rolesPermitidos: ['secretary'] }, createElement('p', null, 'Panel')) }),
+      createElement(Route, { path: '/sin-acceso', element: createElement(DeniedPage) })),
+    createElement(PresentationSwitcher, { onSwitchingChange: value => { switching = value; setHidden(value); } }));
+}
+async function mount(withRoutes = false) {
   const container = document.createElement('div'); document.body.append(container);
   root = createRoot(container);
   cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => root.render(createElement(QueryClientProvider, { client: cache },
-    createElement(MemoryRouter, null, createElement(PresentationSwitcher, { onSwitchingChange: value => { switching = value; } })))));
+    createElement(MemoryRouter, { initialEntries: ['/mis-solicitudes'] }, withRoutes
+      ? createElement(RouteHarness)
+      : createElement(PresentationSwitcher, { onSwitchingChange: value => { switching = value; } })))));
 }
 async function open() {
   await act(async () => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'Period', ctrlKey: true, shiftKey: true, bubbles: true })));
@@ -71,13 +91,18 @@ async function change(input, value) {
 async function submit() {
   await act(async () => {
     document.querySelector('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
-    for (let i = 0; i < 30; i++) await new Promise(resolve => setTimeout(resolve, 5));
   });
+  const deadline = Date.now() + 5000;
+  do {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    if (!document.querySelector('button[type=submit]').disabled && !switching) return;
+  } while (Date.now() < deadline);
+  assert.fail('The account switch did not finish within 5 seconds');
 }
 beforeEach(() => {
   stores.forEach((store, i) => store.setState(snapshots[i], true));
   accounts.clearPresentationSessions();
-  activeSession = session(accounts.PRESENTATION_EMAILS[0]); requests = []; denyLogin = false; denyProfile = false; switching = false;
+  activeSession = session(accounts.PRESENTATION_EMAILS[0]); requests = []; denyLogin = false; denyProfile = false; switching = false; deniedVisits = 0;
   useSessionStore.setState({ user: { id: activeSession.user.id, email: activeSession.user.email, fullName: 'Investigador', roles: ['researcher'], activeRole: 'researcher' }, isLoading: false, isAuthenticated: true });
   client.auth.getSession = async () => ({ data: { session: activeSession }, error: null });
   client.auth.setSession = async (next) => { activeSession = next; return { data: { user: next.user, session: next }, error: null }; };
@@ -95,7 +120,7 @@ beforeEach(() => {
     const authUser = userForToken(new Headers(init?.headers).get('authorization'));
     if (url.pathname === '/auth/v1/user') return Response.json(authUser);
     if (url.pathname.endsWith('/profiles')) return Response.json(denyProfile ? [] : [profile(authUser)]);
-    if (url.pathname.endsWith('/user_roles')) return Response.json([{ role: 'researcher', user_id: authUser.id }]);
+    if (url.pathname.endsWith('/user_roles')) return Response.json([{ role: profile(authUser).role, user_id: authUser.id }]);
     return Response.json([]);
   };
 });
@@ -117,6 +142,11 @@ test('shortcut is exact, ignores repeats/IME/AltGr, and toggles a hidden native 
   }
   await open(); assert.equal(document.querySelector('dialog').open, true);
   assert.equal(document.querySelectorAll('input[type=radio]').length, 6);
+  await act(async () => document.querySelectorAll('input[type=radio]')[1].click());
+  assert.equal(document.querySelector('input[type=password]').value, 'presentation-test-default');
+  await change(document.querySelector('input[type=password]'), 'editable-default');
+  await act(async () => document.querySelectorAll('input[type=radio]')[2].click());
+  assert.equal(document.querySelector('input[type=password]').value, 'presentation-test-default');
   await open(); assert.equal(document.querySelector('dialog').open, false);
 });
 
@@ -146,6 +176,23 @@ test('switching uses the target identity and clears previous account data and qu
   assert.equal(cache.getQueryData(['private']), undefined);
   assert.equal(document.querySelector('dialog').open, false); assert.equal(switching, false);
   assert.ok(requests.some(request => request.url.pathname.endsWith('/applications')));
+});
+
+test('switching between different role routes never visits the unauthorized page', async () => {
+  await mount(true); await open();
+  await act(async () => document.querySelectorAll('input[type=radio]')[1].click());
+  await change(document.querySelector('input[type=password]'), 'only-entered-in-test');
+  await submit();
+  assert.equal(useSessionStore.getState().user.activeRole, 'secretary');
+  assert.equal(document.querySelector('[data-path]').textContent, '/panel');
+  assert.equal(deniedVisits, 0);
+  await open();
+  await act(async () => document.querySelectorAll('input[type=radio]')[0].click());
+  await submit();
+  assert.equal(document.querySelector('[data-path]').textContent, '/mis-solicitudes');
+  assert.equal(deniedVisits, 0);
+  assert.equal(requests.filter(request => request.url.pathname === '/auth/v1/token').length, 1,
+    'returning to a prepared account must reuse its session instead of the prefilled password');
 });
 
 test('invalid credentials and inactive profiles leave the previous identity and data intact', async () => {
