@@ -1,7 +1,8 @@
+import { NotificationPopover } from '../features/notifications/NotificationPopover.tsx';
 import type { ReactElement } from 'react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, MoreHorizontal, User, LogOut, Check,
+import { ArrowLeft, MoreHorizontal, User, LogOut, Check,
   FileText, PlusCircle, ClipboardCheck, LayoutDashboard, CheckSquare,
   Calendar, FileCheck, UserCheck, BarChart3, Users, Layers, BookOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -21,7 +22,7 @@ const shortLabels: Record<string, string> = {
   '/admin/usuarios': 'Usuarios', '/admin/grupos': 'Grupos', '/admin/catalogo': 'Catálogo',
 };
 
-export function MobileNavigation({ unreadCount }: { unreadCount: number }): ReactElement | null {
+export function MobileNavigation(): ReactElement | null {
   const { user, logout, setActiveRole } = useSessionStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -75,11 +76,7 @@ export function MobileNavigation({ unreadCount }: { unreadCount: number }): Reac
           <span>{shortLabels[item.path] ?? item.label}</span>
         </NavLink>;
       })}
-      <NavLink to="/notificaciones" className={({ isActive }) => `mobile-tab ${isActive ? 'is-active' : ''}`}>
-        <span className="relative"><Bell size={22} strokeWidth={1.8} aria-hidden="true" />
-          {unreadCount > 0 && <span className="tab-unread" aria-label={`${unreadCount} sin leer`}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-        </span><span>Avisos</span>
-      </NavLink>
+      <NotificationPopover mobile onOpen={closeMenu} />
       <button type="button" className={`mobile-tab ${isMoreActive || isMenuOpen ? 'is-active' : ''}`}
         aria-expanded={isMenuOpen} aria-haspopup="dialog" onClick={() => setOpenMenuPath(location.pathname)}>
         <MoreHorizontal size={22} aria-hidden="true" /><span>Más</span>

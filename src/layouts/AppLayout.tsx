@@ -1,6 +1,7 @@
+import { NotificationPopover } from '../features/notifications/NotificationPopover.tsx';
 import { useEffect, useId, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
+import { LogOut, User, ChevronDown } from 'lucide-react';
 import { AppSidebar } from './AppSidebar.tsx';
 import { useDismissiblePopover } from '../hooks/useDismissiblePopover.ts';
 import { useRouteScrollRestoration } from '../hooks/useRouteScrollRestoration.ts';
@@ -8,7 +9,6 @@ import { MobileNavigation } from './MobileNavigation.tsx';
 import { SeedLogo } from '../components/SeedLogo.tsx';
 import { SessionSyncNotice } from '../features/auth/SessionSyncNotice.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
-import { useNotifications } from '../features/notifications/useNotifications.ts';
 import {
   ROLE_LABELS,
   ROLE_HOME_PATHS,
@@ -20,7 +20,6 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, setActiveRole, logout } = useSessionStore();
-  const { data: notifications = [] } = useNotifications();
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const roleMenuRef = useDismissiblePopover(isRoleMenuOpen, () => setIsRoleMenuOpen(false));
@@ -36,7 +35,6 @@ export function AppLayout() {
   if (!user) return null;
 
   const activeRole = user.activeRole;
-  const unreadCount = notifications.filter((notification) => !notification.is_read).length;
 
   const handleRoleChange = (newRole: AppRole) => {
     setActiveRole(newRole);
@@ -46,7 +44,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-dvh bg-[#F7F6F2] text-[#14281D] flex flex-col">
-      <MobileNavigation unreadCount={unreadCount} />
+      <MobileNavigation />
       {/* 1. Cabecera Unificada (Sección 6.2) */}
       <header className="h-14 bg-white border-b border-[#E5E3DC] px-4 md:px-6 hidden md:flex items-center justify-between sticky top-0 z-40">
         {/* Logo de Seed (limpio, sin subtítulos técnicos) */}
@@ -96,18 +94,7 @@ export function AppLayout() {
         {/* Notificaciones y Menú de Usuario */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Campana de Notificaciones con Contador */}
-          <NavLink
-            to="/notificaciones"
-            className="relative p-2 text-stone-600 hover:text-[#14281D] hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
-            title="Ver notificaciones"
-          >
-            <Bell size={18} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#84CC16] text-[#14281D] text-[10px] font-bold rounded-full flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </NavLink>
+          <NotificationPopover onOpen={() => { setIsRoleMenuOpen(false); setIsUserMenuOpen(false); }} />
 
           {/* Menú de Usuario */}
           <div ref={userMenuRef} className="relative">

@@ -1,47 +1,20 @@
+import { useOpenNotification } from '../../features/notifications/useOpenNotification.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { NotificationsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { useListFilter } from '../../hooks/useListFilter.ts';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Bell, Check, ArrowRight, RefreshCw } from 'lucide-react';
 import { useNotifications, useMarkNotificationsRead } from '../../features/notifications/useNotifications.ts';
 import { getNotificationTarget } from '../../features/notifications/notificationsApi.ts';
-import type { AppNotification } from '../../features/notifications/notificationsApi.ts';
-import { useSessionStore } from '../../stores/session.store.ts';
-import { normalizeRole } from '../../lib/permissions.ts';
 
 export function NotificacionesPage() {
-  const navigate = useNavigate();
-  const user = useSessionStore((state) => state.user);
+  const { openNotification: handleOpen, error: navigationError, isPending: isOpening } = useOpenNotification();
   const { data: notifications = [], isPending, error, refetch } = useNotifications();
   const markRead = useMarkNotificationsRead();
   const [unreadFilter, setUnreadFilter] = useListFilter('unread', 'false');
   const onlyUnread = unreadFilter === 'true';
   const setOnlyUnread = (value: boolean) => setUnreadFilter(String(value));
-  const [navigationError, setNavigationError] = useState<string | null>(null);
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
   const filtered = onlyUnread ? notifications.filter((notification) => !notification.is_read) : notifications;
-
-  const handleOpen = async (notification: AppNotification) => {
-    setNavigationError(null);
-    const target = getNotificationTarget(notification);
-    if (!target || !user) return;
-    const permittedRoles = ['secretary', 'committee_member', 'admin'];
-    if (notification.session_id && !permittedRoles.includes(normalizeRole(user.activeRole))) {
-      const role = user.roles.find((candidate) => permittedRoles.includes(normalizeRole(candidate)));
-      if (!role) {
-        setNavigationError('Su cuenta ya no tiene permiso para abrir esta sesión.');
-        return;
-      }
-      useSessionStore.getState().setActiveRole(role);
-    }
-    try {
-      if (!notification.is_read) await markRead.mutateAsync(notification.id);
-      if (useSessionStore.getState().user?.id === user.id) navigate(target, { state: { fromList: '/notificaciones' } });
-    } catch {
-      // The mutation exposes the persisted-write error below; keep the notification unread.
-    }
-  };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -103,7 +76,7 @@ export function NotificacionesPage() {
                   })}
                 </time>
                 {getNotificationTarget(notification) && (
-                  <button type="button" disabled={markRead.isPending} onClick={() => void handleOpen(notification)}
+                  <button type="button" disabled={markRead.isPending || isOpening} onClick={() => void handleOpen(notification)}
                     className="font-bold text-[#14281D] flex items-center gap-1 hover:underline disabled:opacity-50">
                     {notification.session_id ? (notification.target_tab === 'acta' ? 'Ver acta' : 'Ver sesión') : 'Ver solicitud'}
                     <ArrowRight size={14} />
