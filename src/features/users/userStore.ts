@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -205,6 +206,7 @@ export const useUserStore = create<UserManagementState>()(
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
@@ -219,6 +221,7 @@ export const useUserStore = create<UserManagementState>()(
           ]);
 
           const error = profilesResult.error ?? rolesResult.error;
+          if (revision !== getAccountDataRevision()) return { success: false };
           if (error) {
             set({ isLoading: false, error: getUserError(error) });
             return { success: false, error: getUserError(error) };
@@ -249,6 +252,7 @@ export const useUserStore = create<UserManagementState>()(
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = getUserError(err, 'No se pudieron cargar los usuarios.');
+          if (revision !== getAccountDataRevision()) return { success: false };
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

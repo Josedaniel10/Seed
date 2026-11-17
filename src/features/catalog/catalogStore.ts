@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { manageCatalog } from './catalogApi.ts';
 import { create } from 'zustand';
@@ -758,6 +759,7 @@ export const useCatalogStore = create<CatalogState>()(
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
@@ -771,6 +773,7 @@ export const useCatalogStore = create<CatalogState>()(
             client.from('requirements').select('*').order('created_at', { ascending: true }),
           ]);
 
+          if (revision !== getAccountDataRevision()) return { success: false };
           if (typesRes.error) throw typesRes.error;
           if (reqsRes.error) throw reqsRes.error;
 
@@ -802,6 +805,7 @@ export const useCatalogStore = create<CatalogState>()(
           };
         } catch (err: unknown) {
           const msg = getUserError(err, 'Error al cargar catálogo desde Supabase');
+          if (revision !== getAccountDataRevision()) return { success: false };
           console.error('Error loadFromSupabase:', msg);
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };

@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { getRequestQuorum } from './requestQuorum.ts';
 import { create } from 'zustand';
@@ -816,6 +817,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         const client = getSupabaseClient();
         if (!client) {
           set({ isLoading: false });
@@ -831,6 +833,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
             client.from('session_non_deliberations').select('*'),
           ]);
           for (const response of responses) {
+            if (revision !== getAccountDataRevision()) return { success: false };
             if (response.error) throw new Error(getUserError(response.error));
           }
           const sessions = sessionSchema.array().parse(responses[0].data);
@@ -842,6 +845,7 @@ export const useCommitteeSessionsStore = create<CommitteeSessionsState>()(
           return { success: true, count: sessions.length };
         } catch (error) {
           const message = getUserError(error, 'Error al cargar sesiones.');
+          if (revision !== getAccountDataRevision()) return { success: false };
           set({ isLoading: false, error: message });
           return { success: false, error: message };
         }

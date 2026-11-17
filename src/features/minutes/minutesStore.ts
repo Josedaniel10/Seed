@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -424,6 +425,7 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         const client = getSupabaseClient();
         if (!client) {
           set({ isLoading: false });
@@ -432,11 +434,13 @@ Constancia de elaboración por: ${actorName} (${actorId}).`;
         set({ isLoading: true, error: null });
         try {
           const { data, error } = await client.from('committee_minutes').select('*').order('created_at', { ascending: false });
+          if (revision !== getAccountDataRevision()) return { success: false };
           if (error) throw new Error(getUserError(error));
           set({ minutes: minuteSchema.array().parse(data), isLoading: false });
           return { success: true };
         } catch (error) {
           const message = getUserError(error, 'Error al cargar actas.');
+          if (revision !== getAccountDataRevision()) return { success: false };
           set({ isLoading: false, error: message });
           return { success: false, error: message };
         }

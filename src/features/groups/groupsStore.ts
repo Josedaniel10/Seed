@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -257,6 +258,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         set({ isLoading: true, error: null });
         const client = getSupabaseClient();
         if (!client) {
@@ -269,6 +271,8 @@ export const useGroupsStore = create<ResearchGroupsState>()(
             .from('research_groups')
             .select('*')
             .order('name', { ascending: true });
+
+          if (revision !== getAccountDataRevision()) return { success: false };
 
           if (error) {
             set({ isLoading: false, error: getUserError(error) });
@@ -289,6 +293,7 @@ export const useGroupsStore = create<ResearchGroupsState>()(
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = getUserError(err, 'Error al sincronizar grupos desde Supabase');
+          if (revision !== getAccountDataRevision()) return { success: false };
           set({ isLoading: false, error: msg });
           return { success: false, error: msg };
         }

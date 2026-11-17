@@ -1,4 +1,5 @@
 import { getUserError } from './userMessages.ts';
+import { accountScopedFetch } from './accountDataScope.ts';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Claves de almacenamiento local para configuración dinámica en navegador
@@ -59,6 +60,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   try {
     cachedClient = createClient(url, anonKey, {
+      global: { fetch: accountScopedFetch },
       auth: {
         persistSession: true,
         autoRefreshToken: true,

@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { PresentationSwitcher } from './features/presentation/PresentationSwitcher.tsx';
+import { isPresentationEnabled } from './features/presentation/presentationAccounts.ts';
 import { AlertProvider } from './components/ui/AlertProvider.tsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsSync } from './features/notifications/useNotifications.ts';
@@ -16,6 +18,7 @@ import { useCommitteeSessionsStore } from './features/sessions/committeeSessions
 const queryClient = new QueryClient();
 
 export default function App() {
+  const [switchingAccount, setSwitchingAccount] = useState(false);
   useMobileViewport();
   const initializeSession = useSessionStore((s) => s.initializeSession);
   const setupAuthListener = useSessionStore((s) => s.setupAuthListener);
@@ -37,11 +40,11 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <NotificationsSync />
+      {!switchingAccount && <NotificationsSync />}
       <BrowserRouter>
         <AlertProvider>
-          <ObservationSync />
-          <AppRoutes />
+          {!switchingAccount && <><ObservationSync /><AppRoutes /></>}
+          {isPresentationEnabled() && <PresentationSwitcher onSwitchingChange={setSwitchingAccount} />}
         </AlertProvider>
       </BrowserRouter>
     </QueryClientProvider>

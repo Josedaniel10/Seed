@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppRole, normalizeRole, ROLE_HOME_PATHS } from '../lib/permissions.ts';
 import { getSupabaseClient } from '../lib/supabase.ts';
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import type { Profile, UserRole } from '../types/database.ts';
 
@@ -28,7 +28,7 @@ function sameUserSession(current: UserSession, next: UserSession): boolean {
     && current.roles.length === next.roles.length && current.roles.every((role) => next.roles.includes(role));
 }
 
-async function loadAuthenticatedSession(client: SupabaseClient, user: User): Promise<UserSession> {
+export async function loadAuthenticatedSession(client: SupabaseClient, user: User): Promise<UserSession> {
   const [profile, assignments] = await Promise.all([
     client.from('profiles').select('*').eq('id', user.id).eq('is_active', true)
       .overrideTypes<Profile[], { merge: false }>(),
@@ -162,6 +162,7 @@ interface SessionState {
   logout: () => Promise<void>;
   initializeSession: () => Promise<void>;
   setupAuthListener: () => () => void;
+  activatePreparedSession: (session: Session) => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -171,6 +172,7 @@ export const useSessionStore = create<SessionState>()(
       let announcedUserId: string | null | undefined;
       let pendingSync: { epoch: number; promise: Promise<void> } | null = null;
       let loggingOut = false;
+      let switchingAccount = false;
       const clearSession = () => {
         sessionEpoch++;
         announcedUserId = null;
@@ -196,6 +198,7 @@ export const useSessionStore = create<SessionState>()(
         let listening = true;
         const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
           if (!listening) return;
+          if (switchingAccount) return;
           if (event === 'SIGNED_OUT') { clearSession(); return; }
           if (loggingOut) return;
           if (!['INITIAL_SESSION', 'SIGNED_IN', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event)) return;
@@ -225,11 +228,33 @@ export const useSessionStore = create<SessionState>()(
         };
       },
 
+      activatePreparedSession: async (session) => {
+        const client = getSupabaseClient();
+        if (!client) throw new Error(USER_MESSAGES.connection);
+        switchingAccount = true;
+        sessionEpoch++;
+        pendingSync = null;
+        set({ user: null, isAuthenticated: false, isLoading: true, unreadNotificationsCount: 0,
+          isRefreshingSession: false, sessionSyncError: null });
+        try {
+          const { data, error } = await client.auth.setSession(session);
+          if (error || !data.user) throw error ?? new Error(USER_MESSAGES.session);
+          const restored = await loadAuthenticatedSession(client, data.user);
+          announcedUserId = restored.id;
+          set({ user: restored, isAuthenticated: true, isLoading: false });
+        } catch (error) {
+          clearSession();
+          throw error;
+        } finally {
+          switchingAccount = false;
+        }
+      },
+
       /**
        * Inicializa y sincroniza la sesión activa desde Supabase Auth
        */
       initializeSession: () => {
-        if (loggingOut) return Promise.resolve();
+        if (loggingOut || switchingAccount) return Promise.resolve();
         if (pendingSync?.epoch === sessionEpoch) return pendingSync.promise;
         const client = getSupabaseClient();
         if (!client) {

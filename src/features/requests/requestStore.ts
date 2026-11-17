@@ -1,3 +1,4 @@
+import { getAccountDataRevision } from '../../lib/accountDataScope.ts';
 import { getUserError } from '../../lib/userMessages.ts';
 import { getNextAction } from './nextAction.ts';
 import { requirementsForRequest } from '../catalog/catalogSnapshot.ts';
@@ -1572,6 +1573,7 @@ export const useRequestStore = create<RequestState>()(
       },
 
       loadFromSupabase: async () => {
+        const revision = getAccountDataRevision();
         const observationsBeforeRead = get().observations;
         const auditBeforeRead = get().auditHistory;
         set({ isLoading: true });
@@ -1591,6 +1593,7 @@ export const useRequestStore = create<RequestState>()(
           ]);
 
           const queryError = appsRes.error ?? docsRes.error ?? audRes.error ?? asgRes.error ?? obsRes.error;
+          if (revision !== getAccountDataRevision()) return { success: false };
           if (queryError) {
             set({ isLoading: false });
             return { success: false, error: getUserError(queryError) };
@@ -1698,6 +1701,7 @@ export const useRequestStore = create<RequestState>()(
           return { success: true, count: 0 };
         } catch (err: unknown) {
           const msg = getUserError(err, 'No se pudieron actualizar las solicitudes.');
+          if (revision !== getAccountDataRevision()) return { success: false };
           set({ isLoading: false });
           return { success: false, error: msg };
         }
