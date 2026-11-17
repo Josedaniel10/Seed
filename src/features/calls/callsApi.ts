@@ -4,6 +4,7 @@ import { getSupabaseClient } from '../../lib/supabase.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
 
 export const callSchema = z.object({
+  icon_key: z.string().nullable().optional(), accent_color: z.string().nullable().optional(), cover_image_path: z.string().nullable().optional(),
   id: z.string().uuid(), title: z.string(), description: z.string(), faculty: z.string(),
   audience: z.enum(['all', 'students', 'teachers']), type_ids: z.array(z.string()),
   opens_at: z.string(), closes_at: z.string(), max_amount: z.coerce.number().positive().nullable(),

@@ -1,3 +1,5 @@
+import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
+import { getTypeAppearance } from '../../features/catalog/typeAppearance.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { BoardCardsSkeleton } from '../../features/loading/BoardCardsSkeleton.tsx';
 import { SkeletonRows } from '../../components/ui/Skeleton.tsx';
@@ -625,7 +627,7 @@ export function PanelSeguimientoPage() {
                       <td data-label="Solicitud">
                         <Link to={`/solicitudes/${app.id}`} state={{ fromList: '/panel' }} className="request-title-link">{app.title}</Link>
                         <span className="request-record-id">{app.filing_number}</span>
-                        <p className="request-secondary">{typeObj?.name || 'Trámite Institucional'}</p>
+                        <div className="request-secondary flex items-center gap-2"><IdentityIcon {...getTypeAppearance(typeObj)} size={16} /><span>{typeObj?.name || 'Trámite Institucional'}</span></div>
                       </td>
                       <td data-label="Investigador">{applicant?.full_name || 'Sin investigador registrado'}</td>
                       <td data-label="Estado"><StatusBadge status={app.current_status} size="md" /></td>

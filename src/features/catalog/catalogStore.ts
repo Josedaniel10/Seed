@@ -628,6 +628,9 @@ interface CatalogState {
 
   // Type Actions (RF-05)
   createType: (type: {
+    icon_key?: string;
+    accent_color?: string;
+    is_active?: boolean;
     code: string;
     name: string;
     description?: string;

@@ -1,3 +1,5 @@
+import { StoredCallCover } from './CallCover.tsx';
+import { uploadCallCover } from './coverFiles.ts';
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -68,7 +70,9 @@ export function CallsPage(): ReactElement {
     });
   };
   const create = async (input: CallDraftInput): Promise<void> => {
-    const { error: failure } = await callsClient().rpc('create_funding_call', { p_data: input });
+    const { cover_file, ...data } = input;
+    const cover_image_path = cover_file ? await uploadCallCover(cover_file) : data.cover_image_path;
+    const { error: failure } = await callsClient().rpc('create_funding_call', { p_data: { ...data, cover_image_path } });
     if (failure) throw new Error(failure.message);
     await refresh(); setEditor(null);
     setSuccess('Borrador guardado. Revisa la convocatoria en el listado y pulsa Publicar cuando esté lista.');
@@ -116,11 +120,12 @@ export function CallsPage(): ReactElement {
     {sections.filter((section) => section.items.length).map((section) => <section key={section.title} aria-label={section.title} className="space-y-3">
       <div><h2 className="text-sm font-bold text-[#14281D]">{section.title} <span className="ml-1 rounded-full bg-stone-200/60 px-2 py-0.5 text-[10px] text-stone-500">{section.items.length}</span></h2><p className="text-xs text-stone-500 mt-1">{section.description}</p></div>
       <div className="grid md:grid-cols-2 gap-4">{section.items.map((call) => <article key={call.id} className="flex flex-col rounded-2xl border border-[#E5E3DC] bg-white shadow-xs overflow-hidden">
+        <StoredCallCover path={call.cover_image_path} icon_key={call.icon_key ?? 'megaphone'} accent_color={call.accent_color} />
         <div className="p-5 space-y-3 flex-1">
           <div className="flex items-start justify-between gap-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">{call.faculty}</p><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${isCallOpen(call) ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-600'}`}>{isCallOpen(call) ? 'Abierta' : call.status === 'published' ? (Date.now() < Date.parse(call.opens_at) ? 'Próximamente' : 'Finalizada') : { draft: 'Borrador', closed: 'Cerrada', cancelled: 'Cancelada' }[call.status]}</span></div>
           <h3 className="text-sm font-bold text-[#14281D] break-words">{call.title}</h3>
           <p className="flex items-start gap-2 text-xs text-stone-500"><CalendarDays size={14} className="shrink-0" />Cierra el {formatCallDate(call.closes_at)}</p>
-          <button type="button" className="text-xs font-semibold text-[#14281D] underline underline-offset-4 cursor-pointer" onClick={() => showDetail(call.id)}>Ver requisitos y detalle</button>
+          <button type="button" className="text-xs font-semibold text-[#14281D] underline underline-offset-4 cursor-pointer" onClick={() => showDetail(call.id)} aria-label={`Ver requisitos y detalle de ${call.title}`}>Ver requisitos y detalle</button>
         </div>
         {(admin || allowed.includes(call.faculty)) && ['draft', 'published'].includes(call.status) && <footer className="flex items-center justify-between gap-2 flex-wrap border-t border-[#E5E3DC] bg-stone-50/50 px-5 py-3">
           <div className="flex gap-2 flex-wrap">
@@ -139,7 +144,7 @@ export function CallsPage(): ReactElement {
     </section>}
     </>}
     <Modal isOpen={Boolean(detail) && !managersView} onClose={() => showDetail(null)} title="Detalle de convocatoria" maxWidth="2xl">
-      {detail && <div className="space-y-4 text-sm">
+      {detail && <div className="space-y-4 text-sm"><StoredCallCover path={detail.cover_image_path} icon_key={detail.icon_key ?? 'megaphone'} accent_color={detail.accent_color} />
         <div><p className="text-xs text-stone-500">{detail.faculty}</p><h2 className="text-lg font-bold mt-1">{detail.title}</h2></div>
         <p className="whitespace-pre-wrap break-words text-stone-600">{detail.description}</p>
         <dl className="grid sm:grid-cols-2 gap-4 text-xs border-t border-[#E5E3DC] pt-4">

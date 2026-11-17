@@ -1,3 +1,5 @@
+import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
+import { getTypeAppearance } from '../../features/catalog/typeAppearance.ts';
 import { requirementsForRequest } from '../../features/catalog/catalogSnapshot.ts';
 import { getDocumentCorrection } from '../../features/documents/documentCorrection.ts';
 import { DocumentCorrectionNotice } from '../../features/documents/DocumentCorrectionNotice.tsx';
@@ -194,7 +196,7 @@ export function DetalleSolicitudPage() {
                 {application.filing_number}
               </span>
               <span className="text-xs font-bold text-stone-600 bg-[#F7F6F2] px-2.5 py-1 rounded-lg border border-[#E5E3DC]">
-                {applicationType?.name || 'Trámite Institucional'}
+                <IdentityIcon {...getTypeAppearance(applicationType)} size={18} />{applicationType?.name || 'Trámite Institucional'}
               </span>
               <span className="text-[11px] text-stone-400 font-mono">
                 [{applicationType?.code}]

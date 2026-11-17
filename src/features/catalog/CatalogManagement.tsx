@@ -1,3 +1,8 @@
+import { CatalogTypeEditor } from './CatalogTypeEditor.tsx';
+import type { CatalogTypeInput } from './CatalogTypeEditor.tsx';
+import { CatalogRequirements } from './CatalogRequirements.tsx';
+import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
+import { getTypeAppearance } from './typeAppearance.ts';
 import { uploadTemplate } from './templateFiles.ts';
 import { TemplateDownload } from './TemplateDownload.tsx';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
@@ -5,27 +10,9 @@ import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { SplitWorkspaceSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useRef, useState } from 'react';
-import {
-  FileText,
-  Plus,
-  AlertCircle,
-  Clock,
-  RefreshCw,
-  Trash2,
-  Edit2,
-  FileCheck,
-  Layers,
-  ShieldAlert,
-  Search,
-  Filter,
-  ArrowRight,
-  ExternalLink,
-  ChevronRight,
-  Info,
-} from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Edit2, FileCheck, AlertCircle, Clock, Search, Layers } from 'lucide-react';
 import { useCatalogStore } from './catalogStore.ts';
-import { ApplicationType, Requirement } from '../../types/database.ts';
-import { isSupabaseConfigured } from '../../lib/supabase.ts';
+import type { ApplicationType, Requirement } from '../../types/database.ts';
 import { useSessionStore } from '../../stores/session.store.ts';
 
 export function CatalogManagement() {
@@ -80,7 +67,8 @@ export function CatalogManagement() {
   const [syncFeedback, setSyncFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   // Form states for Type
-  const [typeForm, setTypeForm] = useState({
+  const [typeForm, setTypeForm] = useState<CatalogTypeInput>({
+    icon_key: 'folder-check', accent_color: 'forest', is_active: true,
     code: '',
     name: '',
     description: '',
@@ -88,6 +76,8 @@ export function CatalogManagement() {
     display_order: 1,
   });
   const [typeError, setTypeError] = useState('');
+  const originalTypeForm = useRef<CatalogTypeInput>(typeForm);
+  const [committeeFilter, setCommitteeFilter] = useState('ALL');
 
   // Form states for Requirement
   const [reqForm, setReqForm] = useState({
@@ -110,38 +100,36 @@ export function CatalogManagement() {
       (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
+    if (committeeFilter === 'COMMITTEE' && !t.requires_committee) return false;
+    if (committeeFilter === 'DIRECT' && t.requires_committee) return false;
     if (filterStatus === 'ACTIVE') return t.is_active;
     if (filterStatus === 'INACTIVE') return !t.is_active;
     return true;
-  });
+  }).sort((left, right) => left.display_order - right.display_order);
 
-  const selectedType = types.find((t) => t.id === selectedTypeId) || filteredTypes[0] || null;
+  const selectedType = types.find((t) => t.id === (editingType?.id ?? selectedTypeId)) || null;
   const currentReqs = selectedType
-    ? requirements.filter((r) => r.application_type_id === selectedType.id && r.is_active !== false)
+    ? requirements.filter((r) => (r.application_type_id || r.request_type_id) === selectedType.id && r.is_active !== false)
     : [];
 
   // Handlers
   const handleOpenCreateType = () => {
-    setTypeForm({
-      code: '',
-      name: '',
-      description: '',
-      requires_committee: true,
-      display_order: types.length + 1,
-    });
+    const initial = { code: '', name: '', description: '', requires_committee: true, display_order: types.length + 1,
+      icon_key: 'folder-check', accent_color: 'forest', is_active: true };
+    originalTypeForm.current = initial;
+    setTypeForm(initial);
     setTypeError('');
     setIsCreateTypeOpen(true);
   };
 
   const handleOpenEditType = (type: ApplicationType) => {
     setEditingType(type);
-    setTypeForm({
-      code: type.code,
-      name: type.name,
-      description: type.description || '',
-      requires_committee: type.requires_committee,
-      display_order: type.display_order,
-    });
+    setSelectedTypeId(type.id);
+    const initial = { code: type.code, name: type.name, description: type.description || '',
+      requires_committee: type.requires_committee, display_order: type.display_order, is_active: type.is_active,
+      ...getTypeAppearance(type) };
+    originalTypeForm.current = initial;
+    setTypeForm(initial);
     setTypeError('');
   };
 
@@ -152,32 +140,22 @@ export function CatalogManagement() {
     saveLock.current = true;
     setSaving(true);
     try {
-    if (editingType) {
-      const res = await updateType(editingType.id, {
-        code: typeForm.code.trim().toUpperCase(),
-        name: typeForm.name.trim(),
-        description: typeForm.description.trim() || null,
-        requires_committee: typeForm.requires_committee,
-        display_order: Number(typeForm.display_order),
-      });
-      if (res.success) {
-        setEditingType(null);
-      } else { setTypeError(res.error ?? 'No se pudo guardar.'); }
-    } else {
-      const res = await createType({
-        code: typeForm.code,
-        name: typeForm.name,
-        description: typeForm.description,
-        requires_committee: typeForm.requires_committee,
-        display_order: Number(typeForm.display_order),
-      });
-      if (!res.success) {
-        setTypeError(res.error || 'Error al crear tipo de trámite');
-        return;
+      const data = { ...typeForm, code: typeForm.code.trim().toUpperCase(), name: typeForm.name.trim(), description: typeForm.description.trim() };
+      if (editingType) {
+        const result = await updateType(editingType.id, data);
+        if (!result.success) { setTypeError(result.error ?? 'No se pudo guardar.'); return; }
+        originalTypeForm.current = data;
+        setTypeForm(data);
+        setSyncFeedback({ success: true, message: 'Tipo de solicitud actualizado.' });
+      } else {
+        const result = await createType(data);
+        if (!result.success || !result.type) { setTypeError(result.error || 'No se pudo crear el tipo de solicitud.'); return; }
+        setIsCreateTypeOpen(false);
+        handleOpenEditType(result.type);
+        setSyncFeedback({ success: true, message: 'Tipo creado. Ahora puede agregar sus requisitos y plantillas.' });
       }
-      setIsCreateTypeOpen(false);
-    }
-    } finally { saveLock.current = false; setSaving(false); }
+    } catch (cause) { setTypeError(cause instanceof Error ? cause.message : 'No se pudo guardar el tipo de solicitud.'); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
   const handleOpenAddReq = () => {
@@ -279,476 +257,58 @@ export function CatalogManagement() {
 
   };
 
+  const closeTypeEditor = () => {
+    if (saving) return;
+    const close = () => { setIsCreateTypeOpen(false); setEditingType(null); };
+    if (JSON.stringify(typeForm) === JSON.stringify(originalTypeForm.current)) { close(); return; }
+    requestDecision({ title: '¿Salir sin guardar?', target: typeForm.name || 'Nuevo tipo de solicitud',
+      confirmLabel: 'Salir sin guardar', consequence: 'Se perderán los cambios del tipo de solicitud. Los requisitos ya guardados se conservan.' }, close);
+  };
+
   return (
     <div className="space-y-6">
       {decisionDialog}
-      {/* Top Banner & Context Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-stone-100">
-        <div>
-          <div className="flex items-center gap-2">
-            <Layers size={20} className="text-[#14281D]" />
-            <h3 className="text-base font-bold text-[#14281D]">
-              Catálogo de Tipos de Solicitud y Requisitos
-            </h3>
-          </div>
-          <p className="text-xs text-stone-600 mt-0.5">
-            Parametriza las solicitudes académicas, si requieren deliberación en sesión de comité, y define los requisitos obligatorios, condicionales y subsanables.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleSyncSupabase}
-            disabled={isSyncing}
-            className="px-3 py-1.5 bg-[#F7F6F2] hover:bg-[#EFECE6] text-[#14281D] text-xs font-semibold rounded-lg border border-[#E5E3DC] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Actualizar el catálogo"
-          >
-            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Actualizar catálogo'}</span>
-          </button>
-
-          <button
-            onClick={handleOpenCreateType}
-            className="px-3.5 py-1.5 bg-[#14281D] hover:bg-[#1E3A2B] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Plus size={14} />
-            <span>Nuevo Tipo de Trámite</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Sync Status Banner */}
       <FloatingAlert message={syncFeedback?.message} tone={syncFeedback?.success ? 'success' : 'error'} onDismiss={() => setSyncFeedback(null)} />
-
-      {/* Rules Notice Badge */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        <div className="bg-[#F7F6F2] p-3 rounded-xl border border-[#E5E3DC] flex items-start gap-2.5">
-          <div className="p-1 rounded bg-[#14281D] text-white shrink-0 mt-0.5">
-            <FileCheck size={14} />
-          </div>
-          <div>
-            <div className="font-bold text-[#14281D]">Requisitos Documentales Exigidos</div>
-            <p className="text-stone-600 text-[11px] leading-relaxed">
-              Cada tipo de solicitud define con exactitud qué documentos debe radicar el investigador. El sistema valida automáticamente los formatos permitidos (.PDF, .DOCX) y el tope institucional de 10 MB.
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-[#F7F6F2] p-3 rounded-xl border border-[#E5E3DC] flex items-start gap-2.5">
-          <div className="p-1 rounded bg-[#A3E635] text-[#14281D] shrink-0 mt-0.5">
-            <Clock size={14} />
-          </div>
-          <div>
-            <div className="font-bold text-[#14281D]">Criterios de Subsanación Documental</div>
-            <p className="text-stone-600 text-[11px] leading-relaxed">
-              La falta de un requisito <strong>subsanable</strong> transita a <em>Pendiente por documentos</em> con plazo hábil de subsanación. La falta de un requisito <strong>no subsanable</strong> causa <em>Rechazo directo</em> en validación.
-            </p>
+      {isCreateTypeOpen || editingType ? <CatalogTypeEditor value={typeForm} onChange={setTypeForm} onSave={handleSaveType}
+        onCancel={closeTypeEditor} saving={saving} error={typeError} isNew={isCreateTypeOpen}>
+        {editingType ? <CatalogRequirements requirements={currentReqs} onAdd={handleOpenAddReq} onEdit={handleOpenEditReq}
+          onRemove={(requirement) => confirmChange('Retirar requisito', requirement.name, () => removeRequirement(requirement.id))} disabled={saving} />
+          : <section className="catalog-section"><h2 className="font-bold">Requisitos y plantillas</h2><p className="text-sm text-stone-500">Guarde primero el tipo de solicitud para agregar sus documentos y plantillas.</p></section>}
+      </CatalogTypeEditor> : <>
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E3DC] pb-4">
+          <div><h1 className="mobile-section-title text-xl md:text-2xl font-extrabold tracking-tight text-[#14281D]">Catálogo de solicitudes</h1><p className="mt-1 text-sm text-stone-500">Organice los tipos de trámite, sus requisitos y sus plantillas institucionales.</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={isSyncing} onClick={handleSyncSupabase} className="catalog-secondary" aria-label="Actualizar catálogo"><RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />{isSyncing ? 'Actualizando…' : 'Actualizar'}</button><button type="button" onClick={handleOpenCreateType} className="catalog-primary"><Plus size={16} /> Nuevo tipo de solicitud</button></div>
+        </header>
+        <dl className="grid grid-cols-3 gap-3">{[
+          { label: 'Tipos activos', value: types.filter((type) => type.is_active).length },
+          { label: 'Tipos inactivos', value: types.filter((type) => !type.is_active).length },
+          { label: 'Requisitos', value: requirements.filter((requirement) => requirement.is_active !== false).length },
+        ].map((metric) => <div key={metric.label} className="rounded-2xl border border-[#E5E3DC] bg-white p-4 sm:p-5"><dt className="text-xs text-stone-500">{metric.label}</dt><dd className="mt-2 text-2xl font-bold text-[#14281D]">{isLoading && !isInitialized ? '—' : metric.value}</dd></div>)}</dl>
+        <div className="catalog-section !p-4">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-3.5 text-stone-400" /><input aria-label="Buscar tipos de solicitud" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar por nombre, código o descripción" className="w-full min-h-11 rounded-xl border border-[#E5E3DC] bg-white pl-10 pr-3 text-sm" /></div>
+            <div className="flex flex-wrap gap-3"><label className="sr-only" htmlFor="catalog-status">Estado</label><select id="catalog-status" value={filterStatus} onChange={(event) => { const value = event.target.value; if (value === 'ALL' || value === 'ACTIVE' || value === 'INACTIVE') setFilterStatus(value); }} className="min-h-11 rounded-xl border border-[#E5E3DC] bg-white px-3 text-sm"><option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option></select>
+              <label className="sr-only" htmlFor="catalog-committee">Revisión en comité</label><select id="catalog-committee" value={committeeFilter} onChange={(event) => setCommitteeFilter(event.target.value)} className="min-h-11 rounded-xl border border-[#E5E3DC] bg-white px-3 text-sm"><option value="ALL">Todos los trámites</option><option value="COMMITTEE">Revisión en comité</option><option value="DIRECT">Trámite directo</option></select></div>
           </div>
         </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-xs">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-2.5 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Buscar por código, nombre o descripción..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#E5E3DC] rounded-lg text-xs text-[#14281D] placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-[#14281D]"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-stone-500 font-medium">Estado:</span>
-          {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                filterStatus === status
-                  ? 'bg-[#14281D] text-white'
-                  : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              {status === 'ALL' ? 'Todos' : status === 'ACTIVE' ? 'Activos' : 'Inactivos'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Grid: Application Types List & Selected Type Requirements */}
-      {isLoading && !isInitialized ? <SplitWorkspaceSkeleton label="Cargando catálogo de trámites…" /> : <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: List of Application Types (5 cols) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
-              Tipos de Solicitud ({filteredTypes.length})
-            </span>
-            <span className="text-[11px] text-stone-400">Seleccione uno para ver requisitos</span>
-          </div>
-
-          <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-            {filteredTypes.map((type) => {
-              const isSelected = selectedType?.id === type.id;
-              const typeReqs = requirements.filter((r) => r.application_type_id === type.id && r.is_active !== false);
-              const mandatoryCount = typeReqs.filter((r) => r.is_mandatory).length;
-              const subsanableCount = typeReqs.filter((r) => r.is_subsanable).length;
-
-              return (
-                <div
-                  key={type.id}
-                  onClick={() => setSelectedTypeId(type.id)}
-                  className={`p-4 rounded-xl border text-xs transition-all cursor-pointer relative ${
-                    isSelected
-                      ? 'bg-white border-[#14281D] shadow-sm ring-1 ring-[#14281D]'
-                      : 'bg-white border-[#E5E3DC] hover:border-stone-300 hover:shadow-2xs'
-                  } ${!type.is_active ? 'opacity-65' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-[#F7F6F2] border border-[#E5E3DC] text-[#14281D]">
-                        {type.code}
-                      </span>
-                      {type.requires_committee ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          Pasa a Sesión
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
-                          Trámite Directo
-                        </span>
-                      )}
-                      {!type.is_active && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-stone-200 text-stone-600">
-                          Inactivo
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" title="Eliminar trámite" aria-label={`Eliminar ${type.name}`} onClick={() => confirmChange('Eliminar o archivar trámite', type.name, () => deleteType(type.id))} className="min-h-12 px-2 text-rose-700"><Trash2 size={15} /></button>
-                      <button
-                        onClick={() => handleOpenEditType(type)}
-                        aria-label={`Editar ${type.name}`} title="Editar tipo"
-                        className="p-1 text-stone-400 hover:text-[#14281D] hover:bg-stone-100 rounded transition-colors cursor-pointer"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={() => confirmChange(type.is_active ? 'Desactivar trámite' : 'Activar trámite', type.name, () => toggleTypeActive(type.id))}
-                        title={type.is_active ? 'Desactivar trámite' : 'Activar trámite'}
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                          type.is_active
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                            : 'bg-stone-100 text-stone-600 border-stone-300 hover:bg-stone-200'
-                        }`}
-                      >
-                        {type.is_active ? 'Activo' : 'Inactivo'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <h4 className="font-bold text-[#14281D] text-xs leading-snug mb-1">
-                    {type.name}
-                  </h4>
-
-                  {type.description && (
-                    <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed mb-2.5">
-                      {type.description}
-                    </p>
-                  )}
-
-                  {/* Badges footer */}
-                  <div className="flex items-center justify-between text-[11px] text-stone-500 pt-2 border-t border-stone-100">
-                    <span className="flex items-center gap-1">
-                      <FileText size={12} className="text-stone-400" />
-                      <strong>{typeReqs.length}</strong> requisitos ({mandatoryCount} obligatorios)
-                    </span>
-                    <span className="flex items-center gap-1 text-[#14281D] font-medium">
-                      <span>Ver requisitos</span>
-                      <ChevronRight size={13} />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {filteredTypes.length === 0 && (
-              <div className="text-center py-8 bg-white rounded-xl border border-dashed border-stone-300 p-4 text-xs text-stone-500">
-                No se encontraron tipos de solicitud con los filtros aplicados.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Requisitos del Tipo Seleccionado (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E5E3DC] p-5 shadow-xs space-y-4">
-          {selectedType ? (
-            <>
-              {/* Header of selected type */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-stone-100">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 bg-[#14281D] text-white rounded">
-                      {selectedType.code}
-                    </span>
-                    <h3 className="font-bold text-sm text-[#14281D]">
-                      {selectedType.name}
-                    </h3>
-                  </div>
-                  {selectedType.description && (
-                    <p className="text-xs text-stone-600 mt-1 leading-relaxed">
-                      {selectedType.description}
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleOpenAddReq}
-                  className="shrink-0 px-3 py-1.5 bg-[#A3E635] hover:bg-[#84CC16] text-[#14281D] text-xs font-bold rounded-lg border border-[#84CC16] transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Plus size={14} />
-                  <span>Agregar Requisito</span>
-                </button>
-              </div>
-
-              {/* Requirements Count and Status Summary */}
-              <div className="flex items-center justify-between text-xs text-stone-600">
-                <span>
-                  Requisitos configurados: <strong>{currentReqs.length}</strong>
-                </span>
-                <span className="text-[11px] text-stone-500">
-                  {currentReqs.filter((r) => r.is_mandatory).length} Obligatorios ·{' '}
-                  {currentReqs.filter((r) => r.is_subsanable).length} Subsanables
-                </span>
-              </div>
-
-              {/* List of Requirements */}
-              <div className="space-y-3">
-                {currentReqs.map((req, idx) => (
-                  <div
-                    key={req.id}
-                    className="p-3.5 rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] hover:bg-[#FAF9F6] transition-colors text-xs space-y-2 relative"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#14281D] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                          {idx + 1}
-                        </span>
-                        <h4 className="font-bold text-[#14281D] text-xs">
-                          {req.name}
-                        </h4>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleOpenEditReq(req)}
-                          title="Editar requisito"
-                          className="p-1 text-stone-400 hover:text-[#14281D] hover:bg-stone-200 rounded transition-colors cursor-pointer"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          onClick={() => confirmChange('Eliminar o archivar requisito', req.name, () => removeRequirement(req.id))}
-                          title="Eliminar requisito"
-                          className="p-1 text-stone-400 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {req.description && (
-                      <p className="text-[11px] text-stone-600 pl-7 leading-relaxed">
-                        {req.description}
-                      </p>
-                    )}
-
-                    {/* Metadata & Tag Badges */}
-                    <div className="flex flex-wrap items-center gap-1.5 pl-7 pt-1">
-                      {/* Obligatorio / Opcional */}
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
-                          req.is_mandatory
-                            ? 'bg-stone-900 text-white border-stone-900'
-                            : 'bg-stone-100 text-stone-600 border-stone-300'
-                        }`}
-                      >
-                        {req.is_mandatory ? 'Obligatorio' : 'Opcional / Condicional'}
-                      </span>
-
-                      {/* Subsanable vs No Subsanable */}
-                      {req.is_subsanable ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#A3E635] text-[#14281D] border border-[#84CC16] flex items-center gap-1">
-                          <Clock size={11} />
-                          <span>Subsanable ({req.cure_deadline_days} días hábiles)</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1">
-                          <ShieldAlert size={11} />
-                          <span>No subsanable (Causal de rechazo)</span>
-                        </span>
-                      )}
-
-                      {/* Formatos y tamaño */}
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-stone-700 border border-stone-200">
-                        {req.allowed_formats
-                          .map((f) => f.replace('application/', '').replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'))
-                          .join(', ')}
-                        {' · '}
-                        max {req.max_size_mb} MB
-                      </span>
-
-                      {/* Template Link */}
-                      {req.template_url && <div className="space-y-1"><p className="text-xs">{req.template_url.split('/').pop()} · Versión {req.template_revision ?? 1}{req.template_updated_at ? ` · ${new Date(req.template_updated_at).toLocaleDateString('es-CO')}` : ''}</p><TemplateDownload path={req.template_url} /></div>}
-                    </div>
-                  </div>
-                ))}
-
-                {currentReqs.length === 0 && (
-                  <div className="text-center py-8 bg-stone-50 rounded-xl border border-dashed border-stone-300 p-4 text-xs text-stone-500 space-y-2">
-                    <AlertCircle size={20} className="mx-auto text-stone-400" />
-                    <div>No hay requisitos asignados a este tipo de trámite.</div>
-                    <button
-                      onClick={handleOpenAddReq}
-                      className="px-3 py-1.5 bg-[#14281D] text-white text-xs font-semibold rounded-lg hover:bg-[#1E3A2B] cursor-pointer inline-flex items-center gap-1"
-                    >
-                      <Plus size={13} />
-                      <span>Agregar el primer requisito</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-12 text-xs text-stone-500">
-              Seleccione un tipo de trámite a la izquierda para inspeccionar y configurar sus requisitos.
-            </div>
-          )}
-        </div>
-      </div>}
-
-      {/* Modal: Crear / Editar Tipo de Trámite */}
-      <ResponsiveOverlay isOpen={Boolean((isCreateTypeOpen || editingType))} onClose={() => { if (!saving) { setIsCreateTypeOpen(false); setEditingType(null); } }} label="Tipo de trámite">
-        {(isCreateTypeOpen || editingType) && (<>
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-[#E5E3DC] shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="px-6 py-4 bg-[#F7F6F2] border-b border-[#E5E3DC] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-[#14281D]" />
-                <h3 className="font-bold text-sm text-[#14281D]">
-                  {editingType ? 'Editar Tipo de Trámite' : 'Registrar Nuevo Tipo de Trámite'}
-                </h3>
-              </div>
-              <button disabled={saving} aria-label="Cerrar panel"
-                onClick={() => {
-                  setIsCreateTypeOpen(false);
-                  setEditingType(null);
-                }}
-                className="text-stone-400 hover:text-stone-700 text-xs font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveType} className="p-6 space-y-4 text-xs">
-              <fieldset disabled={saving} className="contents"><legend className="sr-only">Datos del catálogo institucional</legend>
-              {typeError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2">
-                  <AlertCircle size={15} />
-                  <span>{typeError}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-stone-700">Código Único Institucional *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej. SOL-01, MOD-RUB"
-                    value={typeForm.code}
-                    onChange={(e) => setTypeForm({ ...typeForm, code: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs font-mono uppercase focus:ring-1 focus:ring-[#14281D] focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-stone-700">Orden de Visualización</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={typeForm.display_order}
-                    onChange={(e) => setTypeForm({ ...typeForm, display_order: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs focus:ring-1 focus:ring-[#14281D] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Nombre del Tipo de Trámite *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. Presentación de Proyecto de Investigación"
-                  value={typeForm.name}
-                  onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs focus:ring-1 focus:ring-[#14281D] focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Descripción & Alcance</label>
-                <textarea
-                  rows={3}
-                  placeholder="Explique el propósito y a qué público investigador está dirigido..."
-                  value={typeForm.description}
-                  onChange={(e) => setTypeForm({ ...typeForm, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F7F6F2] border border-[#E5E3DC] rounded-lg text-xs focus:ring-1 focus:ring-[#14281D] focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={typeForm.requires_committee}
-                    onChange={(e) => setTypeForm({ ...typeForm, requires_committee: e.target.checked })}
-                    className="rounded text-[#14281D] focus:ring-[#14281D]"
-                  />
-                  <span className="font-semibold text-[#14281D]">
-                    Requiere deliberación y votación en Sesión de Comité
-                  </span>
-                </label>
-                <p className="text-[11px] text-stone-500 pl-5">
-                  Si se desmarca, el trámite puede ser resuelto directamente por el personal administrativo o secretaría técnica sin ingresar al orden del día colegiado.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreateTypeOpen(false);
-                    setEditingType(null);
-                  }}
-                  className="px-3.5 py-2 text-stone-600 hover:bg-stone-100 rounded-lg font-medium cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit" disabled={saving}
-                  className="px-4 py-2 bg-[#14281D] hover:bg-[#1E3A2B] text-white font-bold rounded-lg cursor-pointer"
-                >
-                  {saving ? 'Guardando…' : editingType ? 'Guardar Cambios' : 'Crear Tipo de Trámite'}
-                </button>
-              </div>
-            </fieldset></form>
-          </div>
-        </>)}
-      </ResponsiveOverlay>
-
+        {isLoading && !isInitialized ? <SplitWorkspaceSkeleton label="Cargando catálogo de trámites…" /> : <>
+          <p className="text-sm text-stone-500">{filteredTypes.length} tipos de solicitud</p>
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{filteredTypes.map((type) => {
+            const typeRequirements = requirements.filter((requirement) => (requirement.application_type_id || requirement.request_type_id) === type.id && requirement.is_active !== false);
+            return <article key={type.id} className="catalog-type-card">
+              <header className="flex items-start justify-between gap-3"><IdentityIcon {...getTypeAppearance(type)} size={26} /><span className={`rounded-full px-3 py-1 text-xs font-semibold ${type.is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-600'}`}>{type.is_active ? 'Activo' : 'Inactivo'}</span></header>
+              <div><p className="mb-2 font-mono text-xs text-stone-500">{type.code}</p><h2 className="text-base font-bold text-[#14281D]"><button type="button" onClick={() => handleOpenEditType(type)} className="text-left hover:underline underline-offset-4">{type.name}</button></h2></div>
+              <p className="text-sm leading-relaxed text-stone-600">{type.description || 'Sin descripción registrada.'}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-stone-600"><span className="rounded-lg bg-[#F7F6F2] px-2.5 py-1.5">{typeRequirements.length} requisitos</span><span className="rounded-lg bg-[#F7F6F2] px-2.5 py-1.5">{type.requires_committee ? 'Revisión en comité' : 'Trámite directo'}</span></div>
+              <footer className="mt-auto flex flex-wrap justify-between gap-2 border-t border-[#E5E3DC] pt-4">
+                <button type="button" onClick={() => handleOpenEditType(type)} className="catalog-secondary" aria-label={`Editar ${type.name}`}><Edit2 size={14} /> Editar y ver requisitos</button>
+                <div className="flex gap-1"><button type="button" onClick={() => confirmChange(type.is_active ? 'Desactivar trámite' : 'Activar trámite', type.name, () => toggleTypeActive(type.id))} className="min-h-11 px-2 text-xs font-semibold text-stone-600">{type.is_active ? 'Desactivar' : 'Activar'}</button><button type="button" aria-label={`Eliminar ${type.name}`} onClick={() => confirmChange('Eliminar o archivar trámite', type.name, () => deleteType(type.id))} className="min-h-11 min-w-11 inline-flex items-center justify-center text-rose-700"><Trash2 size={16} /></button></div>
+              </footer>
+            </article>;
+          })}</div>
+          {!filteredTypes.length && <div className="catalog-section py-12 text-center"><Layers size={32} className="mx-auto text-stone-300" /><h2 className="font-bold">No se encontraron tipos de solicitud</h2><p className="text-sm text-stone-500">Pruebe otra búsqueda o ajuste los filtros.</p></div>}
+        </>}
+      </>}
       {/* Modal: Agregar / Editar Requisito */}
       <ResponsiveOverlay isOpen={Boolean((isAddReqOpen || editingReq))} onClose={() => { if (!saving) { setIsAddReqOpen(false); setEditingReq(null); } }} label="Requisito documental">
         {(isAddReqOpen || editingReq) && (<>
@@ -771,7 +331,7 @@ export function CatalogManagement() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveReq} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSaveReq} className="p-4 sm:p-6 space-y-5 text-sm">
               <fieldset disabled={saving} className="contents"><legend className="sr-only">Datos del catálogo institucional</legend>
               {reqError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2">
@@ -781,10 +341,12 @@ export function CatalogManagement() {
               )}
 
               <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Nombre del Requisito *</label>
+                <label htmlFor="catalog-req-name" className="font-semibold text-stone-700">Nombre del requisito *</label>
                 <input
                   type="text"
                   required
+                  id="catalog-req-name"
+                  maxLength={300}
                   placeholder="Ej. Presupuesto detallado en Excel o PDF"
                   value={reqForm.name}
                   onChange={(e) => setReqForm({ ...reqForm, name: e.target.value })}
@@ -793,9 +355,9 @@ export function CatalogManagement() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Instrucciones / Descripción para el Investigador</label>
-                <textarea
-                  rows={2}
+                <label htmlFor="catalog-req-description" className="font-semibold text-stone-700">Instrucciones para el solicitante</label>
+                <textarea id="catalog-req-description"
+                  rows={3}
                   placeholder="Detalle los puntos clave que debe contener el documento..."
                   value={reqForm.description}
                   onChange={(e) => setReqForm({ ...reqForm, description: e.target.value })}
@@ -839,14 +401,15 @@ export function CatalogManagement() {
               {/* Plazo de subsanación & Tamaño máximo */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-semibold text-stone-700 flex items-center gap-1">
+                  <label htmlFor="catalog-req-days" className="font-semibold text-stone-700 flex items-center gap-1">
                     <Clock size={12} />
                     <span>Días Hábiles Subsanación</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="30"
+                    id="catalog-req-days"
+                    max="365"
                     disabled={!reqForm.is_subsanable}
                     value={reqForm.cure_deadline_days}
                     onChange={(e) => setReqForm({ ...reqForm, cure_deadline_days: Number(e.target.value) })}
@@ -856,10 +419,11 @@ export function CatalogManagement() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-stone-700">Tamaño Máximo (MB)</label>
+                  <label htmlFor="catalog-req-size" className="font-semibold text-stone-700">Tamaño máximo (MB)</label>
                   <input
                     type="number"
                     min="1"
+                    id="catalog-req-size"
                     max="10"
                     value={reqForm.max_size_mb}
                     onChange={(e) => setReqForm({ ...reqForm, max_size_mb: Number(e.target.value) })}

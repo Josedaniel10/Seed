@@ -1,3 +1,5 @@
+import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
+import { getTypeAppearance } from '../catalog/typeAppearance.ts';
 import { TemplateDownload } from '../catalog/TemplateDownload.tsx';
 import { FundingFields } from '../calls/FundingFields.tsx';
 import { financingError, useCalls } from '../calls/callsApi.ts';
@@ -459,7 +461,7 @@ function RequestSubmissionForm() {
               </select>
               {isCatalogLoading && !isCatalogInitialized && <p role="status" className="text-sm text-stone-600">Consultando tipos de solicitud…</p>}
               {selectedType && (!isCatalogLoading || isCatalogInitialized) && <div className="rounded-xl bg-[#F7F6F2] p-3 space-y-2">
-                <h3 className="text-base font-semibold text-[#14281D]">{selectedType.name}</h3>
+                <div className="flex items-center gap-3"><IdentityIcon {...getTypeAppearance(selectedType)} /><h3 className="text-base font-semibold text-[#14281D]">{selectedType.name}</h3></div>
                 <p className="text-sm text-stone-600">{selectedType.description}</p>
               </div>}
             </div>
@@ -496,7 +498,7 @@ function RequestSubmissionForm() {
                           {type.requires_committee ? 'Deliberación en Comité' : 'Trámite Administrativo'}
                         </span>
                       </div>
-                      <h3 className="font-bold text-[#14281D] text-sm leading-snug">{type.name}</h3>
+                      <div className="flex items-center gap-3"><IdentityIcon {...getTypeAppearance(type)} /><h3 className="font-bold text-[#14281D] text-sm leading-snug">{type.name}</h3></div>
                       <p className="text-[11px] text-stone-600 mt-1 leading-relaxed">
                         {type.description}
                       </p>

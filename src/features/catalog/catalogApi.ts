@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../../lib/supabase.ts';
 import type { ApplicationType, Requirement } from '../../types/database.ts';
 
 export const typeSchema = z.object({ id: z.string(), code: z.string(), name: z.string(), description: z.string().nullable(),
+  icon_key: z.string().nullable().optional(), accent_color: z.string().nullable().optional(),
   requires_committee: z.boolean(), is_active: z.boolean(), display_order: z.number(), created_at: z.string() });
 export const requirementSchema = z.object({ id: z.string(), application_type_id: z.string(), name: z.string(), description: z.string().nullable(),
   is_mandatory: z.boolean(), is_subsanable: z.boolean(), allowed_formats: z.array(z.string()), max_size_mb: z.number(),

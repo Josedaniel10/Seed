@@ -32,7 +32,7 @@ test('catalog requires confirmation before removing a type', async () => {
   let deletes = 0;
   await mount();
   await act(async () => useCatalogStore.setState({ deleteType: async () => { deletes++; return { success: true }; } }));
-  await click('button[title="Eliminar trámite"]');
+  await click('button[aria-label="Eliminar Trámite de prueba"]');
   assert.equal(deletes, 0);
   assert.match(document.querySelector('dialog').textContent, /se archivan/);
   const confirm = [...document.querySelectorAll('dialog button')].find(button => button.textContent === 'Eliminar o archivar trámite');
@@ -43,7 +43,7 @@ test('catalog requires confirmation before removing a type', async () => {
 test('failed edits keep the form open and show the server error', async () => {
   await mount();
   await act(async () => useCatalogStore.setState({ updateType: async () => ({ success: false, error: 'Código ya utilizado' }) }));
-  await click('button[title="Editar tipo"]');
+  await click('button[aria-label="Editar Trámite de prueba"]');
   const form = document.querySelector('form'); assert.ok(form);
   await act(async () => form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
   assert.match(document.body.textContent, /Código ya utilizado/);
@@ -53,11 +53,47 @@ test('failed edits keep the form open and show the server error', async () => {
 
 test('requirement editor exposes a labeled real file input with format and size instructions', async () => {
   await mount();
-  await click('button[title="Editar requisito"]');
+  await click('button[aria-label="Editar Trámite de prueba"]');
+  await click('.catalog-requirement summary');
+  const edit = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Editar requisito'));
+  await act(async () => edit.click());
   const input = document.querySelector('#catalog-template'); assert.ok(input);
   assert.equal(input.type, 'file');
   assert.equal(input.accept, '.pdf,.docx,.xlsx');
   assert.ok(document.querySelector('label[for="catalog-template"]'));
   assert.equal(input.getAttribute('aria-describedby'), 'catalog-template-help');
   assert.match(document.querySelector('#catalog-template-help').textContent, /10 MB/);
+});
+
+
+test('catalog saves its selected identity and keeps the requirement workspace available', async () => {
+  await mount();
+  let saved;
+  await act(async () => useCatalogStore.setState({ updateType: async (id, values) => { saved = { id, ...values }; return { success: true }; } }));
+  assert.equal(document.querySelectorAll('.catalog-type-card').length, 1);
+  assert.equal(document.querySelector('form'), null);
+  await click('button[aria-label="Editar Trámite de prueba"]');
+  assert.match(document.querySelector('h1').textContent, /Editar tipo de solicitud/);
+  await click('input[value="flask"]');
+  await click('input[value="violet"]');
+  await act(async () => document.querySelector('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(saved.id, 'type');
+  assert.equal(saved.icon_key, 'flask');
+  assert.equal(saved.accent_color, 'violet');
+  assert.ok(document.querySelector('.catalog-requirement'));
+  assert.equal(document.querySelector('dialog[open]'), null);
+});
+
+test('leaving the type editor preserves unsaved appearance until discard is confirmed', async () => {
+  await mount();
+  await click('button[aria-label="Editar Trámite de prueba"]');
+  await click('input[value="calendar"]');
+  const back = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Volver al catálogo'));
+  await act(async () => back.click());
+  assert.ok(document.querySelector('dialog[open]'));
+  assert.ok(document.querySelector('input[value="calendar"]').checked);
+  const confirm = [...document.querySelectorAll('dialog button')].find((button) => button.textContent === 'Salir sin guardar');
+  await act(async () => confirm.click());
+  assert.ok(document.querySelector('.catalog-type-card'));
+  assert.equal(document.querySelector('form'), null);
 });

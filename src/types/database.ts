@@ -43,6 +43,8 @@ export interface ResearchGroup {
 }
 
 export interface RequestType {
+  icon_key?: string | null;
+  accent_color?: string | null;
   id: string;
   code: string;
   name: string;

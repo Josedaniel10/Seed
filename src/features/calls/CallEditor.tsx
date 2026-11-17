@@ -1,3 +1,8 @@
+import { IdentityPicker } from '../../components/ui/IdentityPicker.tsx';
+import { IdentityIcon } from '../../components/ui/IdentityIcon.tsx';
+import { getTypeAppearance } from '../catalog/typeAppearance.ts';
+import { CallCover, StoredCallCover } from './CallCover.tsx';
+import { validateCoverFile } from './coverFiles.ts';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { ArrowLeft, ArrowRight, Check, CalendarDays, Save } from 'lucide-react';
@@ -8,6 +13,10 @@ import type { FundingCall } from './callsApi.ts';
 
 export interface CallDraftInput {
   id?: string;
+  icon_key: string;
+  accent_color: string;
+  cover_image_path: string | null;
+  cover_file?: File | null;
   title: string;
   description: string;
   faculty: string;
@@ -34,10 +43,18 @@ function localDate(value?: string): string {
 }
 
 export function CallEditor({ call, faculties, types, onSave, onCancel }: Props): ReactElement {
-  const [values, setValues] = useState(() => ({ title: call?.title ?? '', description: call?.description ?? '',
+  const [values, setValues] = useState(() => ({ icon_key: call?.icon_key ?? 'megaphone', accent_color: call?.accent_color ?? 'forest', cover_image_path: call?.cover_image_path ?? null, title: call?.title ?? '', description: call?.description ?? '',
     faculty: call?.faculty ?? faculties[0] ?? '', audience: call?.audience ?? 'all',
     type_ids: call?.type_ids ?? [], opens_at: localDate(call?.opens_at), closes_at: localDate(call?.closes_at),
     max_amount: call?.max_amount?.toString() ?? '' }));
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!coverFile) { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(coverFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverFile]);
   const [step, setStep] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -69,7 +86,8 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
     if (step < 3) { setError(''); setStep(step + 1); return; }
     saving.current = true; setBusy(true); setError('');
     try {
-      await onSave({ id: call?.id, title: values.title.trim(), description: values.description.trim(),
+      await onSave({ id: call?.id, icon_key: values.icon_key, accent_color: values.accent_color,
+        cover_image_path: values.cover_image_path, cover_file: coverFile, title: values.title.trim(), description: values.description.trim(),
         faculty: values.faculty, audience: values.audience, type_ids: values.type_ids,
         opens_at: new Date(values.opens_at + '-05:00').toISOString(),
         closes_at: new Date(values.closes_at + '-05:00').toISOString(),
@@ -97,6 +115,29 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
         {step === 0 && <>
           <label className="block text-xs font-semibold">Nombre de la convocatoria<input name="title" required maxLength={200} value={values.title} onChange={(e) => update('title', e.target.value)} className={field} placeholder="Ej. Apoyo a proyectos de investigación 2027" /></label>
           <label className="block text-xs font-semibold">Descripción y requisitos<textarea name="description" required minLength={20} rows={6} value={values.description} onChange={(e) => update('description', e.target.value)} className={field} placeholder="Describe el objetivo, los requisitos para participar y los criterios de evaluación." /><span className="block text-[11px] font-normal text-stone-500 mt-1">Incluye la información que necesitarán los solicitantes. Mínimo 20 caracteres.</span></label>
+          <section className="space-y-4 border-t border-[#E5E3DC] pt-5" aria-labelledby="call-appearance-title">
+            <div><h3 id="call-appearance-title" className="font-bold text-sm">Apariencia de la tarjeta</h3><p className="text-xs text-stone-500 mt-1">Añade una portada o elige un icono y un color para identificar esta oportunidad.</p></div>
+            <div className="grid lg:grid-cols-2 gap-6 items-start">
+              <div className="space-y-4">
+                <label className="block text-sm font-semibold">Imagen de portada (opcional)
+                  <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" aria-describedby="call-cover-help" className="mt-2 block w-full min-w-0 rounded-xl border border-[#E5E3DC] p-3 text-xs"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]; event.target.value = '';
+                      if (!file) return;
+                      try { validateCoverFile(file); setCoverFile(file); setDirty(true); setError(''); }
+                      catch (failure) { setError(failure instanceof Error ? failure.message : 'Imagen inválida.'); }
+                    }} />
+                </label>
+                <p id="call-cover-help" className="text-xs text-stone-500">JPG, PNG o WebP · Máximo 3 MB. Usa una imagen horizontal; se recortará para llenar la cabecera.</p>
+                {(coverFile || values.cover_image_path) && <div className="flex flex-wrap gap-2 items-center text-xs"><span className="break-words [overflow-wrap:anywhere]">{coverFile?.name ?? 'Portada actual'}</span><button type="button" className={secondary} onClick={() => { setCoverFile(null); update('cover_image_path', null); }}>Quitar portada</button></div>}
+                <IdentityPicker value={values} onChange={(identity) => { setValues((previous) => ({ ...previous, ...identity })); setDirty(true); }} />
+              </div>
+              <aside aria-label="Vista previa de la convocatoria" className="overflow-hidden rounded-2xl border border-[#E5E3DC] bg-white">
+                {values.cover_image_path && !previewUrl ? <StoredCallCover path={values.cover_image_path} {...values} /> : <CallCover imageUrl={previewUrl} {...values} />}
+                <div className="p-4 space-y-2"><span className="text-xs text-stone-500">Vista previa · {values.faculty}</span><h3 className="font-semibold text-[#14281D] break-words">{values.title || 'Nombre de la convocatoria'}</h3><p className="text-xs text-stone-500">El icono se muestra cuando no hay una imagen disponible.</p></div>
+              </aside>
+            </div>
+          </section>
         </>}
         {step === 1 && <>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -106,7 +147,7 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
           <fieldset><legend className="text-xs font-semibold">Tipos de solicitud admitidos</legend><p className="text-xs text-stone-500 mt-1 mb-3">Selecciona al menos uno.</p>
             <div className="grid sm:grid-cols-2 gap-2">{availableTypes.map((type) => <label key={type.id} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${values.type_ids.includes(type.id) ? 'border-lime-600 bg-lime-50/50' : 'border-[#E5E3DC] hover:bg-stone-50'}`}>
               <input type="checkbox" name="type_ids" value={type.id} checked={values.type_ids.includes(type.id)} onChange={(e) => update('type_ids', e.target.checked ? [...values.type_ids, type.id] : values.type_ids.filter((id) => id !== type.id))} className="mt-0.5 accent-[#14281D] shrink-0" />
-              <span className="text-xs leading-relaxed"><span className="block font-semibold">{type.name}</span><span className="text-[10px] text-stone-500">{type.code}{!type.is_active ? ' · Inactivo' : ''}</span></span>
+              <IdentityIcon {...getTypeAppearance(type)} size={18} /><span className="text-xs leading-relaxed"><span className="block font-semibold">{type.name}</span><span className="text-[10px] text-stone-500">{type.code}{!type.is_active ? ' · Inactivo' : ''}</span></span>
             </label>)}</div>
             {!availableTypes.length && <p className="text-xs text-amber-700">No hay tipos de solicitud disponibles. Solicita al administrador que habilite al menos uno.</p>}
           </fieldset>
@@ -119,6 +160,7 @@ export function CallEditor({ call, faculties, types, onSave, onCancel }: Props):
           <label className="block text-xs font-semibold max-w-sm">Tope de financiamiento por solicitud (COP)<input type="number" name="max_amount" min="0.01" step="0.01" value={values.max_amount} onChange={(e) => update('max_amount', e.target.value)} className={field} placeholder="Ej. 5000000" /><span className="block text-[11px] font-normal text-stone-500 mt-1">Opcional. Déjalo vacío si no se define un tope individual.</span></label>
         </>}
         {step === 3 && <div className="space-y-4 text-sm">
+          {values.cover_image_path && !previewUrl ? <StoredCallCover path={values.cover_image_path} {...values} /> : <CallCover imageUrl={previewUrl} {...values} />}
           <div className="rounded-xl bg-[#F7F6F2] p-4"><span className="text-[10px] uppercase font-bold text-stone-500">Borrador · aún no publicado</span><h3 className="font-bold mt-1 break-words">{values.title}</h3><p className="text-xs text-stone-600 mt-2 whitespace-pre-wrap break-words">{values.description}</p></div>
           <dl className="grid sm:grid-cols-2 gap-4 text-xs">
             <div><dt className="text-stone-500">Facultad o área</dt><dd className="font-semibold mt-1">{values.faculty}</dd></div>

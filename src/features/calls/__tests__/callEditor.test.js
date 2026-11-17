@@ -60,7 +60,7 @@ test('creation guides required information, participants and dates before review
   await clickText('Anterior'); assert.equal(document.querySelector('[name="opens_at"]').value, '2027-01-10T08:00');
   await submit(); await submit();
   assert.equal(saves.length, 1);
-  assert.deepEqual(saves[0], { id: undefined, title: 'Nueva oportunidad', description: 'Requisitos y criterios completos para participar.',
+  assert.deepEqual(saves[0], { id: undefined, icon_key: 'megaphone', accent_color: 'forest', cover_image_path: null, cover_file: null, title: 'Nueva oportunidad', description: 'Requisitos y criterios completos para participar.',
     faculty: 'Ingeniería', audience: 'all', type_ids: ['type'], opens_at: '2027-01-10T13:00:00.000Z',
     closes_at: '2027-02-10T22:00:00.000Z', max_amount: null });
 });
@@ -101,4 +101,16 @@ test('saving disables editing and cancellation and prevents duplicate writes', a
   await clickText('Volver a convocatorias'); assert.equal(cancellations, 0);
   await act(async () => finish());
   assert.equal(document.querySelector('button[type="submit"]').disabled, false);
+});
+
+
+test('call appearance is previewed and included in the saved draft', async () => {
+  await mount(call);
+  await act(async () => document.querySelector('input[value="leaf"]').click());
+  await act(async () => document.querySelector('input[value="teal"]').click());
+  assert.ok(document.querySelector('input[value="leaf"]').checked);
+  await submit(); await submit(); await submit(); await submit();
+  assert.equal(saves[0].icon_key, 'leaf');
+  assert.equal(saves[0].accent_color, 'teal');
+  assert.equal(saves[0].cover_image_path, null);
 });

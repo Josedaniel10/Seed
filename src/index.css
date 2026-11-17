@@ -1,5 +1,38 @@
 @import "tailwindcss";
 
+.identity-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 10px; border-radius: 14px; vertical-align: middle; }
+.request-secondary .identity-icon { padding: 6px; border-radius: 9px; }
+.identity-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; }
+.identity-option { position: relative; display: flex; min-height: 82px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 6px; border: 1px solid #e5e3dc; border-radius: 12px; color: #57534e; font-size: 11px; cursor: pointer; }
+.identity-option input, .identity-color input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: pointer; }
+.identity-option:has(:checked) { border-color: #4d7c0f; background: #f2f7ed; color: #28543b; box-shadow: inset 0 0 0 1px #4d7c0f; }
+.identity-option:has(:checked)::after { content: '✓'; position: absolute; top: 3px; right: 6px; font-size: 11px; font-weight: 700; }
+.identity-option:has(:focus-visible), .identity-color:has(:focus-visible) { outline: 2px solid #4d7c0f; outline-offset: 3px; }
+.identity-color { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.identity-color > span { width: 28px; height: 28px; border-radius: 50%; }
+.identity-color:has(:checked) { border-color: #14281d; }
+.identity-color:has(:checked)::after { content: '✓'; position: absolute; color: white; font-size: 14px; font-weight: 700; pointer-events: none; }
+.call-cover { display: block; width: 100%; aspect-ratio: 3 / 1; height: auto; object-fit: cover; flex-shrink: 0; }
+.call-cover-fallback { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.call-cover-fallback .identity-icon { position: relative; z-index: 1; padding: 16px; background: rgb(255 255 255 / 60%) !important; border: 1px solid rgb(255 255 255 / 80%); border-radius: 22px; }
+.call-cover-orbit { position: absolute; width: 55%; aspect-ratio: 1; border: 1px solid currentColor; opacity: .12; border-radius: 50%; right: -8%; top: -75%; }
+.call-cover-orbit-second { right: auto; left: -16%; top: 5%; width: 65%; }
+.catalog-section { min-width: 0; padding: 24px; border: 1px solid #e5e3dc; border-radius: 18px; background: white; color: #14281d; display: flex; flex-direction: column; gap: 20px; overflow-wrap: break-word; }
+.catalog-type-card { min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 24px; border: 1px solid #e5e3dc; border-radius: 18px; background: white; overflow-wrap: anywhere; }
+.catalog-type-card:hover { border-color: #becbb7; }
+.catalog-primary, .catalog-secondary { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 1px solid #e5e3dc; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.catalog-primary { background: #14281d; border-color: #14281d; color: white; }
+.catalog-primary:hover { background: #1e3a2b; }
+.catalog-secondary { background: white; color: #57534e; }
+.catalog-secondary:hover { background: #f7f6f2; }
+.catalog-primary:disabled, .catalog-secondary:disabled { opacity: .5; cursor: wait; }
+.catalog-primary:focus-visible, .catalog-secondary:focus-visible, .catalog-type-card button:focus-visible, .catalog-requirement summary:focus-visible { outline: 2px solid #4d7c0f; outline-offset: 3px; }
+.catalog-requirement { border: 1px solid #e5e3dc; border-radius: 12px; background: #fcfcf9; overflow-wrap: anywhere; }
+@media (width < 768px) {
+  .catalog-section, .catalog-type-card { padding: 16px; }
+  .identity-option input[type="radio"], .identity-color input[type="radio"] { width: 100%; height: 100%; margin: 0; }
+}
+
 /* Request lists adapt to the space left by the sidebar, including on tablets. */
 .request-list-container { container: request-list / inline-size; }
 .request-list-table { border-collapse: separate; border-spacing: 0; color: #14281d; }
