@@ -40,11 +40,13 @@ let root;
 let cache;
 let switching;
 let deniedVisits;
+// Mock tokens must stay identical when a test crosses a wall-clock second.
+const tokenExpiry = Math.floor(Date.now() / 1000) + 3600;
 
 function session(email) {
   const index = accounts.PRESENTATION_EMAILS.indexOf(email);
   const id = `1622d665-8f0a-4fef-ac40-f228999fd00${index + 1}`;
-  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const exp = tokenExpiry;
   const token = `${Buffer.from('{}').toString('base64url')}.${Buffer.from(JSON.stringify({ sub: id, exp })).toString('base64url')}.${Buffer.from('signature').toString('base64url')}`;
   return { access_token: token, refresh_token: `refresh-${index}`, token_type: 'bearer', expires_in: 3600, expires_at: exp,
     user: { id, email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-11-17T00:00:00Z' } };
