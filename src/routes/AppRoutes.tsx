@@ -8,6 +8,8 @@ import { AppLayout } from '../layouts/AppLayout.tsx';
 
 // Route Guards & Session
 import { RutaProtegida } from './RutaProtegida.tsx';
+import { RutaPublica } from './RutaPublica.tsx';
+import { AppShellSkeleton } from '../layouts/AppShellSkeleton.tsx';
 import { useSessionStore } from '../stores/session.store.ts';
 import { ROLE_HOME_PATHS } from '../lib/permisos.ts';
 
@@ -39,7 +41,8 @@ import { PerfilPage } from '../pages/compartidas/PerfilPage.tsx';
 
 // Redirección inteligente de la raíz "/" según el rol activo
 function RedireccionRaiz() {
-  const { user, isAuthenticated } = useSessionStore();
+  const { user, isAuthenticated, isLoading } = useSessionStore();
+  if (isLoading) return <AppShellSkeleton />;
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
@@ -51,7 +54,7 @@ export function AppRoutes() {
   return (
     <Routes>
       {/* 1. Rutas Públicas (AuthLayout) */}
-      <Route element={<AuthLayout />}>
+      <Route element={<RutaPublica><AuthLayout /></RutaPublica>}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegistroPage />} />
         <Route path="/register" element={<Navigate to="/registro" replace />} />
