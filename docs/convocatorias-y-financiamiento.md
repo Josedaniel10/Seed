@@ -12,6 +12,17 @@ Las solicitudes de recursos institucionales requieren una convocatoria publicada
 
 La facultad se toma de los grupos activos del catálogo. El área del solicitante se acredita con su grupo registrado en el perfil, no con un grupo arbitrario del formulario. Los destinatarios se comprueban con el vínculo académico del perfil: estudiante/monitor o docente/profesor. Los requisitos específicos de la convocatoria se publican en su descripción; los documentos obligatorios siguen siendo los definidos por el catálogo del trámite.
 
+Los anuncios, el listado para investigadores y el enlace de postulación se filtran
+por el grupo activo del perfil y su vínculo académico. En el formulario, el grupo
+seleccionado debe ser exactamente el asignado al perfil, incluso si otro grupo
+pertenece a la misma facultad. El selector de financiamiento no ofrece opciones
+cuando falta esa vinculación o el borrador usa otro grupo. El motivo se explica
+antes de cargar documentos y se vuelve a validar antes de radicar. Los borradores
+conservan sus datos y permiten corregir la selección o elegir solo aval académico.
+Los administradores y responsables conservan la consulta de las convocatorias
+que administran. Las convocatorias se definen por facultad o área; no son
+exclusivas de un único grupo de esa facultad.
+
 ## Integridad y persistencia
 
 - Supabase comprueba las reglas al radicar y registra solicitud, convocatoria, monto y auditoría en una transacción.

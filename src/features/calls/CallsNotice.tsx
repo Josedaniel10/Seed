@@ -2,12 +2,14 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Megaphone } from 'lucide-react';
-import { useCalls, isCallOpen, formatCallDate } from './callsApi.ts';
+import { useCalls, isCallOpen, formatCallDate, matchesFundingApplicant } from './callsApi.ts';
+import { useFundingApplicant } from './useFundingApplicant.ts';
 
 export function CallsNotice(): ReactElement | null {
   const calls = useCalls();
+  const applicant = useFundingApplicant();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const open = (calls.data ?? []).filter((call) => isCallOpen(call))
+  const open = (calls.data ?? []).filter((call) => isCallOpen(call) && matchesFundingApplicant(call, applicant))
     .sort((a, b) => Date.parse(a.closes_at) - Date.parse(b.closes_at) || a.id.localeCompare(b.id));
   if (!open.length) return null;
   const selectedIndex = Math.max(0, open.findIndex((call) => call.id === selectedId));

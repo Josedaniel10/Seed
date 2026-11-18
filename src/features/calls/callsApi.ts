@@ -41,12 +41,34 @@ export function matchesAudience(call: FundingCall, academicLink?: string): boole
   return (call.audience === 'students' ? /estudiante|monitor/i : /docente|profesor/i).test(academicLink ?? '');
 }
 
-export function financingError(budget: number, callId: string | undefined, calls: FundingCall[], typeId: string, faculty?: string): string | null {
+export interface FundingApplicant {
+  groupId?: string;
+  faculty?: string;
+  academicLink?: string;
+}
+
+export function matchesFundingApplicant(call: FundingCall, applicant: FundingApplicant): boolean {
+  return Boolean(applicant.groupId && applicant.faculty && call.faculty === applicant.faculty
+    && matchesAudience(call, applicant.academicLink));
+}
+
+export function fundingGroupError(groupId: string | undefined, applicant: FundingApplicant): string | null {
+  if (!applicant.groupId || !applicant.faculty) return 'Para solicitar financiamiento necesitas un grupo de investigación activo asignado en tu perfil. Contacta al administrador para actualizarlo.';
+  if (groupId !== applicant.groupId) return 'Selecciona el grupo registrado en tu perfil para solicitar financiamiento. Si tu vinculación cambió, solicita al administrador que la actualice.';
+  return null;
+}
+
+export function financingError(budget: number, callId: string | undefined, calls: FundingCall[], typeId: string,
+  applicant: FundingApplicant = {}, groupId?: string): string | null {
   if (!Number.isFinite(budget) || budget < 0) return 'El monto solicitado es inválido.';
   if (budget === 0) return callId ? 'El aval académico no debe vincular una convocatoria de financiamiento.' : null;
+  const groupIssue = fundingGroupError(groupId, applicant);
+  if (groupIssue) return groupIssue;
   const call = calls.find((item) => item.id === callId);
   if (!call || !isCallOpen(call)) return 'Seleccione una convocatoria abierta para solicitar financiamiento. Su borrador se conservará.';
-  if (call.faculty !== faculty || !call.type_ids.includes(typeId)) return 'La convocatoria no corresponde al área o tipo de solicitud.';
+  if (call.faculty !== applicant.faculty) return 'La convocatoria no corresponde al área del grupo registrado en tu perfil.';
+  if (!call.type_ids.includes(typeId)) return 'La convocatoria no admite este tipo de solicitud.';
+  if (!matchesAudience(call, applicant.academicLink)) return 'Tu vínculo académico no corresponde a los destinatarios de la convocatoria.';
   if (call.max_amount !== null && budget > call.max_amount) return 'El monto supera el tope de la convocatoria.';
   return null;
 }

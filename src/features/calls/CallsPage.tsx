@@ -18,7 +18,9 @@ import { useCatalogStore } from '../catalog/catalogStore.ts';
 import { useGroupsStore } from '../groups/groupsStore.ts';
 import { useUserStore } from '../users/userStore.ts';
 import { useDecisionConfirmation } from '../../hooks/useDecisionConfirmation.tsx';
-import { callsClient, formatCallDate, isCallOpen, managerSchema, useCalls } from './callsApi.ts';
+import { callsClient, formatCallDate, isCallOpen, managerSchema, matchesFundingApplicant, useCalls } from './callsApi.ts';
+import { useFundingApplicant } from './useFundingApplicant.ts';
+import { roleMatches } from '../../lib/permisos.ts';
 import type { FundingCall } from './callsApi.ts';
 
 const button = 'inline-flex items-center justify-center gap-2 rounded-xl bg-[#14281D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#1E3A2B] disabled:opacity-50 cursor-pointer';
@@ -28,6 +30,7 @@ export function CallsPage(): ReactElement {
   const user = useSessionStore((s) => s.user);
   const queryClient = useQueryClient();
   const calls = useCalls();
+  const applicant = useFundingApplicant();
   const groups = useGroupsStore((s) => s.groups);
   const types = useCatalogStore((s) => s.types);
   const users = useUserStore((s) => s.users);
@@ -88,11 +91,14 @@ export function CallsPage(): ReactElement {
     if (failure) throw new Error(getUserError(failure));
     await refresh(); setSuccess('Se retiró el permiso de gestión.');
   };
-  const detail = calls.data?.find((call) => call.id === params.get('convocatoria'));
+  const researcher = roleMatches(user?.activeRole, 'researcher');
+  const visibleCalls = (calls.data ?? []).filter(call => !researcher || admin || allowed.includes(call.faculty)
+    || matchesFundingApplicant(call, applicant));
+  const detail = visibleCalls.find((call) => call.id === params.get('convocatoria'));
   const sections = [
-    { title: 'En preparación', description: 'Borradores que puedes revisar y publicar.', items: (calls.data ?? []).filter((call) => call.status === 'draft') },
-    { title: 'Convocatorias vigentes', description: 'Recepción abierta o programada para una próxima fecha.', items: (calls.data ?? []).filter((call) => call.status === 'published' && Date.now() < Date.parse(call.closes_at)) },
-    { title: 'Historial', description: 'Convocatorias finalizadas, cerradas o canceladas.', items: (calls.data ?? []).filter((call) => call.status === 'closed' || call.status === 'cancelled' || (call.status === 'published' && Date.now() >= Date.parse(call.closes_at))) },
+    { title: 'En preparación', description: 'Borradores que puedes revisar y publicar.', items: visibleCalls.filter((call) => call.status === 'draft') },
+    { title: 'Convocatorias vigentes', description: 'Recepción abierta o programada para una próxima fecha.', items: visibleCalls.filter((call) => call.status === 'published' && Date.now() < Date.parse(call.closes_at)) },
+    { title: 'Historial', description: 'Convocatorias finalizadas, cerradas o canceladas.', items: visibleCalls.filter((call) => call.status === 'closed' || call.status === 'cancelled' || (call.status === 'published' && Date.now() >= Date.parse(call.closes_at))) },
   ];
   const startStatusChange = (call: FundingCall, status: 'closed' | 'cancelled'): void => {
     setReason(''); setStatusAction({ call, status });
@@ -137,14 +143,14 @@ export function CallsPage(): ReactElement {
         </footer>}
       </article>)}</div>
     </section>)}
-    {calls.isSuccess && !calls.data.length && <section className="rounded-2xl border border-[#E5E3DC] bg-white px-6 py-12 text-center space-y-3">
+    {calls.isSuccess && !visibleCalls.length && <section className="rounded-2xl border border-[#E5E3DC] bg-white px-6 py-12 text-center space-y-3">
       <CalendarDays size={36} className="mx-auto text-stone-300" aria-hidden="true" />
-      <h2 className="text-sm font-bold text-[#14281D]">Aún no hay convocatorias</h2>
-      <p className="text-xs text-stone-500 max-w-md mx-auto">{allowed.length ? 'Crea la primera convocatoria. Te guiaremos para definir los requisitos, participantes y fechas antes de publicarla.' : 'Cuando se publique una convocatoria, podrás consultar aquí sus requisitos y fechas. Mientras tanto, puedes solicitar aval académico.'}</p>
+      <h2 className="text-sm font-bold text-[#14281D]">{researcher ? 'No hay convocatorias disponibles para tu perfil' : 'Aún no hay convocatorias'}</h2>
+      <p className="text-xs text-stone-500 max-w-md mx-auto">{allowed.length ? 'Crea la primera convocatoria. Te guiaremos para definir los requisitos, participantes y fechas antes de publicarla.' : researcher && !applicant.groupId ? 'Para consultar oportunidades de financiamiento necesitas un grupo de investigación activo asignado en tu perfil. Contacta al administrador para actualizarlo.' : 'Cuando se publique una convocatoria compatible con tu perfil, podrás consultar aquí sus requisitos y fechas. Mientras tanto, puedes solicitar aval académico.'}</p>
       {allowed.length > 0 && <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-[#14281D] px-4 py-2.5 text-xs font-bold text-white cursor-pointer" onClick={() => openEditor()}><PlusCircle size={15} /> Crear primera convocatoria</button>}
     </section>}
     </>}
-    <Modal isOpen={Boolean(detail) && !managersView} onClose={() => showDetail(null)} title="Detalle de convocatoria" maxWidth="2xl">
+    <Modal key={`${user?.id}:${applicant.groupId}:${applicant.academicLink}`} isOpen={Boolean(detail) && !managersView} onClose={() => showDetail(null)} title="Detalle de convocatoria" maxWidth="2xl">
       {detail && <div className="space-y-4 text-sm"><StoredCallCover path={detail.cover_image_path} icon_key={detail.icon_key ?? 'megaphone'} accent_color={detail.accent_color} />
         <div><p className="text-xs text-stone-500">{detail.faculty}</p><h2 className="text-lg font-bold mt-1">{detail.title}</h2></div>
         <p className="whitespace-pre-wrap break-words text-stone-600">{detail.description}</p>
@@ -155,7 +161,7 @@ export function CallsPage(): ReactElement {
           <div><dt className="text-stone-500">Cierre (Colombia)</dt><dd className="font-semibold mt-1">{formatCallDate(detail.closes_at)}</dd></div>
         </dl>
         <div className="border-t border-[#E5E3DC] pt-4"><h3 className="font-semibold text-xs">Tipos de solicitud admitidos</h3><ul className="mt-2 space-y-1 text-xs text-stone-600">{types.filter((type) => detail.type_ids.includes(type.id)).map((type) => <li key={type.id}>{type.name}</li>)}</ul></div>
-        {isCallOpen(detail) && user?.roles.includes('researcher') && <Link className={button} to={`/solicitudes/nueva?convocatoria=${detail.id}`}>Postularme</Link>}
+        {isCallOpen(detail) && researcher && matchesFundingApplicant(detail, applicant) && <Link className={button} to={`/solicitudes/nueva?convocatoria=${detail.id}`}>Postularme</Link>}
       </div>}
     </Modal>
     <Modal isOpen={Boolean(statusAction)} onClose={() => setStatusAction(null)} isDismissible={!isDecisionOpen} title={statusAction?.status === 'closed' ? 'Cerrar recepción' : 'Cancelar convocatoria'} subtitle={statusAction?.call.title} maxWidth="md">

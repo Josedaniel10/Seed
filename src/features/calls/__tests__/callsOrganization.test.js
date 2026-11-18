@@ -15,19 +15,22 @@ const { CallsPage } = await import('../CallsPage.tsx');
 const { CallManagersPanel } = await import('../CallManagersPanel.tsx');
 const { useSessionStore } = await import('../../../stores/session.store.ts');
 const { useUserStore } = await import('../../users/userStore.ts');
+const { useGroupsStore } = await import('../../groups/groupsStore.ts');
 const originalSession = useSessionStore.getState();
+const originalGroups = useGroupsStore.getState();
 const users = useUserStore.getState().users;
 const manager = { user_id: users[0].id, faculty: 'Ingeniería', designation: 'lider' };
 const base = { id: 'draft', title: 'Borrador de prueba', description: 'Descripción completa de los requisitos.', faculty: 'Ingeniería',
-  status: 'draft', type_ids: [], audience: 'all', max_amount: null,
+  status: 'draft', type_ids: ['type'], audience: 'all', max_amount: null,
   opens_at: new Date(Date.now() - 60000).toISOString(), closes_at: new Date(Date.now() + 86400000).toISOString() };
 const calls = [base, { ...base, id: 'open', title: 'Convocatoria abierta', status: 'published' },
   { ...base, id: 'closed', title: 'Convocatoria cerrada', status: 'closed' },
   { ...base, id: 'expired', title: 'Convocatoria finalizada', status: 'published', closes_at: new Date(Date.now() - 1000).toISOString() }];
 let root;
 let cache;
-async function mount(role = 'admin', route = '/convocatorias') {
-  useSessionStore.setState({ user: { id: 'organization-user', roles: [role], activeRole: role } });
+async function mount(role = 'admin', route = '/convocatorias', researchGroupId) {
+  useSessionStore.setState({ user: { id: 'organization-user', roles: [role], activeRole: role, researchGroupId, academicLink: 'Estudiante de pregrado' } });
+  useGroupsStore.setState({ groups: [{ id: 'eligible-group', faculty: 'Ingeniería', is_active: true }, { id: 'other-group', faculty: 'Otra área', is_active: true }] });
   cache = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } } });
   cache.setQueryData(['funding-calls', 'organization-user'], calls);
   cache.setQueryData(['call-managers', 'organization-user'], [manager]);
@@ -39,7 +42,7 @@ async function click(element) { assert.ok(element); await act(async () => elemen
 function button(text, within = document) { return [...within.querySelectorAll('button')].find((element) => element.textContent.trim() === text); }
 afterEach(async () => {
   if (root) await act(async () => root.unmount()); root = null;
-  cache?.clear(); document.body.replaceChildren(); useSessionStore.setState(originalSession, true);
+  cache?.clear(); document.body.replaceChildren(); useSessionStore.setState(originalSession, true); useGroupsStore.setState(originalGroups, true);
 });
 after(() => dom.window.close());
 
@@ -90,7 +93,24 @@ test('a direct managers URL never exposes manager administration to researchers'
   assert.equal(document.querySelector('[aria-label="Secciones de convocatorias"]'), null);
   assert.equal(document.querySelector('table'), null);
   assert.equal(button('Asignar responsable'), undefined);
-  assert.equal(document.querySelectorAll('article').length, 4);
+  assert.equal(document.querySelectorAll('article').length, 0);
+  assert.match(document.body.textContent, /grupo de investigación activo asignado en tu perfil/);
+});
+
+test('researchers cannot open or apply to a foreign call through its direct detail URL', async () => {
+  await mount('researcher', '/convocatorias?convocatoria=open', 'other-group');
+  assert.equal(document.querySelectorAll('article').length, 0);
+  assert.equal(document.querySelector('dialog[data-open=true]'), null);
+  assert.equal(document.querySelector('a[href*="/solicitudes/nueva"]'), null);
+});
+
+test('eligible researchers can apply and changing their profile removes incompatible opportunities', async () => {
+  await mount('researcher', '/convocatorias?convocatoria=open', 'eligible-group');
+  assert.ok(document.querySelector('a[href="/solicitudes/nueva?convocatoria=open"]'));
+  await act(async () => useSessionStore.setState({ user: { ...useSessionStore.getState().user, researchGroupId: 'other-group' } }));
+  assert.equal(document.querySelectorAll('article').length, 0);
+  assert.equal(Boolean(document.querySelector('a[href*="/solicitudes/nueva"]')), false);
+  assert.equal(Boolean(document.querySelector('dialog[data-open=true]')), false);
 });
 
 test('manager assignment preserves failed selections for retry and removal requires confirmation', async () => {

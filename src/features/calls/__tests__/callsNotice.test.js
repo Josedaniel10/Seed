@@ -11,15 +11,18 @@ const { MemoryRouter } = await import('react-router-dom');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { CallsNotice } = await import('../CallsNotice.tsx');
 const { useSessionStore } = await import('../../../stores/session.store.ts');
+const { useGroupsStore } = await import('../../groups/groupsStore.ts');
 const session = useSessionStore.getState();
-const key = ['funding-calls', undefined];
-const open = { id: 'open-call', title: 'Apoyo semilla', faculty: 'Ingeniería', status: 'published',
+const groups = useGroupsStore.getState();
+const key = ['funding-calls', 'notice-user'];
+const open = { id: 'open-call', title: 'Apoyo semilla', faculty: 'Ingeniería', audience: 'all', status: 'published',
   opens_at: new Date(Date.now() - 60000).toISOString(), closes_at: new Date(Date.now() + 86400000).toISOString() };
 let root;
 let cache;
 
 async function mount(calls) {
-  useSessionStore.setState({ user: null });
+  useSessionStore.setState({ user: { id: 'notice-user', researchGroupId: 'notice-group', academicLink: 'Estudiante de pregrado' } });
+  useGroupsStore.setState({ groups: [{ id: 'notice-group', faculty: 'Ingeniería', is_active: true }] });
   cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   if (calls) cache.setQueryData(key, calls);
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -28,7 +31,7 @@ async function mount(calls) {
 }
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
-  root = null; cache?.clear(); document.body.replaceChildren(); useSessionStore.setState(session, true);
+  root = null; cache?.clear(); document.body.replaceChildren(); useSessionStore.setState(session, true); useGroupsStore.setState(groups, true);
 });
 after(() => dom.window.close());
 
@@ -48,6 +51,15 @@ test('only open calls are announced and the notice disappears when the last one 
   assert.doesNotMatch(document.body.textContent, /Convocatoria cerrada/);
   assert.equal(document.querySelector('a[href*="convocatoria="]').getAttribute('href'), '/convocatorias?convocatoria=open-call');
   await act(async () => { cache.setQueryData(key, []); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  assert.equal(document.querySelector('section'), null);
+});
+
+test('notices exclude foreign faculties, wrong audiences and profiles with no active group', async () => {
+  await mount([{ ...open, id: 'foreign', title: 'Other faculty', faculty: 'Otra área' },
+    { ...open, id: 'teachers', title: 'Teachers only', audience: 'teachers' }, open]);
+  assert.equal(document.querySelector('h3').textContent, open.title);
+  assert.equal(document.querySelector('[aria-label="Siguiente convocatoria"]'), null);
+  await act(async () => useSessionStore.setState({ user: { id: 'notice-user' } }));
   assert.equal(document.querySelector('section'), null);
 });
 

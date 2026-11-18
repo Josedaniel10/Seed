@@ -3,6 +3,7 @@ import { getTypeAppearance } from '../catalog/typeAppearance.ts';
 import { TemplateDownload } from '../catalog/TemplateDownload.tsx';
 import { FundingFields } from '../calls/FundingFields.tsx';
 import { financingError, useCalls } from '../calls/callsApi.ts';
+import { useFundingApplicant } from '../calls/useFundingApplicant.ts';
 import { FloatingAlert } from '../../components/ui/FloatingAlert.tsx';
 import { TypeOptionsSkeleton } from '../../components/ui/ContentSkeletons.tsx';
 import React, { useEffect, useRef, useState } from 'react';
@@ -56,6 +57,7 @@ function RequestSubmissionForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const calls = useCalls();
+  const fundingApplicant = useFundingApplicant();
   const { user } = useSessionStore();
   const { types, requirements, isLoading: isCatalogLoading, isInitialized: isCatalogInitialized } = useCatalogStore();
   const { groups } = useGroupsStore();
@@ -175,7 +177,7 @@ function RequestSubmissionForm() {
     const mode = formData.funding_mode ?? (formData.budget_requested > 0 ? 'funded' : 'academic');
     if (mode === 'funded' && formData.budget_requested <= 0) return 'Indique un monto mayor que cero para solicitar financiamiento.';
     return financingError(formData.budget_requested, formData.funding_call_id, calls.data ?? [], selectedTypeId,
-      groups.find((g) => g.id === formData.research_group_id)?.faculty);
+      fundingApplicant, formData.research_group_id ?? undefined);
   };
 
   const handleNextStep = () => {
@@ -667,8 +669,7 @@ function RequestSubmissionForm() {
                   </select>
                 </div>
 
-                <FundingFields value={formData} onChange={setFormData} typeId={selectedTypeId}
-                  faculty={groups.find((g) => g.id === formData.research_group_id)?.faculty} />
+                <FundingFields value={formData} onChange={setFormData} typeId={selectedTypeId} />
               </div>
 
               <div>
