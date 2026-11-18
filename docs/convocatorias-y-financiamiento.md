@@ -13,12 +13,26 @@ Las solicitudes de recursos institucionales requieren una convocatoria publicada
 La facultad se toma de los grupos activos del catálogo. El área del solicitante se acredita con su grupo registrado en el perfil, no con un grupo arbitrario del formulario. Los destinatarios se comprueban con el vínculo académico del perfil: estudiante/monitor o docente/profesor. Los requisitos específicos de la convocatoria se publican en su descripción; los documentos obligatorios siguen siendo los definidos por el catálogo del trámite.
 
 Los anuncios, el listado para investigadores y el enlace de postulación se filtran
-por el grupo activo del perfil y su vínculo académico. En el formulario, el grupo
-seleccionado debe ser exactamente el asignado al perfil, incluso si otro grupo
-pertenece a la misma facultad. El selector de financiamiento no ofrece opciones
-cuando falta esa vinculación o el borrador usa otro grupo. El motivo se explica
-antes de cargar documentos y se vuelve a validar antes de radicar. Los borradores
-conservan sus datos y permiten corregir la selección o elegir solo aval académico.
+por el grupo activo del perfil y su vínculo académico. El administrador asigna,
+cambia o retira la vinculación desde **Usuarios → Asignar grupo**. Solo se ofrecen
+grupos activos y el cambio se muestra como guardado después de la confirmación
+de Supabase. Si otro administrador cambió la vinculación mientras tanto, se pide
+actualizar la lista antes de volver a guardar.
+
+**Mi perfil** muestra la vinculación actual. En **Nueva solicitud** el grupo es un
+dato de solo lectura; una cuenta sin vinculación muestra **Sin grupo asignado**,
+sin elegir el primer grupo del catálogo. Recuperar un borrador utiliza la
+vinculación actual del perfil, conserva los demás datos y vuelve a comprobar
+la compatibilidad de su convocatoria antes de radicar. La sesión se actualiza
+al regresar a la pestaña, recuperar la conexión y cada 30 segundos mientras está
+visible, sin desmontar formularios cuando la identidad se mantiene.
+
+El investigador no puede cambiar su pertenencia desde el navegador: las políticas
+y el trigger existentes de Supabase reservan ese cambio a administradores. No se
+requiere una migración nueva. Cambiar el perfil no modifica los grupos de las
+solicitudes ya radicadas. La prueba transaccional de permisos e historial está en
+`supabase/tests/research_group_membership.sql` y revierte todos sus datos de prueba.
+
 Los administradores y responsables conservan la consulta de las convocatorias
 que administran. Las convocatorias se definen por facultad o área; no son
 exclusivas de un único grupo de esa facultad.

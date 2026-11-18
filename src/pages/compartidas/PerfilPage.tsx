@@ -2,11 +2,14 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSessionStore } from '../../stores/session.store.ts';
 import { ROLE_LABELS } from '../../lib/permisos.ts';
+import { useGroupsStore } from '../../features/groups/groupsStore.ts';
 import { User, Mail, GraduationCap, Building2, Shield, LogOut } from 'lucide-react';
 
 export function PerfilPage() {
   const navigate = useNavigate();
   const { user, logout } = useSessionStore();
+  const groups = useGroupsStore(state => state.groups);
+  const group = groups.find(item => item.id === user?.researchGroupId);
 
   if (!user) return null;
 
@@ -84,6 +87,11 @@ export function PerfilPage() {
           </div>
         </div>
 
+        <div className="rounded-xl border border-[#E5E3DC] bg-[#F7F6F2] p-3 space-y-2">
+          <h4 className="font-bold text-stone-700">Grupo de investigación asignado</h4>
+          <p>{group ? `[${group.code}] ${group.name}${group.is_active === false ? ' (inactivo)' : ''}` : user.researchGroupId ? 'Grupo asignado no disponible' : 'Sin grupo asignado'}</p>
+          <p className="text-stone-500">Para asignar o cambiar tu grupo, contacta al administrador.</p>
+        </div>
         {/* Cerrar Sesión */}
         <div className="pt-4 border-t border-stone-100 flex justify-end">
           <button

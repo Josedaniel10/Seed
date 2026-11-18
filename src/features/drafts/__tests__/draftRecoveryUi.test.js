@@ -13,6 +13,7 @@ const { act, createElement } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { MemoryRouter } = await import('react-router-dom');
 const { RequestSubmissionWizard } = await import('../../requests/RequestSubmissionWizard.tsx');
+const { useProfileSync } = await import('../../auth/useProfileSync.ts');
 const { RevisionesPage } = await import('../../../pages/gestion/RevisionesPage.tsx');
 const { useSessionStore } = await import('../../../stores/session.store.ts');
 const { useRequestStore } = await import('../../requests/requestStore.ts');
@@ -26,6 +27,10 @@ const user = { id: 'draft-user', fullName: 'Usuario de prueba', email: 'draft@ex
 const app = { id: 'app-a', filing_number: 'Radicado 2026-001', title: 'Solicitud A', abstract: 'Resumen',
   applicant_id: 'owner', current_status: 'EN_REVISION', application_type_id: 'type', request_type_id: 'type' };
 const noLoad = async () => ({ success: true });
+const membershipGroups = [
+  { id: 'assigned-a', code: 'G-A', name: 'Grupo asignado A', faculty: 'Área A', is_active: true },
+  { id: 'assigned-b', code: 'G-B', name: 'Grupo asignado B', faculty: 'Área B', is_active: true },
+];
 let root;
 async function mount(Component) {
   const container = document.createElement('div'); document.body.append(container);
@@ -74,6 +79,43 @@ test('new request restores its step and general data after leaving and reopening
   assert.match(document.querySelector('textarea').value, /debe recuperarse/);
   assert.match(document.body.textContent, /Borrador recuperado/);
   assert.equal(draftKeys().length, 1);
+});
+
+test('new requests show no group when unassigned and never default to the first catalog entry', async () => {
+  setup(); useGroupsStore.setState({ groups: membershipGroups });
+  await mount(RequestSubmissionWizard); await click(button('Continuar'));
+  const field = document.querySelector('#request-group');
+  assert.equal(field.readOnly, true); assert.equal(field.value, 'Sin grupo asignado');
+  assert.equal(document.querySelectorAll('select#request-group').length, 0);
+});
+
+test('profile refresh updates the fixed group without discarding the unsaved request', async () => {
+  setup(); useGroupsStore.setState({ groups: membershipGroups });
+  useSessionStore.setState({ user: { ...user, researchGroupId: 'assigned-a' }, isLoading: false, isRefreshingSession: false,
+    initializeSession: async () => { useSessionStore.setState({ user: { ...user, researchGroupId: 'assigned-b' } }); } });
+  function SyncedWizard() { useProfileSync(); return createElement(RequestSubmissionWizard); }
+  await mount(SyncedWizard); await click(button('Continuar'));
+  await change(document.querySelector('input[placeholder^="Ej: Evaluación"]'), 'Proyecto que debe conservarse');
+  assert.match(document.querySelector('#request-group').value, /G-A/);
+  await act(async () => window.dispatchEvent(new dom.window.Event('focus')));
+  assert.match(document.querySelector('#request-group').value, /G-B/);
+  assert.equal(document.querySelector('input[placeholder^="Ej: Evaluación"]').value, 'Proyecto que debe conservarse');
+});
+
+test('filing an old draft uses the verified profile membership instead of its stored group', async () => {
+  setup(); useGroupsStore.setState({ groups: membershipGroups });
+  useSessionStore.setState({ user: { ...user, researchGroupId: 'assigned-b' } });
+  const pending = { currentStep: 4, selectedTypeId: 'type', submissionId: '4900be32-4798-4726-b631-f45853e975d7',
+    formData: { title: 'Proyecto recuperado', related_project: '', abstract: 'Justificación académica suficientemente detallada.',
+      research_group_id: 'assigned-a', budget_requested: 0, is_tutor_endorsed: false }, uploadedFiles: {} };
+  const local = createLocalDraft({ ownerId: user.id, scope: 'request:new', context: 'request:v1', storage: window.localStorage,
+    schema: requestDraftSchema, createInitial: () => pending, hasContent: () => true });
+  local.update(value => ({ ...value })); local.flush();
+  let payload;
+  useRequestStore.setState({ createRequest: async value => { payload = value; return { success: true, request: { id: 'filed', filing_number: 'Radicado 2026-101' } }; } });
+  await mount(RequestSubmissionWizard); await click(button('Radicar solicitud'));
+  assert.equal(payload.research_group_id, 'assigned-b');
+  assert.match(document.body.textContent, /Radicado 2026-101/);
 });
 
 test('switching account never displays or saves another user draft', async () => {

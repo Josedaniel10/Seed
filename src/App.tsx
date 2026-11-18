@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PresentationSwitcher } from './features/presentation/PresentationSwitcher.tsx';
 import { isPresentationEnabled } from './features/presentation/presentationAccounts.ts';
+import { useProfileSync } from './features/auth/useProfileSync.ts';
 import { AlertProvider } from './components/ui/AlertProvider.tsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationsSync } from './features/notifications/useNotifications.ts';
@@ -20,6 +21,7 @@ const queryClient = new QueryClient();
 export default function App() {
   const [switchingAccount, setSwitchingAccount] = useState(false);
   useMobileViewport();
+  useProfileSync();
   const initializeSession = useSessionStore((s) => s.initializeSession);
   const setupAuthListener = useSessionStore((s) => s.setupAuthListener);
 

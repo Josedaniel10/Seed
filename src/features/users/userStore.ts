@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Profile, UserRole } from '../../types/database.ts';
 import { DEMO_USERS } from '../auth/authStore.ts';
 import { getSupabaseClient, getSupabaseCredentials } from '../../lib/supabase.ts';
+import { saveUserResearchGroup } from './userGroupsApi.ts';
 
 // Usuarios institucionales iniciales para gestión y pruebas
 export const INITIAL_PROFILES: Profile[] = [
@@ -90,6 +91,7 @@ interface UserManagementState {
   addUser: (userData: Omit<Profile, 'id' | 'created_at'> & { id?: string; created_at?: string }) => Profile;
   loadFromSupabase: () => Promise<{ success: boolean; count?: number; error?: string }>;
   resetToInitial: () => void;
+  assignResearchGroup: (userId: string, groupId: string | null) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useUserStore = create<UserManagementState>()(
@@ -104,6 +106,21 @@ export const useUserStore = create<UserManagementState>()(
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       setSelectedRoleFilter: (selectedRoleFilter) => set({ selectedRoleFilter }),
+
+      assignResearchGroup: async (userId, groupId) => {
+        const revision = getAccountDataRevision();
+        const previous = get().users.find(user => user.id === userId);
+        if (!previous) return { success: false, error: 'Actualiza el listado de usuarios antes de asignar el grupo.' };
+        try {
+          const saved = await saveUserResearchGroup(userId, groupId, previous.research_group_id ?? null);
+          if (revision !== getAccountDataRevision()) return { success: false, error: 'La sesión cambió. Actualiza los usuarios para consultar la asignación.' };
+          set(state => ({ users: state.users.map(user => user.id === saved.id
+            ? { ...user, research_group_id: saved.research_group_id } : user) }));
+          return { success: true };
+        } catch (error) {
+          return { success: false, error: getUserError(error, 'No se pudo guardar la asignación del grupo. Inténtalo nuevamente.') };
+        }
+      },
 
       updateUserRole: (userId: string, newRole: UserRole) => {
         let updatedProfile: Profile | undefined;

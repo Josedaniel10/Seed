@@ -7,6 +7,9 @@ import { ResponsiveOverlay } from '../../components/ui/ResponsiveOverlay.tsx';
 import React, { useState } from 'react';
 import { useUserStore } from './userStore.ts';
 import { UserRole } from '../../types/database.ts';
+import type { Profile } from '../../types/database.ts';
+import { UserGroupAssignment } from './UserGroupAssignment.tsx';
+import { useGroupsStore } from '../groups/groupsStore.ts';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import {
   Users,
@@ -57,6 +60,8 @@ export const UserManagementTable: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [groupUser, setGroupUser] = useState<Profile | null>(null);
+  const groups = useGroupsStore(state => state.groups);
 
   // Cargar perfiles reales de Supabase al montar la pantalla
   React.useEffect(() => {
@@ -282,6 +287,9 @@ export const UserManagementTable: React.FC = () => {
                         <div className="text-[11px] text-stone-500 capitalize">
                           {u.academic_link ? u.academic_link.replace('_', ' ') : 'Docente'}
                         </div>
+                        <p className="text-[11px] text-stone-600">Grupo: {groups.find(group => group.id === u.research_group_id)?.name ?? (u.research_group_id ? 'Grupo no disponible' : 'Sin grupo asignado')}</p>
+                        <button type="button" onClick={() => setGroupUser(u)} aria-label={`Asignar grupo a ${u.full_name}`}
+                          className="mt-1 rounded-lg border border-stone-300 px-2 py-1.5 text-[11px] font-semibold text-[#14281D] hover:bg-stone-50">Asignar grupo</button>
                       </div>
                     </td>
 
@@ -334,6 +342,9 @@ export const UserManagementTable: React.FC = () => {
       </div>
 
       {/* Add User Modal */}
+      {groupUser && <UserGroupAssignment key={groupUser.id} user={groupUser} onClose={() => setGroupUser(null)} onSaved={() => {
+        setGroupUser(null); showFeedback('La asignación del grupo se guardó correctamente.');
+      }} />}
       <ResponsiveOverlay isOpen={Boolean(showAddModal)} onClose={() => setShowAddModal(false)} label="Registrar miembro">
         {showAddModal && (<>
           <div className="bg-white rounded-2xl border border-[#E5E3DC] p-6 max-w-md w-full shadow-lg space-y-4 animate-scale-up">

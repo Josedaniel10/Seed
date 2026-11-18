@@ -69,14 +69,17 @@ function RequestSubmissionForm() {
     ownerId: user?.id ?? '', scope: 'request:new', context: 'request:v1', schema: requestDraftSchema,
     createInitial: (): RequestDraft => ({
       currentStep: 1, selectedTypeId: activeTypes[0]?.id ?? '', submissionId: createUuid(),
-      formData: { title: '', related_project: '', abstract: '', research_group_id: user?.researchGroupId ?? groups[0]?.id ?? '',
+      formData: { title: '', related_project: '', abstract: '', research_group_id: user?.researchGroupId ?? '',
         budget_requested: 0, is_tutor_endorsed: false, funding_call_id: searchParams.get('convocatoria') ?? '',
         funding_mode: searchParams.has('convocatoria') ? 'funded' : 'academic' }, uploadedFiles: {},
     }),
     hasContent: (value) => Boolean(value.selectedTypeId) || value.currentStep > 1 || Boolean(value.formData.title || value.formData.abstract
       || value.formData.related_project || Object.keys(value.uploadedFiles).length),
   });
-  const { currentStep, selectedTypeId, formData, uploadedFiles } = savedDraft.value;
+  const { currentStep, selectedTypeId, formData: storedFormData, uploadedFiles } = savedDraft.value;
+  // Membership belongs to the verified profile, including when recovering an old draft.
+  const formData = { ...storedFormData, research_group_id: user?.researchGroupId ?? '' };
+  const assignedGroup = groups.find(group => group.id === formData.research_group_id);
   const setCurrentStep = (next: number) => draftController.update((current) => ({ ...current, currentStep: next }));
   const setSelectedTypeId = (next: string) => draftController.update((current) => ({ ...current, selectedTypeId: next }));
   const setFormData: Dispatch<SetStateAction<RequestDraft['formData']>> = (next) => draftController.update((current) => ({
@@ -92,12 +95,6 @@ function RequestSubmissionForm() {
       if (firstActiveType) setSelectedTypeId(firstActiveType.id);
     }
   }, [types, selectedTypeId]);
-
-  useEffect(() => {
-    if (!formData.research_group_id && groups[0]) {
-      setFormData((current) => ({ ...current, research_group_id: groups[0]?.id || '' }));
-    }
-  }, [groups, formData.research_group_id]);
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const contentRef = useRef<HTMLDivElement>(null);
@@ -651,22 +648,12 @@ function RequestSubmissionForm() {
                   <label htmlFor="request-group" className="block font-bold text-stone-800 mb-1">
                     Grupo de investigación
                   </label>
-                  <select id="request-group"
-                    value={formData.research_group_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, research_group_id: e.target.value })
-                    }
+                  <input id="request-group" readOnly aria-describedby="request-group-help"
+                    value={assignedGroup ? `[${assignedGroup.code}] ${assignedGroup.name}${assignedGroup.is_active === false ? ' (inactivo)' : ''}`
+                      : user?.researchGroupId ? 'Grupo asignado no disponible' : 'Sin grupo asignado'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DC] focus:border-[#14281D] outline-none bg-white text-xs text-stone-800"
-                  >
-                    <option value="">Sin grupo asignado</option>
-                    {formData.research_group_id && !groups.some((group) => group.id === formData.research_group_id)
-                      && <option value={formData.research_group_id} disabled>Grupo del borrador no disponible; seleccione uno actual</option>}
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        [{g.code}] {g.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  <p id="request-group-help" className="mt-2 text-xs text-stone-500">El administrador asigna o cambia tu grupo desde Usuarios. Seleccionar un tipo de solicitud o recuperar un borrador no modifica tu vinculación.</p>
                 </div>
 
                 <FundingFields value={formData} onChange={setFormData} typeId={selectedTypeId} />
